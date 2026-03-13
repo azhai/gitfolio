@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>发布 - gitfolio-core - GitFolio</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .releases-page {
+            max-width: 100%;
+        }
+
+        .project-header {
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: var(--shadow);
+            margin-bottom: 20px;
+        }
+
+        .project-header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 15px;
+        }
+
+        .project-title-section {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .project-title-section h1 {
+            font-size: 24px;
+            font-weight: 600;
+        }
+
+        .project-breadcrumb {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .project-breadcrumb a {
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+
+        .project-breadcrumb a:hover {
+            text-decoration: underline;
+        }
+
+        .project-actions-bar {
+            display: flex;
+            gap: 10px;
+        }
+
+        .project-description {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-bottom: 15px;
+        }
+
+        .project-tabs {
+            display: flex;
+            gap: 0;
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 20px;
+            background: var(--card-bg);
+            border-radius: 8px 8px 0 0;
+            overflow: hidden;
+        }
+
+        .project-tab {
+            padding: 12px 20px;
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            text-decoration: none;
+            border-bottom: 2px solid transparent;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .project-tab:hover {
+            color: var(--text-primary);
+            background: var(--bg-color);
+        }
+
+        .project-tab.active {
+            color: var(--primary-color);
+            border-bottom-color: var(--primary-color);
+            background: var(--bg-color);
+        }
+
+        .project-tab .badge {
+            position: static;
+            background: var(--bg-color);
+            color: var(--text-secondary);
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+        }
+
+        .project-tab.active .badge {
+            background: rgba(252, 109, 38, 0.1);
+            color: var(--primary-color);
+        }
+
+        .releases-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .releases-title {
+            font-size: 24px;
+            font-weight: 600;
+        }
+
+        .release-card {
+            background: var(--card-bg);
+            border-radius: 8px;
+            box-shadow: var(--shadow);
+            margin-bottom: 20px;
+            overflow: hidden;
+            transition: var(--transition);
+        }
+
+        .release-card:hover {
+            box-shadow: var(--shadow-hover);
+        }
+
+        .release-header {
+            padding: 20px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+
+        .release-info {
+            flex: 1;
+        }
+
+        .release-title-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 8px;
+        }
+
+        .release-title {
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        .release-title a {
+            color: var(--text-primary);
+            text-decoration: none;
+        }
+
+        .release-title a:hover {
+            color: var(--primary-color);
+        }
+
+        .release-tag {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .release-tag.latest {
+            background: rgba(16, 133, 72, 0.1);
+            color: var(--success-color);
+        }
+
+        .release-tag.pre-release {
+            background: rgba(252, 109, 38, 0.1);
+            color: var(--primary-color);
+        }
+
+        .release-meta {
+            display: flex;
+            gap: 15px;
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+
+        .release-meta-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .release-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .release-body {
+            padding: 20px;
+        }
+
+        .release-notes {
+            font-size: 14px;
+            line-height: 1.6;
+            color: var(--text-secondary);
+        }
+
+        .release-notes h3 {
+            font-size: 16px;
+            font-weight: 600;
+            margin-top: 20px;
+            margin-bottom: 10px;
+            color: var(--text-primary);
+        }
+
+        .release-notes h3:first-child {
+            margin-top: 0;
+        }
+
+        .release-notes ul {
+            margin-bottom: 15px;
+            padding-left: 25px;
+        }
+
+        .release-notes li {
+            margin-bottom: 6px;
+        }
+
+        .release-notes code {
+            background: var(--bg-color);
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 13px;
+        }
+
+        .release-footer {
+            padding: 15px 20px;
+            background: var(--bg-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .release-downloads {
+            display: flex;
+            gap: 15px;
+        }
+
+        .download-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .download-item a {
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+
+        .download-item a:hover {
+            text-decoration: underline;
+        }
+
+        .download-size {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .release-stats {
+            display: flex;
+            gap: 15px;
+        }
+
+        .release-stat {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+
+        .new-release-btn {
+            background: var(--success-color);
+            color: white;
+        }
+
+        .new-release-btn:hover {
+            background: #0d6d3b;
+        }
+
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+            margin-top: 24px;
+            padding: 16px 0;
+        }
+
+        .pagination-btn {
+            min-width: 36px;
+            height: 36px;
+            padding: 0 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            background: var(--card-bg);
+            color: var(--text-secondary);
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .pagination-btn:hover:not(:disabled) {
+            border-color: var(--primary-color);
+            color: var(--primary-color);
+            background: rgba(252, 109, 38, 0.05);
+        }
+
+        .pagination-btn.active {
+            background: var(--primary-color);
+            border-color: var(--primary-color);
+            color: white;
+        }
+
+        .pagination-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .pagination-info {
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-right: 16px;
+        }
+
+        .pagination-nav {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <header class="top-bar">
+            <div class="top-bar-left">
+                <button class="menu-toggle" id="menuToggle">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <a href="/" class="logo">
+                    <i class="fas fa-code-branch"></i>
+                    <span>GitFolio</span>
+                </a>
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" placeholder="搜索项目、Issue、合并请求...">
+                </div>
+            </div>
+            <div class="top-bar-right">
+                <button class="icon-btn">
+                    <i class="fas fa-plus"></i>
+                </button>
+                <button class="icon-btn">
+                    <i class="fas fa-bell"></i>
+                    <span class="badge">3</span>
+                </button>
+                <div class="user-menu">
+                    <img src="https://via.placeholder.com/32" alt="用户头像" class="avatar">
+                    <span class="username">ryan</span>
+                    <i class="fas fa-chevron-down"></i>
+                </div>
+            </div>
+        </header>
+
+        <div class="main-container">
+            <aside class="sidebar" id="sidebar">
+                <nav class="sidebar-nav">
+                    <div class="nav-section">
+                        <a href="/" class="nav-item">
+                            <i class="fas fa-home"></i>
+                            <span>仪表盘</span>
+                        </a>
+                        <a href="/projects" class="nav-item active">
+                            <i class="fas fa-folder"></i>
+                            <span>项目</span>
+                        </a>
+                        <a href="/groups" class="nav-item">
+                            <i class="fas fa-users"></i>
+                            <span>群组</span>
+                        </a>
+                        <a href="/activity" class="nav-item">
+                            <i class="fas fa-chart-line"></i>
+                            <span>活动</span>
+                        </a>
+                        <a href="/milestones" class="nav-item">
+                            <i class="fas fa-flag"></i>
+                            <span>里程碑</span>
+                        </a>
+                        <a href="/snippets" class="nav-item">
+                            <i class="fas fa-code"></i>
+                            <span>代码片段</span>
+                        </a>
+                    </div>
+                </nav>
+            </aside>
+
+            <main class="content">
+                <div class="releases-page">
+                    <div class="project-header">
+                        <div class="project-header-top">
+                            <div class="project-title-section">
+                                <h1>gitfolio-core</h1>
+                                <span class="project-visibility">公开</span>
+                            </div>
+                            <div class="project-actions-bar">
+                                <button class="btn btn-sm">
+                                    <i class="fas fa-star"></i> 星标
+                                </button>
+                                <button class="btn btn-sm">
+                                    <i class="fas fa-code-branch"></i> Fork
+                                </button>
+                                <button class="btn btn-sm">
+                                    <i class="fas fa-clone"></i> 克隆
+                                </button>
+                            </div>
+                        </div>
+                        <div class="project-breadcrumb">
+                            <a href="#">ryan</a>
+                            <span>/</span>
+                            <span>gitfolio-core</span>
+                        </div>
+                        <p class="project-description">Git 仓库管理核心系统，提供完整的版本控制和协作功能</p>
+                    </div>
+
+                    <div class="project-tabs">
+                        <a href="/project-detail" class="project-tab">
+                            <i class="fas fa-code"></i>
+                            代码
+                        </a>
+                        <a href="/issues" class="project-tab">
+                            <i class="fas fa-exclamation-circle"></i>
+                            Issue
+                            <span class="badge">12</span>
+                        </a>
+                        <a href="/merge-requests" class="project-tab">
+                            <i class="fas fa-code-branch"></i>
+                            合并请求
+                            <span class="badge">5</span>
+                        </a>
+                        <a href="/releases" class="project-tab active">
+                            <i class="fas fa-cube"></i>
+                            发布
+                        </a>
+                        <a href="/stats" class="project-tab">
+                            <i class="fas fa-chart-line"></i>
+                            统计
+                        </a>
+                        <a href="/settings" class="project-tab">
+                            <i class="fas fa-cog"></i>
+                            设置
+                        </a>
+                    </div>
+
+                    <div class="releases-header">
+                        <h1 class="releases-title">发布</h1>
+                        <button class="btn new-release-btn">
+                            <i class="fas fa-plus"></i> 新建发布
+                        </button>
+                    </div>
+
+                    <div class="release-card">
+                        <div class="release-header">
+                            <div class="release-info">
+                                <div class="release-title-row">
+                                    <h2 class="release-title"><a href="#">v1.5.0</a></h2>
+                                    <span class="release-tag latest">最新版本</span>
+                                </div>
+                                <div class="release-meta">
+                                    <span class="release-meta-item">
+                                        <i class="fas fa-tag"></i> v1.5.0
+                                    </span>
+                                    <span class="release-meta-item">
+                                        <i class="fas fa-code-branch"></i> main
+                                    </span>
+                                    <span class="release-meta-item">
+                                        <i class="fas fa-clock"></i> 发布于 3 天前
+                                    </span>
+                                    <span class="release-meta-item">
+                                        <i class="fas fa-user"></i> ryan
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="release-actions">
+                                <button class="btn-icon"><i class="fas fa-edit"></i></button>
+                                <button class="btn-icon"><i class="fas fa-download"></i></button>
+                            </div>
+                        </div>
+                        <div class="release-body">
+                            <div class="release-notes">
+                                <h3>🚀 新功能</h3>
+                                <ul>
+                                    <li>添加暗色主题支持</li>
+                                    <li>新增用户个人设置页面</li>
+                                    <li>支持 Markdown 编辑器预览</li>
+                                </ul>
+                                <h3>🐛 Bug 修复</h3>
+                                <ul>
+                                    <li>修复用户权限验证问题 (<code>#124</code>)</li>
+                                    <li>修复登录页面样式问题 (<code>#112</code>)</li>
+                                </ul>
+                                <h3>⚡ 性能优化</h3>
+                                <ul>
+                                    <li>优化数据库查询性能</li>
+                                    <li>减少前端资源加载时间</li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="release-footer">
+                            <div class="release-downloads">
+                                <div class="download-item">
+                                    <i class="fas fa-file-archive"></i>
+                                    <a href="#">Source code (zip)</a>
+                                    <span class="download-size">2.5 MB</span>
+                                </div>
+                                <div class="download-item">
+                                    <i class="fas fa-file-archive"></i>
+                                    <a href="#">Source code (tar.gz)</a>
+                                    <span class="download-size">2.1 MB</span>
+                                </div>
+                            </div>
+                            <div class="release-stats">
+                                <span class="release-stat">
+                                    <i class="fas fa-download"></i> 256 下载
+                                </span>
+                                <span class="release-stat">
+                                    <i class="fas fa-star"></i> 45 星标
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="release-card">
+                        <div class="release-header">
+                            <div class="release-info">
+                                <div class="release-title-row">
+                                    <h2 class="release-title"><a href="#">v1.4.0</a></h2>
+                                </div>
+                                <div class="release-meta">
+                                    <span class="release-meta-item">
+                                        <i class="fas fa-tag"></i> v1.4.0
+                                    </span>
+                                    <span class="release-meta-item">
+                                        <i class="fas fa-code-branch"></i> main
+                                    </span>
+                                    <span class="release-meta-item">
+                                        <i class="fas fa-clock"></i> 发布于 2 周前
+                                    </span>
+                                    <span class="release-meta-item">
+                                        <i class="fas fa-user"></i> ryan
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="release-actions">
+                                <button class="btn-icon"><i class="fas fa-edit"></i></button>
+                                <button class="btn-icon"><i class="fas fa-download"></i></button>
+                            </div>
+                        </div>
+                        <div class="release-body">
+                            <div class="release-notes">
+                                <h3>🚀 新功能</h3>
+                                <ul>
+                                    <li>添加 Issue 评论功能</li>
+                                    <li>支持合并请求代码审查</li>
+                                </ul>
+                                <h3>🐛 Bug 修复</h3>
+                                <ul>
+                                    <li>修复分页显示问题</li>
+                                    <li>修复文件上传错误</li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="release-footer">
+                            <div class="release-downloads">
+                                <div class="download-item">
+                                    <i class="fas fa-file-archive"></i>
+                                    <a href="#">Source code (zip)</a>
+                                    <span class="download-size">2.3 MB</span>
+                                </div>
+                                <div class="download-item">
+                                    <i class="fas fa-file-archive"></i>
+                                    <a href="#">Source code (tar.gz)</a>
+                                    <span class="download-size">1.9 MB</span>
+                                </div>
+                            </div>
+                            <div class="release-stats">
+                                <span class="release-stat">
+                                    <i class="fas fa-download"></i> 189 下载
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="release-card">
+                        <div class="release-header">
+                            <div class="release-info">
+                                <div class="release-title-row">
+                                    <h2 class="release-title"><a href="#">v1.3.0-beta</a></h2>
+                                    <span class="release-tag pre-release">预发布</span>
+                                </div>
+                                <div class="release-meta">
+                                    <span class="release-meta-item">
+                                        <i class="fas fa-tag"></i> v1.3.0-beta
+                                    </span>
+                                    <span class="release-meta-item">
+                                        <i class="fas fa-code-branch"></i> develop
+                                    </span>
+                                    <span class="release-meta-item">
+                                        <i class="fas fa-clock"></i> 发布于 1 个月前
+                                    </span>
+                                    <span class="release-meta-item">
+                                        <i class="fas fa-user"></i> alice
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="release-actions">
+                                <button class="btn-icon"><i class="fas fa-edit"></i></button>
+                                <button class="btn-icon"><i class="fas fa-download"></i></button>
+                            </div>
+                        </div>
+                        <div class="release-body">
+                            <div class="release-notes">
+                                <h3>🚀 新功能</h3>
+                                <ul>
+                                    <li>添加 Webhook 支持</li>
+                                    <li>支持 CI/CD 集成</li>
+                                </ul>
+                                <p><strong>注意：</strong>这是一个预发布版本，不建议在生产环境中使用。</p>
+                            </div>
+                        </div>
+                        <div class="release-footer">
+                            <div class="release-downloads">
+                                <div class="download-item">
+                                    <i class="fas fa-file-archive"></i>
+                                    <a href="#">Source code (zip)</a>
+                                    <span class="download-size">2.2 MB</span>
+                                </div>
+                            </div>
+                            <div class="release-stats">
+                                <span class="release-stat">
+                                    <i class="fas fa-download"></i> 45 下载
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="pagination">
+                        <span class="pagination-info">显示 1-3 条，共 8 条</span>
+                        <div class="pagination-nav">
+                            <button class="pagination-btn" disabled>
+                                <i class="fas fa-chevron-left"></i>
+                            </button>
+                            <button class="pagination-btn active">1</button>
+                            <button class="pagination-btn">2</button>
+                            <button class="pagination-btn">3</button>
+                            <button class="pagination-btn">
+                                <i class="fas fa-chevron-right"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

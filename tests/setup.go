@@ -39,7 +39,7 @@ func SetupTestRouter() *fiber.App {
 	return routes.SetupRouter()
 }
 
-func MakeRequest(app *fiber.App, method, path string, body interface{}, headers map[string]string) (*http.Response, error) {
+func MakeRequest(app *fiber.App, method, path string, body any, headers map[string]string) (*http.Response, error) {
 	var reqBody bytes.Buffer
 	if body != nil {
 		json.NewEncoder(&reqBody).Encode(body)
@@ -67,7 +67,7 @@ func AssertStatus(t *testing.T, expected, actual int) {
 }
 
 func AssertJSONHasKey(t *testing.T, jsonStr string, key string) {
-	var result map[string]interface{}
+	var result map[string]any
 	json.Unmarshal([]byte(jsonStr), &result)
 
 	if _, ok := result[key]; !ok {

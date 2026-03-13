@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>统计 - gitfolio-core - GitFolio</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .stats-page {
+            max-width: 100%;
+        }
+
+        .project-header {
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: var(--shadow);
+            margin-bottom: 20px;
+        }
+
+        .project-header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 15px;
+        }
+
+        .project-title-section {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .project-title-section h1 {
+            font-size: 24px;
+            font-weight: 600;
+        }
+
+        .project-breadcrumb {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .project-breadcrumb a {
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+
+        .project-breadcrumb a:hover {
+            text-decoration: underline;
+        }
+
+        .project-actions-bar {
+            display: flex;
+            gap: 10px;
+        }
+
+        .project-description {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-bottom: 15px;
+        }
+
+        .project-tabs {
+            display: flex;
+            gap: 0;
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 20px;
+            background: var(--card-bg);
+            border-radius: 8px 8px 0 0;
+            overflow: hidden;
+        }
+
+        .project-tab {
+            padding: 12px 20px;
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            text-decoration: none;
+            border-bottom: 2px solid transparent;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .project-tab:hover {
+            color: var(--text-primary);
+            background: var(--bg-color);
+        }
+
+        .project-tab.active {
+            color: var(--primary-color);
+            border-bottom-color: var(--primary-color);
+            background: var(--bg-color);
+        }
+
+        .project-tab .badge {
+            position: static;
+            background: var(--bg-color);
+            color: var(--text-secondary);
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+        }
+
+        .project-tab.active .badge {
+            background: rgba(252, 109, 38, 0.1);
+            color: var(--primary-color);
+        }
+
+        .stats-title {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 20px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: var(--card-bg);
+            border-radius: 8px;
+            box-shadow: var(--shadow);
+            padding: 20px;
+            transition: var(--transition);
+        }
+
+        .stat-card:hover {
+            box-shadow: var(--shadow-hover);
+        }
+
+        .stat-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .stat-card-title {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+
+        .stat-card-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+        }
+
+        .stat-card-icon.commits {
+            background: rgba(16, 133, 72, 0.1);
+            color: var(--success-color);
+        }
+
+        .stat-card-icon.branches {
+            background: rgba(31, 117, 203, 0.1);
+            color: var(--info-color);
+        }
+
+        .stat-card-icon.issues {
+            background: rgba(252, 109, 38, 0.1);
+            color: var(--primary-color);
+        }
+
+        .stat-card-icon.mrs {
+            background: rgba(128, 91, 183, 0.1);
+            color: #805bb7;
+        }
+
+        .stat-card-value {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            color: var(--text-primary);
+        }
+
+        .stat-card-change {
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .stat-card-change.positive {
+            color: var(--success-color);
+        }
+
+        .stat-card-change.negative {
+            color: var(--danger-color);
+        }
+
+        .charts-section {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .chart-card {
+            background: var(--card-bg);
+            border-radius: 8px;
+            box-shadow: var(--shadow);
+            padding: 20px;
+        }
+
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .chart-title {
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .chart-filter {
+            padding: 6px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            background: white;
+            font-size: 13px;
+            cursor: pointer;
+        }
+
+        .chart-placeholder {
+            height: 250px;
+            background: linear-gradient(135deg, var(--bg-color) 0%, rgba(252, 109, 38, 0.05) 100%);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+
+        .contributors-section {
+            background: var(--card-bg);
+            border-radius: 8px;
+            box-shadow: var(--shadow);
+            padding: 20px;
+        }
+
+        .contributors-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .contributors-title {
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .contributors-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .contributor-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            border-radius: 6px;
+            transition: var(--transition);
+        }
+
+        .contributor-item:hover {
+            background: var(--bg-color);
+        }
+
+        .contributor-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+        }
+
+        .contributor-info {
+            flex: 1;
+        }
+
+        .contributor-name {
+            font-weight: 500;
+            font-size: 14px;
+            margin-bottom: 2px;
+        }
+
+        .contributor-stats {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .contributor-commits {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--primary-color);
+        }
+
+        .activity-section {
+            background: var(--card-bg);
+            border-radius: 8px;
+            box-shadow: var(--shadow);
+            padding: 20px;
+        }
+
+        .activity-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .activity-title {
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .activity-calendar {
+            display: grid;
+            grid-template-columns: repeat(52, 1fr);
+            gap: 3px;
+        }
+
+        .calendar-day {
+            width: 12px;
+            height: 12px;
+            border-radius: 2px;
+            background: var(--bg-color);
+        }
+
+        .calendar-day.level-1 {
+            background: rgba(252, 109, 38, 0.25);
+        }
+
+        .calendar-day.level-2 {
+            background: rgba(252, 109, 38, 0.5);
+        }
+
+        .calendar-day.level-3 {
+            background: rgba(252, 109, 38, 0.75);
+        }
+
+        .calendar-day.level-4 {
+            background: var(--primary-color);
+        }
+
+        .calendar-legend {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 15px;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .calendar-legend-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        @media (max-width: 1200px) {
+            .charts-section {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <header class="top-bar">
+            <div class="top-bar-left">
+                <button class="menu-toggle" id="menuToggle">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <a href="/" class="logo">
+                    <i class="fas fa-code-branch"></i>
+                    <span>GitFolio</span>
+                </a>
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" placeholder="搜索项目、Issue、合并请求...">
+                </div>
+            </div>
+            <div class="top-bar-right">
+                <button class="icon-btn">
+                    <i class="fas fa-plus"></i>
+                </button>
+                <button class="icon-btn">
+                    <i class="fas fa-bell"></i>
+                    <span class="badge">3</span>
+                </button>
+                <div class="user-menu">
+                    <img src="https://via.placeholder.com/32" alt="用户头像" class="avatar">
+                    <span class="username">ryan</span>
+                    <i class="fas fa-chevron-down"></i>
+                </div>
+            </div>
+        </header>
+
+        <div class="main-container">
+            <aside class="sidebar" id="sidebar">
+                <nav class="sidebar-nav">
+                    <div class="nav-section">
+                        <a href="/" class="nav-item">
+                            <i class="fas fa-home"></i>
+                            <span>仪表盘</span>
+                        </a>
+                        <a href="/projects" class="nav-item active">
+                            <i class="fas fa-folder"></i>
+                            <span>项目</span>
+                        </a>
+                        <a href="/groups" class="nav-item">
+                            <i class="fas fa-users"></i>
+                            <span>群组</span>
+                        </a>
+                        <a href="/activity" class="nav-item">
+                            <i class="fas fa-chart-line"></i>
+                            <span>活动</span>
+                        </a>
+                        <a href="/milestones" class="nav-item">
+                            <i class="fas fa-flag"></i>
+                            <span>里程碑</span>
+                        </a>
+                        <a href="/snippets" class="nav-item">
+                            <i class="fas fa-code"></i>
+                            <span>代码片段</span>
+                        </a>
+                    </div>
+                </nav>
+            </aside>
+
+            <main class="content">
+                <div class="stats-page">
+                    <div class="project-header">
+                        <div class="project-header-top">
+                            <div class="project-title-section">
+                                <h1>gitfolio-core</h1>
+                                <span class="project-visibility">公开</span>
+                            </div>
+                            <div class="project-actions-bar">
+                                <button class="btn btn-sm">
+                                    <i class="fas fa-star"></i> 星标
+                                </button>
+                                <button class="btn btn-sm">
+                                    <i class="fas fa-code-branch"></i> Fork
+                                </button>
+                                <button class="btn btn-sm">
+                                    <i class="fas fa-clone"></i> 克隆
+                                </button>
+                            </div>
+                        </div>
+                        <div class="project-breadcrumb">
+                            <a href="#">ryan</a>
+                            <span>/</span>
+                            <span>gitfolio-core</span>
+                        </div>
+                        <p class="project-description">Git 仓库管理核心系统，提供完整的版本控制和协作功能</p>
+                    </div>
+
+                    <div class="project-tabs">
+                        <a href="/project-detail" class="project-tab">
+                            <i class="fas fa-code"></i>
+                            代码
+                        </a>
+                        <a href="/issues" class="project-tab">
+                            <i class="fas fa-exclamation-circle"></i>
+                            Issue
+                            <span class="badge">12</span>
+                        </a>
+                        <a href="/merge-requests" class="project-tab">
+                            <i class="fas fa-code-branch"></i>
+                            合并请求
+                            <span class="badge">5</span>
+                        </a>
+                        <a href="/releases" class="project-tab">
+                            <i class="fas fa-cube"></i>
+                            发布
+                        </a>
+                        <a href="/stats" class="project-tab active">
+                            <i class="fas fa-chart-line"></i>
+                            统计
+                        </a>
+                        <a href="/settings" class="project-tab">
+                            <i class="fas fa-cog"></i>
+                            设置
+                        </a>
+                    </div>
+
+                    <h1 class="stats-title">统计</h1>
+
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-card-header">
+                                <span class="stat-card-title">提交次数</span>
+                                <div class="stat-card-icon commits">
+                                    <i class="fas fa-code-commit"></i>
+                                </div>
+                            </div>
+                            <div class="stat-card-value">1,234</div>
+                            <div class="stat-card-change positive">
+                                <i class="fas fa-arrow-up"></i>
+                                <span>+12% 较上月</span>
+                            </div>
+                        </div>
+
+                        <div class="stat-card">
+                            <div class="stat-card-header">
+                                <span class="stat-card-title">分支数量</span>
+                                <div class="stat-card-icon branches">
+                                    <i class="fas fa-code-branch"></i>
+                                </div>
+                            </div>
+                            <div class="stat-card-value">23</div>
+                            <div class="stat-card-change positive">
+                                <i class="fas fa-arrow-up"></i>
+                                <span>+3 新分支</span>
+                            </div>
+                        </div>
+
+                        <div class="stat-card">
+                            <div class="stat-card-header">
+                                <span class="stat-card-title">Issue 数量</span>
+                                <div class="stat-card-icon issues">
+                                    <i class="fas fa-exclamation-circle"></i>
+                                </div>
+                            </div>
+                            <div class="stat-card-value">57</div>
+                            <div class="stat-card-change negative">
+                                <i class="fas fa-arrow-down"></i>
+                                <span>-8 较上月</span>
+                            </div>
+                        </div>
+
+                        <div class="stat-card">
+                            <div class="stat-card-header">
+                                <span class="stat-card-title">合并请求</span>
+                                <div class="stat-card-icon mrs">
+                                    <i class="fas fa-code-merge"></i>
+                                </div>
+                            </div>
+                            <div class="stat-card-value">36</div>
+                            <div class="stat-card-change positive">
+                                <i class="fas fa-arrow-up"></i>
+                                <span>+5 较上月</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="charts-section">
+                        <div class="chart-card">
+                            <div class="chart-header">
+                                <h3 class="chart-title">提交活动</h3>
+                                <select class="chart-filter">
+                                    <option>最近 30 天</option>
+                                    <option>最近 90 天</option>
+                                    <option>最近 1 年</option>
+                                </select>
+                            </div>
+                            <div class="chart-placeholder">
+                                <i class="fas fa-chart-line"></i> 提交活动图表
+                            </div>
+                        </div>
+
+                        <div class="contributors-section">
+                            <div class="contributors-header">
+                                <h3 class="contributors-title">贡献者</h3>
+                                <a href="#" class="btn btn-sm">查看全部</a>
+                            </div>
+                            <div class="contributors-list">
+                                <div class="contributor-item">
+                                    <img src="https://via.placeholder.com/40" alt="贡献者" class="contributor-avatar">
+                                    <div class="contributor-info">
+                                        <div class="contributor-name">ryan</div>
+                                        <div class="contributor-stats">456 次提交</div>
+                                    </div>
+                                    <div class="contributor-commits">37%</div>
+                                </div>
+
+                                <div class="contributor-item">
+                                    <img src="https://via.placeholder.com/40" alt="贡献者" class="contributor-avatar">
+                                    <div class="contributor-info">
+                                        <div class="contributor-name">alice</div>
+                                        <div class="contributor-stats">312 次提交</div>
+                                    </div>
+                                    <div class="contributor-commits">25%</div>
+                                </div>
+
+                                <div class="contributor-item">
+                                    <img src="https://via.placeholder.com/40" alt="贡献者" class="contributor-avatar">
+                                    <div class="contributor-info">
+                                        <div class="contributor-name">bob</div>
+                                        <div class="contributor-stats">234 次提交</div>
+                                    </div>
+                                    <div class="contributor-commits">19%</div>
+                                </div>
+
+                                <div class="contributor-item">
+                                    <img src="https://via.placeholder.com/40" alt="贡献者" class="contributor-avatar">
+                                    <div class="contributor-info">
+                                        <div class="contributor-name">charlie</div>
+                                        <div class="contributor-stats">178 次提交</div>
+                                    </div>
+                                    <div class="contributor-commits">14%</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="activity-section">
+                        <div class="activity-header">
+                            <h3 class="activity-title">提交日历</h3>
+                        </div>
+                        <div class="activity-calendar" id="activityCalendar"></div>
+                        <div class="calendar-legend">
+                            <span>少</span>
+                            <div class="calendar-day"></div>
+                            <div class="calendar-day level-1"></div>
+                            <div class="calendar-day level-2"></div>
+                            <div class="calendar-day level-3"></div>
+                            <div class="calendar-day level-4"></div>
+                            <span>多</span>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+    <script>
+        const calendar = document.getElementById('activityCalendar');
+        const levels = ['', 'level-1', 'level-2', 'level-3', 'level-4'];
+        for (let i = 0; i < 364; i++) {
+            const day = document.createElement('div');
+            day.className = 'calendar-day ' + levels[Math.floor(Math.random() * 5)];
+            calendar.appendChild(day);
+        }
+    </script>
+</body>
+</html>

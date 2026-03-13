@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Issue - gitfolio-core - GitFolio</title>
+    <title>合并请求 - gitfolio-core - GitFolio</title>
     <link rel="stylesheet" href="/static/styles.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        .issues-page {
+        .merge-requests-page {
             max-width: 100%;
         }
 
@@ -113,19 +113,19 @@
             color: var(--primary-color);
         }
 
-        .issues-header {
+        .mr-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
             margin-bottom: 20px;
         }
 
-        .issues-title {
+        .mr-title {
             font-size: 24px;
             font-weight: 600;
         }
 
-        .issues-tabs {
+        .mr-tabs {
             display: flex;
             gap: 0;
             background: var(--card-bg);
@@ -135,7 +135,7 @@
             overflow: hidden;
         }
 
-        .issues-tab {
+        .mr-tab {
             flex: 1;
             padding: 12px 20px;
             font-size: 14px;
@@ -151,30 +151,30 @@
             gap: 8px;
         }
 
-        .issues-tab:hover {
+        .mr-tab:hover {
             color: var(--text-primary);
             background: var(--bg-color);
         }
 
-        .issues-tab.active {
+        .mr-tab.active {
             color: var(--primary-color);
             border-bottom-color: var(--primary-color);
             background: var(--bg-color);
         }
 
-        .issues-tab .count {
+        .mr-tab .count {
             padding: 2px 8px;
             background: var(--bg-color);
             border-radius: 12px;
             font-size: 11px;
         }
 
-        .issues-tab.active .count {
+        .mr-tab.active .count {
             background: rgba(252, 109, 38, 0.1);
             color: var(--primary-color);
         }
 
-        .issues-filters {
+        .mr-filters {
             display: flex;
             gap: 15px;
             margin-bottom: 20px;
@@ -182,13 +182,13 @@
             align-items: center;
         }
 
-        .search-issues {
+        .search-mr {
             flex: 1;
             max-width: 400px;
             position: relative;
         }
 
-        .search-issues input {
+        .search-mr input {
             width: 100%;
             padding: 10px 12px 10px 36px;
             border: 1px solid var(--border-color);
@@ -197,12 +197,12 @@
             transition: var(--transition);
         }
 
-        .search-issues input:focus {
+        .search-mr input:focus {
             outline: none;
             border-color: var(--primary-color);
         }
 
-        .search-issues i {
+        .search-mr i {
             position: absolute;
             left: 12px;
             top: 50%;
@@ -224,14 +224,14 @@
             border-color: var(--primary-color);
         }
 
-        .issues-list {
+        .mr-list {
             background: var(--card-bg);
             border-radius: 8px;
             box-shadow: var(--shadow);
             overflow: hidden;
         }
 
-        .issue-row {
+        .mr-row {
             display: flex;
             align-items: flex-start;
             padding: 15px 20px;
@@ -239,117 +239,105 @@
             transition: var(--transition);
         }
 
-        .issue-row:last-child {
+        .mr-row:last-child {
             border-bottom: none;
         }
 
-        .issue-row:hover {
+        .mr-row:hover {
             background: var(--bg-color);
         }
 
-        .issue-checkbox {
-            margin-right: 15px;
-            margin-top: 3px;
-        }
-
-        .issue-checkbox input {
-            width: 16px;
-            height: 16px;
-            cursor: pointer;
-        }
-
-        .issue-icon {
+        .mr-icon {
             width: 20px;
             margin-right: 12px;
             margin-top: 2px;
         }
 
-        .issue-icon.open {
+        .mr-icon.open {
+            color: var(--info-color);
+        }
+
+        .mr-icon.merged {
             color: var(--success-color);
         }
 
-        .issue-icon.closed {
+        .mr-icon.closed {
             color: var(--danger-color);
         }
 
-        .issue-content {
+        .mr-content {
             flex: 1;
         }
 
-        .issue-title {
+        .mr-row-title {
             font-size: 15px;
             font-weight: 500;
             margin-bottom: 6px;
         }
 
-        .issue-title a {
+        .mr-row-title a {
             color: var(--text-primary);
             text-decoration: none;
         }
 
-        .issue-title a:hover {
+        .mr-row-title a:hover {
             color: var(--primary-color);
         }
 
-        .issue-labels {
+        .mr-labels {
             display: inline-flex;
             gap: 6px;
             margin-left: 8px;
         }
 
-        .issue-label {
+        .mr-label {
             padding: 3px 8px;
             border-radius: 12px;
             font-size: 11px;
             font-weight: 500;
-            text-transform: uppercase;
         }
 
-        .issue-label.bug {
-            background: rgba(201, 28, 0, 0.1);
-            color: var(--danger-color);
-        }
-
-        .issue-label.feature {
+        .mr-label.feature {
             background: rgba(31, 117, 203, 0.1);
             color: var(--info-color);
         }
 
-        .issue-label.enhancement {
+        .mr-label.bugfix {
+            background: rgba(201, 28, 0, 0.1);
+            color: var(--danger-color);
+        }
+
+        .mr-label.refactor {
             background: rgba(128, 91, 183, 0.1);
             color: #805bb7;
         }
 
-        .issue-label.documentation {
-            background: rgba(16, 133, 72, 0.1);
-            color: var(--success-color);
-        }
-
-        .issue-label.help-wanted {
-            background: rgba(252, 109, 38, 0.1);
-            color: var(--primary-color);
-        }
-
-        .issue-meta {
+        .mr-meta {
             font-size: 12px;
             color: var(--text-muted);
         }
 
-        .issue-meta a {
+        .mr-meta a {
             color: var(--text-muted);
             text-decoration: none;
         }
 
-        .issue-meta a:hover {
+        .mr-meta a:hover {
             color: var(--primary-color);
         }
 
-        .issue-assignees {
+        .mr-branch {
+            font-family: monospace;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .mr-assignees {
             display: flex;
             margin-left: 15px;
         }
 
-        .issue-assignee {
+        .mr-assignee {
             width: 24px;
             height: 24px;
             border-radius: 50%;
@@ -357,11 +345,11 @@
             margin-left: -8px;
         }
 
-        .issue-assignee:first-child {
+        .mr-assignee:first-child {
             margin-left: 0;
         }
 
-        .issue-comments {
+        .mr-comments {
             display: flex;
             align-items: center;
             gap: 5px;
@@ -370,12 +358,12 @@
             color: var(--text-muted);
         }
 
-        .new-issue-btn {
+        .new-mr-btn {
             background: var(--success-color);
             color: white;
         }
 
-        .new-issue-btn:hover {
+        .new-mr-btn:hover {
             background: #0d6d3b;
         }
 
@@ -422,11 +410,6 @@
             cursor: not-allowed;
         }
 
-        .pagination-ellipsis {
-            padding: 0 8px;
-            color: var(--text-muted);
-        }
-
         .pagination-info {
             font-size: 13px;
             color: var(--text-muted);
@@ -437,28 +420,6 @@
             display: flex;
             align-items: center;
             gap: 4px;
-        }
-
-        @media (max-width: 768px) {
-            .issues-filters {
-                flex-direction: column;
-                align-items: stretch;
-            }
-
-            .search-issues {
-                max-width: 100%;
-            }
-
-            .pagination {
-                flex-wrap: wrap;
-            }
-
-            .pagination-info {
-                width: 100%;
-                text-align: center;
-                margin-bottom: 12px;
-                margin-right: 0;
-            }
         }
     </style>
 </head>
@@ -527,7 +488,7 @@
             </aside>
 
             <main class="content">
-                <div class="issues-page">
+                <div class="merge-requests-page">
                     <div class="project-header">
                         <div class="project-header-top">
                             <div class="project-title-section">
@@ -559,12 +520,12 @@
                             <i class="fas fa-code"></i>
                             代码
                         </a>
-                        <a href="/issues" class="project-tab active">
+                        <a href="/issues" class="project-tab">
                             <i class="fas fa-exclamation-circle"></i>
                             Issue
                             <span class="badge">12</span>
                         </a>
-                        <a href="/merge-requests" class="project-tab">
+                        <a href="/merge-requests" class="project-tab active">
                             <i class="fas fa-code-branch"></i>
                             合并请求
                             <span class="badge">5</span>
@@ -583,50 +544,47 @@
                         </a>
                     </div>
 
-                    <div class="issues-header">
-                        <h1 class="issues-title">Issue</h1>
-                        <button class="btn new-issue-btn">
-                            <i class="fas fa-plus"></i> 新建 Issue
+                    <div class="mr-header">
+                        <h1 class="mr-title">合并请求</h1>
+                        <button class="btn new-mr-btn">
+                            <i class="fas fa-plus"></i> 新建合并请求
                         </button>
                     </div>
 
-                    <div class="issues-tabs">
-                        <a href="#" class="issues-tab active">
-                            <i class="fas fa-exclamation-circle"></i>
+                    <div class="mr-tabs">
+                        <a href="#" class="mr-tab active">
+                            <i class="fas fa-code-branch"></i>
                             打开
-                            <span class="count">12</span>
+                            <span class="count">5</span>
                         </a>
-                        <a href="#" class="issues-tab">
-                            <i class="fas fa-check-circle"></i>
+                        <a href="#" class="mr-tab">
+                            <i class="fas fa-check"></i>
+                            已合并
+                            <span class="count">23</span>
+                        </a>
+                        <a href="#" class="mr-tab">
+                            <i class="fas fa-times"></i>
                             已关闭
-                            <span class="count">45</span>
+                            <span class="count">8</span>
                         </a>
-                        <a href="#" class="issues-tab">
+                        <a href="#" class="mr-tab">
                             <i class="fas fa-list"></i>
                             全部
-                            <span class="count">57</span>
+                            <span class="count">36</span>
                         </a>
                     </div>
 
-                    <div class="issues-filters">
-                        <div class="search-issues">
+                    <div class="mr-filters">
+                        <div class="search-mr">
                             <i class="fas fa-search"></i>
-                            <input type="text" placeholder="搜索 Issue...">
+                            <input type="text" placeholder="搜索合并请求...">
                         </div>
 
                         <select class="filter-dropdown">
-                            <option>标签</option>
-                            <option>Bug</option>
-                            <option>Feature</option>
-                            <option>Enhancement</option>
-                            <option>Documentation</option>
-                        </select>
-
-                        <select class="filter-dropdown">
-                            <option>里程碑</option>
-                            <option>v1.0.0</option>
-                            <option>v1.1.0</option>
-                            <option>v2.0.0</option>
+                            <option>作者</option>
+                            <option>ryan</option>
+                            <option>alice</option>
+                            <option>bob</option>
                         </select>
 
                         <select class="filter-dropdown">
@@ -637,164 +595,129 @@
                         </select>
 
                         <select class="filter-dropdown">
+                            <option>里程碑</option>
+                            <option>v2.0.0</option>
+                            <option>v1.5.0</option>
+                        </select>
+
+                        <select class="filter-dropdown">
                             <option>排序</option>
                             <option>最近创建</option>
                             <option>最近更新</option>
-                            <option>评论最多</option>
+                            <option>优先级</option>
                         </select>
                     </div>
 
-                    <div class="issues-list">
-                        <div class="issue-row">
-                            <div class="issue-checkbox">
-                                <input type="checkbox">
+                    <div class="mr-list">
+                        <div class="mr-row">
+                            <div class="mr-icon open">
+                                <i class="fas fa-code-branch"></i>
                             </div>
-                            <div class="issue-icon open">
-                                <i class="fas fa-exclamation-circle"></i>
-                            </div>
-                            <div class="issue-content">
-                                <div class="issue-title">
-                                    <a href="#">修复用户权限验证问题</a>
-                                    <span class="issue-labels">
-                                        <span class="issue-label bug">Bug</span>
-                                        <span class="issue-label help-wanted">Help Wanted</span>
+                            <div class="mr-content">
+                                <div class="mr-row-title">
+                                    <a href="#">重构用户认证模块</a>
+                                    <span class="mr-labels">
+                                        <span class="mr-label refactor">重构</span>
                                     </span>
                                 </div>
-                                <div class="issue-meta">
-                                    <a href="#">#124</a> · 打开于 3 天前 · <a href="#">ryan</a>
+                                <div class="mr-meta">
+                                    <a href="#">!46</a> · <span class="mr-branch">feature/auth-refactor → main</span> · 打开于 3 天前 · <a href="#">ryan</a>
                                 </div>
                             </div>
-                            <div class="issue-assignees">
-                                <img src="https://via.placeholder.com/24" alt="指派给" class="issue-assignee" title="ryan">
+                            <div class="mr-assignees">
+                                <img src="https://via.placeholder.com/24" alt="指派给" class="mr-assignee" title="ryan">
                             </div>
-                            <div class="issue-comments">
-                                <i class="fas fa-comment"></i>
-                                <span>5</span>
-                            </div>
-                        </div>
-
-                        <div class="issue-row">
-                            <div class="issue-checkbox">
-                                <input type="checkbox">
-                            </div>
-                            <div class="issue-icon open">
-                                <i class="fas fa-exclamation-circle"></i>
-                            </div>
-                            <div class="issue-content">
-                                <div class="issue-title">
-                                    <a href="#">添加暗色主题支持</a>
-                                    <span class="issue-labels">
-                                        <span class="issue-label feature">Feature</span>
-                                        <span class="issue-label enhancement">Enhancement</span>
-                                    </span>
-                                </div>
-                                <div class="issue-meta">
-                                    <a href="#">#122</a> · 打开于 5 天前 · <a href="#">alice</a>
-                                </div>
-                            </div>
-                            <div class="issue-assignees">
-                                <img src="https://via.placeholder.com/24" alt="指派给" class="issue-assignee" title="alice">
-                            </div>
-                            <div class="issue-comments">
-                                <i class="fas fa-comment"></i>
-                                <span>12</span>
-                            </div>
-                        </div>
-
-                        <div class="issue-row">
-                            <div class="issue-checkbox">
-                                <input type="checkbox">
-                            </div>
-                            <div class="issue-icon open">
-                                <i class="fas fa-exclamation-circle"></i>
-                            </div>
-                            <div class="issue-content">
-                                <div class="issue-title">
-                                    <a href="#">优化数据库查询性能</a>
-                                    <span class="issue-labels">
-                                        <span class="issue-label enhancement">Enhancement</span>
-                                    </span>
-                                </div>
-                                <div class="issue-meta">
-                                    <a href="#">#120</a> · 打开于 1 周前 · <a href="#">bob</a>
-                                </div>
-                            </div>
-                            <div class="issue-comments">
+                            <div class="mr-comments">
                                 <i class="fas fa-comment"></i>
                                 <span>8</span>
                             </div>
                         </div>
 
-                        <div class="issue-row">
-                            <div class="issue-checkbox">
-                                <input type="checkbox">
+                        <div class="mr-row">
+                            <div class="mr-icon open">
+                                <i class="fas fa-code-branch"></i>
                             </div>
-                            <div class="issue-icon open">
-                                <i class="fas fa-exclamation-circle"></i>
-                            </div>
-                            <div class="issue-content">
-                                <div class="issue-title">
-                                    <a href="#">更新 API 文档</a>
-                                    <span class="issue-labels">
-                                        <span class="issue-label documentation">Documentation</span>
+                            <div class="mr-content">
+                                <div class="mr-row-title">
+                                    <a href="#">添加暗色主题支持</a>
+                                    <span class="mr-labels">
+                                        <span class="mr-label feature">功能</span>
                                     </span>
                                 </div>
-                                <div class="issue-meta">
-                                    <a href="#">#118</a> · 打开于 2 周前 · <a href="#">ryan</a>
+                                <div class="mr-meta">
+                                    <a href="#">!45</a> · <span class="mr-branch">feature/dark-theme → main</span> · 打开于 5 天前 · <a href="#">alice</a>
                                 </div>
                             </div>
-                            <div class="issue-comments">
+                            <div class="mr-assignees">
+                                <img src="https://via.placeholder.com/24" alt="指派给" class="mr-assignee" title="alice">
+                            </div>
+                            <div class="mr-comments">
+                                <i class="fas fa-comment"></i>
+                                <span>12</span>
+                            </div>
+                        </div>
+
+                        <div class="mr-row">
+                            <div class="mr-icon open">
+                                <i class="fas fa-code-branch"></i>
+                            </div>
+                            <div class="mr-content">
+                                <div class="mr-row-title">
+                                    <a href="#">修复权限验证问题</a>
+                                    <span class="mr-labels">
+                                        <span class="mr-label bugfix">修复</span>
+                                    </span>
+                                </div>
+                                <div class="mr-meta">
+                                    <a href="#">!44</a> · <span class="mr-branch">fix/permission → main</span> · 打开于 1 周前 · <a href="#">bob</a>
+                                </div>
+                            </div>
+                            <div class="mr-comments">
+                                <i class="fas fa-comment"></i>
+                                <span>5</span>
+                            </div>
+                        </div>
+
+                        <div class="mr-row">
+                            <div class="mr-icon open">
+                                <i class="fas fa-code-branch"></i>
+                            </div>
+                            <div class="mr-content">
+                                <div class="mr-row-title">
+                                    <a href="#">优化数据库查询性能</a>
+                                    <span class="mr-labels">
+                                        <span class="mr-label refactor">优化</span>
+                                    </span>
+                                </div>
+                                <div class="mr-meta">
+                                    <a href="#">!43</a> · <span class="mr-branch">perf/db-query → main</span> · 打开于 2 周前 · <a href="#">ryan</a>
+                                </div>
+                            </div>
+                            <div class="mr-assignees">
+                                <img src="https://via.placeholder.com/24" alt="指派给" class="mr-assignee" title="ryan">
+                            </div>
+                            <div class="mr-comments">
                                 <i class="fas fa-comment"></i>
                                 <span>3</span>
                             </div>
                         </div>
 
-                        <div class="issue-row">
-                            <div class="issue-checkbox">
-                                <input type="checkbox">
+                        <div class="mr-row">
+                            <div class="mr-icon open">
+                                <i class="fas fa-code-branch"></i>
                             </div>
-                            <div class="issue-icon open">
-                                <i class="fas fa-exclamation-circle"></i>
-                            </div>
-                            <div class="issue-content">
-                                <div class="issue-title">
-                                    <a href="#">添加单元测试覆盖率报告</a>
-                                    <span class="issue-labels">
-                                        <span class="issue-label enhancement">Enhancement</span>
+                            <div class="mr-content">
+                                <div class="mr-row-title">
+                                    <a href="#">更新 API 文档</a>
+                                    <span class="mr-labels">
+                                        <span class="mr-label feature">文档</span>
                                     </span>
                                 </div>
-                                <div class="issue-meta">
-                                    <a href="#">#115</a> · 打开于 3 周前 · <a href="#">charlie</a>
+                                <div class="mr-meta">
+                                    <a href="#">!42</a> · <span class="mr-branch">docs/api → main</span> · 打开于 3 周前 · <a href="#">charlie</a>
                                 </div>
                             </div>
-                            <div class="issue-assignees">
-                                <img src="https://via.placeholder.com/24" alt="指派给" class="issue-assignee" title="charlie">
-                            </div>
-                            <div class="issue-comments">
-                                <i class="fas fa-comment"></i>
-                                <span>6</span>
-                            </div>
-                        </div>
-
-                        <div class="issue-row">
-                            <div class="issue-checkbox">
-                                <input type="checkbox">
-                            </div>
-                            <div class="issue-icon closed">
-                                <i class="fas fa-check-circle"></i>
-                            </div>
-                            <div class="issue-content">
-                                <div class="issue-title">
-                                    <a href="#">修复登录页面样式问题</a>
-                                    <span class="issue-labels">
-                                        <span class="issue-label bug">Bug</span>
-                                    </span>
-                                </div>
-                                <div class="issue-meta">
-                                    <a href="#">#112</a> · 关闭于 1 个月前 · <a href="#">ryan</a>
-                                </div>
-                            </div>
-                            <div class="issue-comments">
+                            <div class="mr-comments">
                                 <i class="fas fa-comment"></i>
                                 <span>2</span>
                             </div>
@@ -802,17 +725,13 @@
                     </div>
 
                     <div class="pagination">
-                        <span class="pagination-info">显示 1-10 条，共 57 条</span>
+                        <span class="pagination-info">显示 1-5 条，共 5 条</span>
                         <div class="pagination-nav">
                             <button class="pagination-btn" disabled>
                                 <i class="fas fa-chevron-left"></i>
                             </button>
                             <button class="pagination-btn active">1</button>
-                            <button class="pagination-btn">2</button>
-                            <button class="pagination-btn">3</button>
-                            <span class="pagination-ellipsis">...</span>
-                            <button class="pagination-btn">6</button>
-                            <button class="pagination-btn">
+                            <button class="pagination-btn" disabled>
                                 <i class="fas fa-chevron-right"></i>
                             </button>
                         </div>

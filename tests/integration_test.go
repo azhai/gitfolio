@@ -31,7 +31,7 @@ func TestCompleteUserFlow(t *testing.T) {
 		w, _ := MakeRequest(router, "POST", "/api/v1/auth/login", payload, nil)
 		AssertStatus(t, http.StatusOK, w.StatusCode)
 
-		var response map[string]interface{}
+		var response map[string]any
 		json.Unmarshal([]byte(ReadBody(w)), &response)
 		token = response["token"].(string)
 	})
@@ -41,7 +41,7 @@ func TestCompleteUserFlow(t *testing.T) {
 	}
 
 	t.Run("Create repository", func(t *testing.T) {
-		payload := map[string]interface{}{
+		payload := map[string]any{
 			"name":        "flow-repo",
 			"description": "Test repository for flow",
 			"is_private":  false,
@@ -55,7 +55,7 @@ func TestCompleteUserFlow(t *testing.T) {
 		w, _ := MakeRequest(router, "GET", "/api/v1/users/flowuser/repos", nil, nil)
 		AssertStatus(t, http.StatusOK, w.StatusCode)
 
-		var response []interface{}
+		var response []any
 		json.Unmarshal([]byte(ReadBody(w)), &response)
 
 		if len(response) != 1 {
@@ -64,7 +64,7 @@ func TestCompleteUserFlow(t *testing.T) {
 	})
 
 	t.Run("Create issue", func(t *testing.T) {
-		payload := map[string]interface{}{
+		payload := map[string]any{
 			"title": "Flow Issue",
 			"body":  "This is a test issue in the flow",
 		}
@@ -77,7 +77,7 @@ func TestCompleteUserFlow(t *testing.T) {
 		w, _ := MakeRequest(router, "GET", "/api/v1/flowuser/flow-repo/issues", nil, nil)
 		AssertStatus(t, http.StatusOK, w.StatusCode)
 
-		var response []interface{}
+		var response []any
 		json.Unmarshal([]byte(ReadBody(w)), &response)
 
 		if len(response) != 1 {
@@ -86,7 +86,7 @@ func TestCompleteUserFlow(t *testing.T) {
 	})
 
 	t.Run("Add comment", func(t *testing.T) {
-		payload := map[string]interface{}{
+		payload := map[string]any{
 			"body": "This is a test comment",
 		}
 
@@ -95,7 +95,7 @@ func TestCompleteUserFlow(t *testing.T) {
 	})
 
 	t.Run("Close issue", func(t *testing.T) {
-		payload := map[string]interface{}{
+		payload := map[string]any{
 			"is_closed": true,
 		}
 
@@ -115,7 +115,7 @@ func TestCollaborationFlow(t *testing.T) {
 	w, _ := MakeRequest(router, "POST", "/api/v1/auth/register", ownerPayload, nil)
 	AssertStatus(t, http.StatusCreated, w.StatusCode)
 
-	var ownerResponse map[string]interface{}
+	var ownerResponse map[string]any
 	json.Unmarshal([]byte(ReadBody(w)), &ownerResponse)
 	ownerToken := ownerResponse["token"].(string)
 
@@ -123,7 +123,7 @@ func TestCollaborationFlow(t *testing.T) {
 		"Authorization": "Bearer " + ownerToken,
 	}
 
-	repoPayload := map[string]interface{}{
+	repoPayload := map[string]any{
 		"name":        "collab-repo",
 		"description": "Collaboration test repository",
 		"is_private":  false,
@@ -139,7 +139,7 @@ func TestCollaborationFlow(t *testing.T) {
 	w, _ = MakeRequest(router, "POST", "/api/v1/auth/register", collaboratorPayload, nil)
 	AssertStatus(t, http.StatusCreated, w.StatusCode)
 
-	var collabResponse map[string]interface{}
+	var collabResponse map[string]any
 	json.Unmarshal([]byte(ReadBody(w)), &collabResponse)
 	collabToken := collabResponse["token"].(string)
 
@@ -153,7 +153,7 @@ func TestCollaborationFlow(t *testing.T) {
 	})
 
 	t.Run("Create issue on original repo", func(t *testing.T) {
-		payload := map[string]interface{}{
+		payload := map[string]any{
 			"title": "Issue on original repo",
 			"body":  "Issue created by collaborator",
 		}
@@ -174,7 +174,7 @@ func TestPrivateRepositoryFlow(t *testing.T) {
 	w, _ := MakeRequest(router, "POST", "/api/v1/auth/register", ownerPayload, nil)
 	AssertStatus(t, http.StatusCreated, w.StatusCode)
 
-	var ownerResponse map[string]interface{}
+	var ownerResponse map[string]any
 	json.Unmarshal([]byte(ReadBody(w)), &ownerResponse)
 	ownerToken := ownerResponse["token"].(string)
 
@@ -182,7 +182,7 @@ func TestPrivateRepositoryFlow(t *testing.T) {
 		"Authorization": "Bearer " + ownerToken,
 	}
 
-	repoPayload := map[string]interface{}{
+	repoPayload := map[string]any{
 		"name":        "private-repo",
 		"description": "Private repository",
 		"is_private":  true,
@@ -198,7 +198,7 @@ func TestPrivateRepositoryFlow(t *testing.T) {
 	w, _ = MakeRequest(router, "POST", "/api/v1/auth/register", otherPayload, nil)
 	AssertStatus(t, http.StatusCreated, w.StatusCode)
 
-	var otherResponse map[string]interface{}
+	var otherResponse map[string]any
 	json.Unmarshal([]byte(ReadBody(w)), &otherResponse)
 	otherToken := otherResponse["token"].(string)
 
@@ -233,7 +233,7 @@ func TestPagination(t *testing.T) {
 	w, _ := MakeRequest(router, "POST", "/api/v1/auth/register", userPayload, nil)
 	AssertStatus(t, http.StatusCreated, w.StatusCode)
 
-	var response map[string]interface{}
+	var response map[string]any
 	json.Unmarshal([]byte(ReadBody(w)), &response)
 	token := response["token"].(string)
 
@@ -242,7 +242,7 @@ func TestPagination(t *testing.T) {
 	}
 
 	for i := 1; i <= 35; i++ {
-		repoPayload := map[string]interface{}{
+		repoPayload := map[string]any{
 			"name":        "repo" + string(rune('0'+i)),
 			"description": "Repository",
 		}
@@ -253,10 +253,10 @@ func TestPagination(t *testing.T) {
 		w, _ := MakeRequest(router, "GET", "/api/v1/repos?page=1&per_page=10", nil, nil)
 		AssertStatus(t, http.StatusOK, w.StatusCode)
 
-		var resp map[string]interface{}
+		var resp map[string]any
 		json.Unmarshal([]byte(ReadBody(w)), &resp)
 
-		data := resp["data"].([]interface{})
+		data := resp["data"].([]any)
 		if len(data) != 10 {
 			t.Errorf("Expected 10 items on first page, got %d", len(data))
 		}
@@ -266,10 +266,10 @@ func TestPagination(t *testing.T) {
 		w, _ := MakeRequest(router, "GET", "/api/v1/repos?page=4&per_page=10", nil, nil)
 		AssertStatus(t, http.StatusOK, w.StatusCode)
 
-		var resp map[string]interface{}
+		var resp map[string]any
 		json.Unmarshal([]byte(ReadBody(w)), &resp)
 
-		data := resp["data"].([]interface{})
+		data := resp["data"].([]any)
 		if len(data) != 5 {
 			t.Errorf("Expected 5 items on last page, got %d", len(data))
 		}

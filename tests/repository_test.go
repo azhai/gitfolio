@@ -26,12 +26,12 @@ func TestCreateRepository(t *testing.T) {
 
 	tests := []struct {
 		name       string
-		payload    map[string]interface{}
+		payload    map[string]any
 		wantStatus int
 	}{
 		{
 			name: "Valid public repository",
-			payload: map[string]interface{}{
+			payload: map[string]any{
 				"name":        "test-repo",
 				"description": "Test repository",
 				"is_private":  false,
@@ -40,7 +40,7 @@ func TestCreateRepository(t *testing.T) {
 		},
 		{
 			name: "Valid private repository",
-			payload: map[string]interface{}{
+			payload: map[string]any{
 				"name":        "private-repo",
 				"description": "Private repository",
 				"is_private":  true,
@@ -49,14 +49,14 @@ func TestCreateRepository(t *testing.T) {
 		},
 		{
 			name: "Missing name",
-			payload: map[string]interface{}{
+			payload: map[string]any{
 				"description": "No name repository",
 			},
 			wantStatus: http.StatusBadRequest,
 		},
 		{
 			name: "Empty name",
-			payload: map[string]interface{}{
+			payload: map[string]any{
 				"name":        "",
 				"description": "Empty name repository",
 			},
@@ -99,7 +99,7 @@ func TestDuplicateRepositoryName(t *testing.T) {
 		"Authorization": "Bearer " + token,
 	}
 
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"name":        "duplicate-repo",
 		"description": "First repository",
 	}
@@ -135,10 +135,10 @@ func TestListRepositories(t *testing.T) {
 	w, _ := MakeRequest(router, "GET", "/api/v1/repos", nil, nil)
 	AssertStatus(t, http.StatusOK, w.StatusCode)
 
-	var response map[string]interface{}
+	var response map[string]any
 	json.Unmarshal([]byte(ReadBody(w)), &response)
 
-	data := response["data"].([]interface{})
+	data := response["data"].([]any)
 	if len(data) != 2 {
 		t.Errorf("Expected 2 public repositories, got %d", len(data))
 	}
@@ -232,7 +232,7 @@ func TestUpdateRepository(t *testing.T) {
 		"Authorization": "Bearer " + token,
 	}
 
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"description": "Updated description",
 	}
 

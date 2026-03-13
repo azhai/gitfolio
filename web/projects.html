@@ -239,33 +239,56 @@
         .pagination {
             display: flex;
             justify-content: center;
-            gap: 10px;
-            margin-top: 30px;
+            align-items: center;
+            gap: 8px;
+            margin-top: 24px;
+            padding: 16px 0;
         }
 
         .pagination-btn {
-            padding: 8px 16px;
+            min-width: 36px;
+            height: 36px;
+            padding: 0 12px;
             border: 1px solid var(--border-color);
-            background: white;
-            border-radius: 4px;
+            border-radius: 6px;
+            background: var(--card-bg);
+            color: var(--text-secondary);
+            font-size: 14px;
+            font-weight: 500;
             cursor: pointer;
             transition: var(--transition);
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
-        .pagination-btn:hover {
+        .pagination-btn:hover:not(:disabled) {
             border-color: var(--primary-color);
             color: var(--primary-color);
+            background: rgba(252, 109, 38, 0.05);
         }
 
         .pagination-btn.active {
             background: var(--primary-color);
-            color: white;
             border-color: var(--primary-color);
+            color: white;
         }
 
         .pagination-btn:disabled {
             opacity: 0.5;
             cursor: not-allowed;
+        }
+
+        .pagination-info {
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-right: 16px;
+        }
+
+        .pagination-nav {
+            display: flex;
+            align-items: center;
+            gap: 4px;
         }
     </style>
 </head>
@@ -313,19 +336,19 @@
                             <i class="fas fa-folder"></i>
                             <span>项目</span>
                         </a>
-                        <a href="groups.html" class="nav-item">
+                        <a href="/groups" class="nav-item">
                             <i class="fas fa-users"></i>
                             <span>群组</span>
                         </a>
-                        <a href="activity.html" class="nav-item">
+                        <a href="/activity" class="nav-item">
                             <i class="fas fa-chart-line"></i>
                             <span>活动</span>
                         </a>
-                        <a href="milestones.html" class="nav-item">
+                        <a href="/milestones" class="nav-item">
                             <i class="fas fa-flag"></i>
                             <span>里程碑</span>
                         </a>
-                        <a href="snippets.html" class="nav-item">
+                        <a href="/snippets" class="nav-item">
                             <i class="fas fa-code"></i>
                             <span>代码片段</span>
                         </a>
@@ -611,15 +634,18 @@
                     </div>
 
                     <div class="pagination">
-                        <button class="pagination-btn" disabled>
-                            <i class="fas fa-chevron-left"></i>
-                        </button>
-                        <button class="pagination-btn active">1</button>
-                        <button class="pagination-btn">2</button>
-                        <button class="pagination-btn">3</button>
-                        <button class="pagination-btn">
-                            <i class="fas fa-chevron-right"></i>
-                        </button>
+                        <span class="pagination-info">显示 1-6 条，共 18 条</span>
+                        <div class="pagination-nav">
+                            <button class="pagination-btn" disabled>
+                                <i class="fas fa-chevron-left"></i>
+                            </button>
+                            <button class="pagination-btn active">1</button>
+                            <button class="pagination-btn">2</button>
+                            <button class="pagination-btn">3</button>
+                            <button class="pagination-btn">
+                                <i class="fas fa-chevron-right"></i>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </main>

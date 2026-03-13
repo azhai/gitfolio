@@ -36,12 +36,12 @@ func TestCreateIssue(t *testing.T) {
 
 	tests := []struct {
 		name       string
-		payload    map[string]interface{}
+		payload    map[string]any
 		wantStatus int
 	}{
 		{
 			name: "Valid issue",
-			payload: map[string]interface{}{
+			payload: map[string]any{
 				"title": "Test Issue",
 				"body":  "This is a test issue",
 			},
@@ -49,7 +49,7 @@ func TestCreateIssue(t *testing.T) {
 		},
 		{
 			name: "Issue with labels",
-			payload: map[string]interface{}{
+			payload: map[string]any{
 				"title":  "Issue with labels",
 				"body":   "Issue body",
 				"labels": []string{"bug", "help-wanted"},
@@ -58,7 +58,7 @@ func TestCreateIssue(t *testing.T) {
 		},
 		{
 			name: "Missing title",
-			payload: map[string]interface{}{
+			payload: map[string]any{
 				"body": "No title issue",
 			},
 			wantStatus: http.StatusBadRequest,
@@ -109,7 +109,7 @@ func TestListIssues(t *testing.T) {
 	w, _ := MakeRequest(router, "GET", "/api/v1/listissueuser/list-issue-repo/issues?state=open", nil, nil)
 	AssertStatus(t, http.StatusOK, w.StatusCode)
 
-	var response []interface{}
+	var response []any
 	json.Unmarshal([]byte(ReadBody(w)), &response)
 
 	if len(response) != 2 {
@@ -190,7 +190,7 @@ func TestUpdateIssue(t *testing.T) {
 		"Authorization": "Bearer " + token,
 	}
 
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"title": "Updated Title",
 		"body":  "Updated body",
 	}
@@ -232,7 +232,7 @@ func TestCloseIssue(t *testing.T) {
 		"Authorization": "Bearer " + token,
 	}
 
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"is_closed": true,
 	}
 
@@ -272,7 +272,7 @@ func TestCreateComment(t *testing.T) {
 		"Authorization": "Bearer " + token,
 	}
 
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"body": "This is a test comment",
 	}
 

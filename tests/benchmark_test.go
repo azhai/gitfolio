@@ -65,7 +65,7 @@ func BenchmarkCreateRepository(b *testing.B) {
 		"Authorization": "Bearer " + token,
 	}
 
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"name":        "bench-repo",
 		"description": "Benchmark repository",
 	}
@@ -101,7 +101,7 @@ func BenchmarkCreateIssue(b *testing.B) {
 		"Authorization": "Bearer " + token,
 	}
 
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"title": "Benchmark Issue",
 		"body":  "Benchmark issue body",
 	}
@@ -124,7 +124,7 @@ func BenchmarkListRepositories(b *testing.B) {
 	db := database.GetDB()
 	db.User.Insert().One(&user)
 
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		repo := models.Repository{
 			Name:      "repo" + string(rune(i)),
 			OwnerID:   user.ID,

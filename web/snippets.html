@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>代码片段 - GitFolio</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+    <style>
+        .snippets-page {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+
+        .page-title {
+            font-size: 28px;
+            font-weight: 600;
+        }
+
+        .filters-bar {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .search-filter {
+            flex: 1;
+            max-width: 300px;
+            position: relative;
+        }
+
+        .search-filter input {
+            width: 100%;
+            padding: 8px 12px 8px 36px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            font-size: 14px;
+            transition: var(--transition);
+        }
+
+        .search-filter input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+        }
+
+        .search-filter i {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+        }
+
+        .filter-select {
+            padding: 8px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            background: white;
+            font-size: 14px;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .filter-select:focus {
+            outline: none;
+            border-color: var(--primary-color);
+        }
+
+        .snippets-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(500px, 1fr));
+            gap: 20px;
+        }
+
+        .snippet-card {
+            background: var(--card-bg);
+            border-radius: 8px;
+            box-shadow: var(--shadow);
+            overflow: hidden;
+            transition: var(--transition);
+        }
+
+        .snippet-card:hover {
+            box-shadow: var(--shadow-hover);
+        }
+
+        .snippet-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+
+        .snippet-info {
+            flex: 1;
+        }
+
+        .snippet-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+
+        .snippet-title a {
+            color: var(--text-primary);
+            text-decoration: none;
+        }
+
+        .snippet-title a:hover {
+            color: var(--primary-color);
+        }
+
+        .snippet-meta {
+            display: flex;
+            gap: 12px;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .snippet-meta-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .snippet-language {
+            padding: 2px 8px;
+            background: var(--bg-color);
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+
+        .snippet-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .snippet-body {
+            padding: 0;
+        }
+
+        .snippet-code {
+            background: #f6f8fa;
+            padding: 16px;
+            overflow-x: auto;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .snippet-code pre {
+            margin: 0;
+            padding: 0;
+            background: transparent;
+        }
+
+        .snippet-code code {
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 13px;
+        }
+
+        .snippet-footer {
+            padding: 12px 20px;
+            background: var(--bg-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .snippet-stats {
+            display: flex;
+            gap: 15px;
+        }
+
+        .snippet-stat {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+
+        .snippet-visibility {
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+
+        .snippet-visibility.public {
+            background: rgba(31, 117, 203, 0.1);
+            color: var(--info-color);
+        }
+
+        .snippet-visibility.private {
+            background: rgba(201, 28, 0, 0.1);
+            color: var(--danger-color);
+        }
+
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+            margin-top: 24px;
+            padding: 16px 0;
+        }
+
+        .pagination-btn {
+            min-width: 36px;
+            height: 36px;
+            padding: 0 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            background: var(--card-bg);
+            color: var(--text-secondary);
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .pagination-btn:hover:not(:disabled) {
+            border-color: var(--primary-color);
+            color: var(--primary-color);
+            background: rgba(252, 109, 38, 0.05);
+        }
+
+        .pagination-btn.active {
+            background: var(--primary-color);
+            border-color: var(--primary-color);
+            color: white;
+        }
+
+        .pagination-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .pagination-info {
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-right: 16px;
+        }
+
+        .pagination-nav {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        @media (max-width: 768px) {
+            .snippets-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <header class="top-bar">
+            <div class="top-bar-left">
+                <button class="menu-toggle" id="menuToggle">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <a href="/" class="logo">
+                    <i class="fas fa-code-branch"></i>
+                    <span>GitFolio</span>
+                </a>
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" placeholder="搜索项目、Issue、合并请求...">
+                </div>
+            </div>
+            <div class="top-bar-right">
+                <button class="icon-btn">
+                    <i class="fas fa-plus"></i>
+                </button>
+                <button class="icon-btn">
+                    <i class="fas fa-bell"></i>
+                    <span class="badge">3</span>
+                </button>
+                <div class="user-menu">
+                    <img src="https://via.placeholder.com/32" alt="用户头像" class="avatar">
+                    <span class="username">ryan</span>
+                    <i class="fas fa-chevron-down"></i>
+                </div>
+            </div>
+        </header>
+
+        <div class="main-container">
+            <aside class="sidebar" id="sidebar">
+                <nav class="sidebar-nav">
+                    <div class="nav-section">
+                        <a href="/" class="nav-item">
+                            <i class="fas fa-home"></i>
+                            <span>仪表盘</span>
+                        </a>
+                        <a href="/projects" class="nav-item">
+                            <i class="fas fa-folder"></i>
+                            <span>项目</span>
+                        </a>
+                        <a href="/groups" class="nav-item">
+                            <i class="fas fa-users"></i>
+                            <span>群组</span>
+                        </a>
+                        <a href="/activity" class="nav-item">
+                            <i class="fas fa-chart-line"></i>
+                            <span>活动</span>
+                        </a>
+                        <a href="/milestones" class="nav-item">
+                            <i class="fas fa-flag"></i>
+                            <span>里程碑</span>
+                        </a>
+                        <a href="/snippets" class="nav-item active">
+                            <i class="fas fa-code"></i>
+                            <span>代码片段</span>
+                        </a>
+                    </div>
+                </nav>
+            </aside>
+
+            <main class="content">
+                <div class="snippets-page">
+                    <div class="page-header">
+                        <h1 class="page-title">代码片段</h1>
+                        <button class="btn btn-sm">
+                            <i class="fas fa-plus"></i>
+                            新建片段
+                        </button>
+                    </div>
+
+                    <div class="filters-bar">
+                        <div class="search-filter">
+                            <i class="fas fa-search"></i>
+                            <input type="text" placeholder="搜索代码片段...">
+                        </div>
+
+                        <select class="filter-select">
+                            <option>所有语言</option>
+                            <option>JavaScript</option>
+                            <option>TypeScript</option>
+                            <option>Python</option>
+                            <option>Go</option>
+                            <option>Rust</option>
+                        </select>
+
+                        <select class="filter-select">
+                            <option>所有可见性</option>
+                            <option>公开</option>
+                            <option>私有</option>
+                        </select>
+                    </div>
+
+                    <div class="snippets-grid">
+                        <div class="snippet-card">
+                            <div class="snippet-header">
+                                <div class="snippet-info">
+                                    <h3 class="snippet-title"><a href="#">JWT 认证中间件</a></h3>
+                                    <div class="snippet-meta">
+                                        <span class="snippet-meta-item">
+                                            <i class="fas fa-user"></i> ryan
+                                        </span>
+                                        <span class="snippet-meta-item">
+                                            <i class="fas fa-clock"></i> 2 天前
+                                        </span>
+                                        <span class="snippet-language">Go</span>
+                                    </div>
+                                </div>
+                                <div class="snippet-actions">
+                                    <button class="btn-icon"><i class="fas fa-copy"></i></button>
+                                    <button class="btn-icon"><i class="fas fa-edit"></i></button>
+                                </div>
+                            </div>
+                            <div class="snippet-body">
+                                <div class="snippet-code">
+                                    <pre><code class="language-go">func AuthMiddleware() fiber.Handler {
+    return func(c fiber.Ctx) error {
+        token := c.Get("Authorization")
+        if token == "" {
+            return c.Status(401).JSON(fiber.Map{
+                "error": "未授权访问",
+            })
+        }
+        // 验证 token...
+        return c.Next()
+    }
+}</code></pre>
+                                </div>
+                            </div>
+                            <div class="snippet-footer">
+                                <div class="snippet-stats">
+                                    <span class="snippet-stat">
+                                        <i class="fas fa-eye"></i> 128
+                                    </span>
+                                    <span class="snippet-stat">
+                                        <i class="fas fa-copy"></i> 45
+                                    </span>
+                                </div>
+                                <span class="snippet-visibility public">公开</span>
+                            </div>
+                        </div>
+
+                        <div class="snippet-card">
+                            <div class="snippet-header">
+                                <div class="snippet-info">
+                                    <h3 class="snippet-title"><a href="#">React Hook: useLocalStorage</a></h3>
+                                    <div class="snippet-meta">
+                                        <span class="snippet-meta-item">
+                                            <i class="fas fa-user"></i> alice
+                                        </span>
+                                        <span class="snippet-meta-item">
+                                            <i class="fas fa-clock"></i> 5 天前
+                                        </span>
+                                        <span class="snippet-language">TypeScript</span>
+                                    </div>
+                                </div>
+                                <div class="snippet-actions">
+                                    <button class="btn-icon"><i class="fas fa-copy"></i></button>
+                                    <button class="btn-icon"><i class="fas fa-edit"></i></button>
+                                </div>
+                            </div>
+                            <div class="snippet-body">
+                                <div class="snippet-code">
+                                    <pre><code class="language-typescript">function useLocalStorage&lt;T&gt;(
+  key: string,
+  initialValue: T
+): [T, (value: T) => void] {
+  const [storedValue, setStoredValue] = useState&lt;T&gt;(() => {
+    try {
+      const item = localStorage.getItem(key);
+      return item ? JSON.parse(item) : initialValue;
+    } catch (error) {
+      return initialValue;
+    }
+  });
+  // ...
+}</code></pre>
+                                </div>
+                            </div>
+                            <div class="snippet-footer">
+                                <div class="snippet-stats">
+                                    <span class="snippet-stat">
+                                        <i class="fas fa-eye"></i> 89
+                                    </span>
+                                    <span class="snippet-stat">
+                                        <i class="fas fa-copy"></i> 32
+                                    </span>
+                                </div>
+                                <span class="snippet-visibility public">公开</span>
+                            </div>
+                        </div>
+
+                        <div class="snippet-card">
+                            <div class="snippet-header">
+                                <div class="snippet-info">
+                                    <h3 class="snippet-title"><a href="#">Python 装饰器：计时器</a></h3>
+                                    <div class="snippet-meta">
+                                        <span class="snippet-meta-item">
+                                            <i class="fas fa-user"></i> bob
+                                        </span>
+                                        <span class="snippet-meta-item">
+                                            <i class="fas fa-clock"></i> 1 周前
+                                        </span>
+                                        <span class="snippet-language">Python</span>
+                                    </div>
+                                </div>
+                                <div class="snippet-actions">
+                                    <button class="btn-icon"><i class="fas fa-copy"></i></button>
+                                    <button class="btn-icon"><i class="fas fa-edit"></i></button>
+                                </div>
+                            </div>
+                            <div class="snippet-body">
+                                <div class="snippet-code">
+                                    <pre><code class="language-python">import time
+from functools import wraps
+
+def timer(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        start = time.time()
+        result = func(*args, **kwargs)
+        end = time.time()
+        print(f'{func.__name__} 执行时间: {end-start:.2f}s')
+        return result
+    return wrapper</code></pre>
+                                </div>
+                            </div>
+                            <div class="snippet-footer">
+                                <div class="snippet-stats">
+                                    <span class="snippet-stat">
+                                        <i class="fas fa-eye"></i> 56
+                                    </span>
+                                    <span class="snippet-stat">
+                                        <i class="fas fa-copy"></i> 18
+                                    </span>
+                                </div>
+                                <span class="snippet-visibility private">私有</span>
+                            </div>
+                        </div>
+
+                        <div class="snippet-card">
+                            <div class="snippet-header">
+                                <div class="snippet-info">
+                                    <h3 class="snippet-title"><a href="#">CSS Flexbox 布局模板</a></h3>
+                                    <div class="snippet-meta">
+                                        <span class="snippet-meta-item">
+                                            <i class="fas fa-user"></i> charlie
+                                        </span>
+                                        <span class="snippet-meta-item">
+                                            <i class="fas fa-clock"></i> 2 周前
+                                        </span>
+                                        <span class="snippet-language">CSS</span>
+                                    </div>
+                                </div>
+                                <div class="snippet-actions">
+                                    <button class="btn-icon"><i class="fas fa-copy"></i></button>
+                                    <button class="btn-icon"><i class="fas fa-edit"></i></button>
+                                </div>
+                            </div>
+                            <div class="snippet-body">
+                                <div class="snippet-code">
+                                    <pre><code class="language-css">.flex-container {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
+}
+
+.flex-item {
+    flex: 1;
+    min-width: 0;
+}</code></pre>
+                                </div>
+                            </div>
+                            <div class="snippet-footer">
+                                <div class="snippet-stats">
+                                    <span class="snippet-stat">
+                                        <i class="fas fa-eye"></i> 34
+                                    </span>
+                                    <span class="snippet-stat">
+                                        <i class="fas fa-copy"></i> 12
+                                    </span>
+                                </div>
+                                <span class="snippet-visibility public">公开</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="pagination">
+                        <span class="pagination-info">显示 1-4 条，共 4 条</span>
+                        <div class="pagination-nav">
+                            <button class="pagination-btn" disabled>
+                                <i class="fas fa-chevron-left"></i>
+                            </button>
+                            <button class="pagination-btn active">1</button>
+                            <button class="pagination-btn" disabled>
+                                <i class="fas fa-chevron-right"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

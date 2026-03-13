@@ -28,6 +28,30 @@ func SetupRouter() *fiber.App {
 	app.Get("/issues", func(c fiber.Ctx) error {
 		return c.SendFile("./web/issues.html")
 	})
+	app.Get("/groups", func(c fiber.Ctx) error {
+		return c.SendFile("./web/groups.html")
+	})
+	app.Get("/activity", func(c fiber.Ctx) error {
+		return c.SendFile("./web/activity.html")
+	})
+	app.Get("/milestones", func(c fiber.Ctx) error {
+		return c.SendFile("./web/milestones.html")
+	})
+	app.Get("/snippets", func(c fiber.Ctx) error {
+		return c.SendFile("./web/snippets.html")
+	})
+	app.Get("/merge-requests", func(c fiber.Ctx) error {
+		return c.SendFile("./web/merge-requests.html")
+	})
+	app.Get("/releases", func(c fiber.Ctx) error {
+		return c.SendFile("./web/releases.html")
+	})
+	app.Get("/stats", func(c fiber.Ctx) error {
+		return c.SendFile("./web/stats.html")
+	})
+	app.Get("/settings", func(c fiber.Ctx) error {
+		return c.SendFile("./web/settings.html")
+	})
 
 	app.Get("/static/*", func(c fiber.Ctx) error {
 		return c.SendFile("./web/" + c.Params("*"))

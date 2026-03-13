@@ -51,7 +51,7 @@ func AuthMiddleware() fiber.Handler {
 		tokenString := parts[1]
 		claims := &Claims{}
 
-		token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+		token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (any, error) {
 			return []byte(config.AppConfig.Auth.JWTSecret), nil
 		})
 
@@ -83,7 +83,7 @@ func OptionalAuth() fiber.Handler {
 		tokenString := parts[1]
 		claims := &Claims{}
 
-		token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+		token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (any, error) {
 			return []byte(config.AppConfig.Auth.JWTSecret), nil
 		})
 
