@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GitFolio - Git 仓库管理平台</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="app-container">
+        <header class="top-bar">
+            <div class="top-bar-left">
+                <button class="menu-toggle" id="menuToggle">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <a href="/" class="logo">
+                    <i class="fas fa-code-branch"></i>
+                    <span>GitFolio</span>
+                </a>
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" placeholder="搜索项目、Issue、合并请求...">
+                </div>
+            </div>
+            <div class="top-bar-right">
+                <button class="icon-btn">
+                    <i class="fas fa-plus"></i>
+                </button>
+                <button class="icon-btn">
+                    <i class="fas fa-bell"></i>
+                    <span class="badge">3</span>
+                </button>
+                <div class="user-menu">
+                    <img src="https://via.placeholder.com/32" alt="用户头像" class="avatar">
+                    <span class="username">ryan</span>
+                    <i class="fas fa-chevron-down"></i>
+                </div>
+            </div>
+        </header>
+
+        <div class="main-container">
+            <aside class="sidebar" id="sidebar">
+                <nav class="sidebar-nav">
+                    <div class="nav-section">
+                        <a href="/" class="nav-item active">
+                            <i class="fas fa-home"></i>
+                            <span>仪表盘</span>
+                        </a>
+                        <a href="/projects" class="nav-item">
+                            <i class="fas fa-folder"></i>
+                            <span>项目</span>
+                        </a>
+                        <a href="groups.html" class="nav-item">
+                            <i class="fas fa-users"></i>
+                            <span>群组</span>
+                        </a>
+                        <a href="activity.html" class="nav-item">
+                            <i class="fas fa-chart-line"></i>
+                            <span>活动</span>
+                        </a>
+                        <a href="milestones.html" class="nav-item">
+                            <i class="fas fa-flag"></i>
+                            <span>里程碑</span>
+                        </a>
+                        <a href="snippets.html" class="nav-item">
+                            <i class="fas fa-code"></i>
+                            <span>代码片段</span>
+                        </a>
+                    </div>
+                </nav>
+            </aside>
+
+            <main class="content">
+                <div class="dashboard">
+                    <div class="dashboard-header">
+                        <h1>欢迎回来，ryan！</h1>
+                        <p>这是你的个人仪表盘，可以快速访问你的项目和活动。</p>
+                    </div>
+
+                    <div class="dashboard-grid">
+                        <section class="card projects-card">
+                            <div class="card-header">
+                                <h2><i class="fas fa-folder"></i> 我的项目</h2>
+                                <a href="/projects" class="btn btn-sm">查看全部</a>
+                            </div>
+                            <div class="card-body">
+                                <div class="project-list">
+                                    <div class="project-item">
+                                        <div class="project-icon">
+                                            <i class="fas fa-book"></i>
+                                        </div>
+                                        <div class="project-info">
+                                            <h3><a href="/project-detail">gitfolio-core</a></h3>
+                                            <p>Git 仓库管理核心系统</p>
+                                            <div class="project-meta">
+                                                <span><i class="fas fa-star"></i> 128</span>
+                                                <span><i class="fas fa-code-branch"></i> 45</span>
+                                                <span class="language"><span class="dot" style="background: #f1e05a;"></span> JavaScript</span>
+                                            </div>
+                                        </div>
+                                        <div class="project-actions">
+                                            <button class="btn-icon"><i class="fas fa-star"></i></button>
+                                            <button class="btn-icon"><i class="fas fa-clone"></i></button>
+                                        </div>
+                                    </div>
+
+                                    <div class="project-item">
+                                        <div class="project-icon">
+                                            <i class="fas fa-book"></i>
+                                        </div>
+                                        <div class="project-info">
+                                            <h3><a href="/project-detail">frontend-ui</a></h3>
+                                            <p>前端 UI 组件库</p>
+                                            <div class="project-meta">
+                                                <span><i class="fas fa-star"></i> 89</span>
+                                                <span><i class="fas fa-code-branch"></i> 32</span>
+                                                <span class="language"><span class="dot" style="background: #3178c6;"></span> TypeScript</span>
+                                            </div>
+                                        </div>
+                                        <div class="project-actions">
+                                            <button class="btn-icon"><i class="fas fa-star"></i></button>
+                                            <button class="btn-icon"><i class="fas fa-clone"></i></button>
+                                        </div>
+                                    </div>
+
+                                    <div class="project-item">
+                                        <div class="project-icon">
+                                            <i class="fas fa-book"></i>
+                                        </div>
+                                        <div class="project-info">
+                                            <h3><a href="/project-detail">api-server</a></h3>
+                                            <p>RESTful API 服务</p>
+                                            <div class="project-meta">
+                                                <span><i class="fas fa-star"></i> 56</span>
+                                                <span><i class="fas fa-code-branch"></i> 18</span>
+                                                <span class="language"><span class="dot" style="background: #e34c26;"></span> HTML</span>
+                                            </div>
+                                        </div>
+                                        <div class="project-actions">
+                                            <button class="btn-icon"><i class="fas fa-star"></i></button>
+                                            <button class="btn-icon"><i class="fas fa-clone"></i></button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="card activity-card">
+                            <div class="card-header">
+                                <h2><i class="fas fa-clock"></i> 最近活动</h2>
+                            </div>
+                            <div class="card-body">
+                                <div class="activity-list">
+                                    <div class="activity-item">
+                                        <img src="https://via.placeholder.com/32" alt="用户" class="avatar-sm">
+                                        <div class="activity-content">
+                                            <p><strong>ryan</strong> 推送到了 <a href="#">gitfolio-core</a></p>
+                                            <span class="activity-time">2 小时前</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="activity-item">
+                                        <img src="https://via.placeholder.com/32" alt="用户" class="avatar-sm">
+                                        <div class="activity-content">
+                                            <p><strong>ryan</strong> 创建了 Issue <a href="#">#123 修复登录问题</a></p>
+                                            <span class="activity-time">5 小时前</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="activity-item">
+                                        <img src="https://via.placeholder.com/32" alt="用户" class="avatar-sm">
+                                        <div class="activity-content">
+                                            <p><strong>ryan</strong> 合并了合并请求 <a href="#">!45 添加新功能</a></p>
+                                            <span class="activity-time">1 天前</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="activity-item">
+                                        <img src="https://via.placeholder.com/32" alt="用户" class="avatar-sm">
+                                        <div class="activity-content">
+                                            <p><strong>ryan</strong> 评论了 Issue <a href="#">#118 性能优化建议</a></p>
+                                            <span class="activity-time">2 天前</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="card stats-card">
+                            <div class="card-header">
+                                <h2><i class="fas fa-chart-bar"></i> 统计信息</h2>
+                            </div>
+                            <div class="card-body">
+                                <div class="stats-grid">
+                                    <div class="stat-item">
+                                        <div class="stat-value">12</div>
+                                        <div class="stat-label">项目</div>
+                                    </div>
+                                    <div class="stat-item">
+                                        <div class="stat-value">48</div>
+                                        <div class="stat-label">Issue</div>
+                                    </div>
+                                    <div class="stat-item">
+                                        <div class="stat-value">23</div>
+                                        <div class="stat-label">合并请求</div>
+                                    </div>
+                                    <div class="stat-item">
+                                        <div class="stat-value">156</div>
+                                        <div class="stat-label">提交</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="card issues-card">
+                            <div class="card-header">
+                                <h2><i class="fas fa-exclamation-circle"></i> 待处理的 Issue</h2>
+                                <a href="/issues" class="btn btn-sm">查看全部</a>
+                            </div>
+                            <div class="card-body">
+                                <div class="issue-list">
+                                    <div class="issue-item">
+                                        <span class="issue-status open"><i class="fas fa-exclamation-circle"></i></span>
+                                        <div class="issue-info">
+                                            <h4><a href="#">修复用户权限验证问题</a></h4>
+                                            <span class="issue-meta">#124 · 创建于 3 天前</span>
+                                        </div>
+                                        <span class="issue-label bug">Bug</span>
+                                    </div>
+
+                                    <div class="issue-item">
+                                        <span class="issue-status open"><i class="fas fa-exclamation-circle"></i></span>
+                                        <div class="issue-info">
+                                            <h4><a href="#">添加暗色主题支持</a></h4>
+                                            <span class="issue-meta">#122 · 创建于 5 天前</span>
+                                        </div>
+                                        <span class="issue-label feature">Feature</span>
+                                    </div>
+
+                                    <div class="issue-item">
+                                        <span class="issue-status open"><i class="fas fa-exclamation-circle"></i></span>
+                                        <div class="issue-info">
+                                            <h4><a href="#">优化数据库查询性能</a></h4>
+                                            <span class="issue-meta">#120 · 创建于 1 周前</span>
+                                        </div>
+                                        <span class="issue-label enhancement">Enhancement</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="card merge-requests-card">
+                            <div class="card-header">
+                                <h2><i class="fas fa-code-branch"></i> 合并请求</h2>
+                                <a href="merge-requests.html" class="btn btn-sm">查看全部</a>
+                            </div>
+                            <div class="card-body">
+                                <div class="mr-list">
+                                    <div class="mr-item">
+                                        <span class="mr-status open"><i class="fas fa-code-branch"></i></span>
+                                        <div class="mr-info">
+                                            <h4><a href="#">重构用户认证模块</a></h4>
+                                            <span class="mr-meta">!46 · feature/auth-refactor → main</span>
+                                        </div>
+                                        <div class="mr-assignees">
+                                            <img src="https://via.placeholder.com/24" alt="指派给" title="ryan">
+                                        </div>
+                                    </div>
+
+                                    <div class="mr-item">
+                                        <span class="mr-status merged"><i class="fas fa-code-branch"></i></span>
+                                        <div class="mr-info">
+                                            <h4><a href="#">添加单元测试</a></h4>
+                                            <span class="mr-meta">!45 · tests/unit → main</span>
+                                        </div>
+                                        <div class="mr-assignees">
+                                            <img src="https://via.placeholder.com/24" alt="指派给" title="ryan">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

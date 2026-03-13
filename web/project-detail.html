@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>gitfolio-core - GitFolio</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+    <style>
+        .project-detail-page {
+            max-width: 100%;
+        }
+
+        .project-header {
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: var(--shadow);
+            margin-bottom: 20px;
+        }
+
+        .project-header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 15px;
+        }
+
+        .project-title-section {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .project-title-section h1 {
+            font-size: 24px;
+            font-weight: 600;
+        }
+
+        .project-breadcrumb {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .project-breadcrumb a {
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+
+        .project-breadcrumb a:hover {
+            text-decoration: underline;
+        }
+
+        .project-actions-bar {
+            display: flex;
+            gap: 10px;
+        }
+
+        .project-description {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-bottom: 15px;
+        }
+
+        .project-tabs {
+            display: flex;
+            gap: 0;
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 20px;
+            background: var(--card-bg);
+            border-radius: 8px 8px 0 0;
+            overflow: hidden;
+        }
+
+        .project-tab {
+            padding: 12px 20px;
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            text-decoration: none;
+            border-bottom: 2px solid transparent;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .project-tab:hover {
+            color: var(--text-primary);
+            background: var(--bg-color);
+        }
+
+        .project-tab.active {
+            color: var(--primary-color);
+            border-bottom-color: var(--primary-color);
+            background: var(--bg-color);
+        }
+
+        .project-tab .badge {
+            position: static;
+            background: var(--bg-color);
+            color: var(--text-secondary);
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+        }
+
+        .project-tab.active .badge {
+            background: rgba(252, 109, 38, 0.1);
+            color: var(--primary-color);
+        }
+
+        .file-browser {
+            background: var(--card-bg);
+            border-radius: 8px;
+            box-shadow: var(--shadow);
+            overflow: hidden;
+        }
+
+        .file-browser-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 20px;
+            background: var(--bg-color);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .branch-selector {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .branch-dropdown {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px;
+            background: white;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: var(--transition);
+        }
+
+        .branch-dropdown:hover {
+            border-color: var(--primary-color);
+        }
+
+        .file-browser-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .commit-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            padding: 12px 20px;
+            background: rgba(252, 109, 38, 0.05);
+            border-bottom: 1px solid var(--border-color);
+            font-size: 13px;
+        }
+
+        .commit-info-avatar {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+        }
+
+        .commit-info-message {
+            flex: 1;
+        }
+
+        .commit-info-message a {
+            color: var(--text-primary);
+            text-decoration: none;
+        }
+
+        .commit-info-message a:hover {
+            color: var(--primary-color);
+        }
+
+        .commit-info-meta {
+            color: var(--text-muted);
+        }
+
+        .commit-info-hash {
+            font-family: monospace;
+            color: var(--primary-color);
+        }
+
+        .file-list {
+            border-radius: 0 0 8px 8px;
+        }
+
+        .file-item {
+            display: flex;
+            align-items: center;
+            padding: 10px 20px;
+            border-bottom: 1px solid var(--border-color);
+            transition: var(--transition);
+        }
+
+        .file-item:last-child {
+            border-bottom: none;
+        }
+
+        .file-item:hover {
+            background: var(--bg-color);
+        }
+
+        .file-icon {
+            width: 20px;
+            margin-right: 10px;
+            text-align: center;
+            color: var(--text-muted);
+        }
+
+        .file-icon.folder {
+            color: var(--info-color);
+        }
+
+        .file-name {
+            flex: 1;
+            font-size: 14px;
+        }
+
+        .file-name a {
+            color: var(--text-primary);
+            text-decoration: none;
+        }
+
+        .file-name a:hover {
+            color: var(--primary-color);
+        }
+
+        .file-commit-message {
+            flex: 2;
+            font-size: 13px;
+            color: var(--text-secondary);
+            padding: 0 20px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .file-commit-time {
+            font-size: 12px;
+            color: var(--text-muted);
+            width: 120px;
+            text-align: right;
+        }
+
+        .readme-section {
+            margin-top: 20px;
+            background: var(--card-bg);
+            border-radius: 8px;
+            box-shadow: var(--shadow);
+            overflow: hidden;
+        }
+
+        .readme-header {
+            padding: 12px 20px;
+            background: var(--bg-color);
+            border-bottom: 1px solid var(--border-color);
+            font-weight: 600;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .readme-content {
+            padding: 20px;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .readme-content h1 {
+            font-size: 24px;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .readme-content h2 {
+            font-size: 20px;
+            margin-top: 25px;
+            margin-bottom: 10px;
+        }
+
+        .readme-content h3 {
+            font-size: 16px;
+            margin-top: 20px;
+            margin-bottom: 8px;
+        }
+
+        .readme-content p {
+            margin-bottom: 15px;
+        }
+
+        .readme-content ul, .readme-content ol {
+            margin-bottom: 15px;
+            padding-left: 30px;
+        }
+
+        .readme-content li {
+            margin-bottom: 5px;
+        }
+
+        .readme-content code {
+            background: var(--bg-color);
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 13px;
+        }
+
+        .readme-content pre {
+            background: #f6f8fa;
+            padding: 15px;
+            border-radius: 6px;
+            overflow-x: auto;
+            margin-bottom: 15px;
+        }
+
+        .readme-content pre code {
+            background: none;
+            padding: 0;
+        }
+
+        .sidebar-info {
+            position: sticky;
+            top: 90px;
+        }
+
+        .info-card {
+            background: var(--card-bg);
+            border-radius: 8px;
+            box-shadow: var(--shadow);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .info-card h3 {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .info-card h3 i {
+            color: var(--primary-color);
+        }
+
+        .clone-box {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 10px;
+        }
+
+        .clone-url {
+            flex: 1;
+            padding: 8px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px 0 0 4px;
+            font-size: 12px;
+            font-family: monospace;
+            background: var(--bg-color);
+        }
+
+        .clone-btn {
+            padding: 8px 12px;
+            background: var(--bg-color);
+            border: 1px solid var(--border-color);
+            border-left: none;
+            border-radius: 0 4px 4px 0;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .clone-btn:hover {
+            background: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
+        }
+
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .stat-row:last-child {
+            border-bottom: none;
+        }
+
+        .stat-label {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .stat-value {
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .contributors-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .contributor-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: 2px solid var(--card-bg);
+            transition: var(--transition);
+        }
+
+        .contributor-avatar:hover {
+            transform: scale(1.1);
+            border-color: var(--primary-color);
+        }
+
+        .project-layout {
+            display: grid;
+            grid-template-columns: 1fr 300px;
+            gap: 20px;
+        }
+
+        @media (max-width: 1200px) {
+            .project-layout {
+                grid-template-columns: 1fr;
+            }
+
+            .sidebar-info {
+                position: static;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <header class="top-bar">
+            <div class="top-bar-left">
+                <button class="menu-toggle" id="menuToggle">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <a href="/" class="logo">
+                    <i class="fas fa-code-branch"></i>
+                    <span>GitFolio</span>
+                </a>
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" placeholder="搜索项目、Issue、合并请求...">
+                </div>
+            </div>
+            <div class="top-bar-right">
+                <button class="icon-btn">
+                    <i class="fas fa-plus"></i>
+                </button>
+                <button class="icon-btn">
+                    <i class="fas fa-bell"></i>
+                    <span class="badge">3</span>
+                </button>
+                <div class="user-menu">
+                    <img src="https://via.placeholder.com/32" alt="用户头像" class="avatar">
+                    <span class="username">ryan</span>
+                    <i class="fas fa-chevron-down"></i>
+                </div>
+            </div>
+        </header>
+
+        <div class="main-container">
+            <aside class="sidebar" id="sidebar">
+                <nav class="sidebar-nav">
+                    <div class="nav-section">
+                        <a href="/" class="nav-item">
+                            <i class="fas fa-home"></i>
+                            <span>仪表盘</span>
+                        </a>
+                        <a href="/projects" class="nav-item active">
+                            <i class="fas fa-folder"></i>
+                            <span>项目</span>
+                        </a>
+                        <a href="groups.html" class="nav-item">
+                            <i class="fas fa-users"></i>
+                            <span>群组</span>
+                        </a>
+                        <a href="activity.html" class="nav-item">
+                            <i class="fas fa-chart-line"></i>
+                            <span>活动</span>
+                        </a>
+                        <a href="milestones.html" class="nav-item">
+                            <i class="fas fa-flag"></i>
+                            <span>里程碑</span>
+                        </a>
+                        <a href="snippets.html" class="nav-item">
+                            <i class="fas fa-code"></i>
+                            <span>代码片段</span>
+                        </a>
+                    </div>
+                </nav>
+            </aside>
+
+            <main class="content">
+                <div class="project-detail-page">
+                    <div class="project-header">
+                        <div class="project-header-top">
+                            <div class="project-title-section">
+                                <h1>gitfolio-core</h1>
+                                <span class="project-visibility">公开</span>
+                            </div>
+                            <div class="project-actions-bar">
+                                <button class="btn btn-sm">
+                                    <i class="fas fa-star"></i> 星标
+                                </button>
+                                <button class="btn btn-sm">
+                                    <i class="fas fa-code-branch"></i> Fork
+                                </button>
+                                <button class="btn btn-sm">
+                                    <i class="fas fa-clone"></i> 克隆
+                                </button>
+                            </div>
+                        </div>
+                        <div class="project-breadcrumb">
+                            <a href="#">ryan</a>
+                            <span>/</span>
+                            <span>gitfolio-core</span>
+                        </div>
+                        <p class="project-description">Git 仓库管理核心系统，提供完整的版本控制和协作功能</p>
+                    </div>
+
+                    <div class="project-tabs">
+                        <a href="#" class="project-tab active">
+                            <i class="fas fa-code"></i>
+                            代码
+                        </a>
+                        <a href="/issues" class="project-tab">
+                            <i class="fas fa-exclamation-circle"></i>
+                            Issue
+                            <span class="badge">12</span>
+                        </a>
+                        <a href="#" class="project-tab">
+                            <i class="fas fa-code-branch"></i>
+                            合并请求
+                            <span class="badge">5</span>
+                        </a>
+                        <a href="#" class="project-tab">
+                            <i class="fas fa-cube"></i>
+                            发布
+                        </a>
+                        <a href="#" class="project-tab">
+                            <i class="fas fa-chart-line"></i>
+                            统计
+                        </a>
+                        <a href="#" class="project-tab">
+                            <i class="fas fa-cog"></i>
+                            设置
+                        </a>
+                    </div>
+
+                    <div class="project-layout">
+                        <div class="main-content">
+                            <div class="file-browser">
+                                <div class="file-browser-header">
+                                    <div class="branch-selector">
+                                        <div class="branch-dropdown">
+                                            <i class="fas fa-code-branch"></i>
+                                            <span>main</span>
+                                            <i class="fas fa-chevron-down"></i>
+                                        </div>
+                                        <div class="branch-dropdown">
+                                            <i class="fas fa-tags"></i>
+                                            <span>标签</span>
+                                            <i class="fas fa-chevron-down"></i>
+                                        </div>
+                                    </div>
+                                    <div class="file-browser-actions">
+                                        <button class="btn btn-sm">
+                                            <i class="fas fa-plus"></i> 添加文件
+                                        </button>
+                                        <button class="btn btn-sm">
+                                            <i class="fas fa-download"></i> 下载
+                                        </button>
+                                        <button class="btn btn-sm">
+                                            <i class="fas fa-history"></i> 历史
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div class="commit-info">
+                                    <img src="https://via.placeholder.com/24" alt="提交者" class="commit-info-avatar">
+                                    <div class="commit-info-message">
+                                        <a href="#">添加用户认证功能</a>
+                                        <span class="commit-info-meta">· 提交于 2 小时前</span>
+                                    </div>
+                                    <span class="commit-info-hash">a1b2c3d</span>
+                                </div>
+
+                                <div class="file-list">
+                                    <div class="file-item">
+                                        <span class="file-icon folder"><i class="fas fa-folder"></i></span>
+                                        <span class="file-name"><a href="#">src</a></span>
+                                        <span class="file-commit-message">重构核心模块</span>
+                                        <span class="file-commit-time">3 天前</span>
+                                    </div>
+                                    <div class="file-item">
+                                        <span class="file-icon folder"><i class="fas fa-folder"></i></span>
+                                        <span class="file-name"><a href="#">tests</a></span>
+                                        <span class="file-commit-message">添加单元测试</span>
+                                        <span class="file-commit-time">5 天前</span>
+                                    </div>
+                                    <div class="file-item">
+                                        <span class="file-icon folder"><i class="fas fa-folder"></i></span>
+                                        <span class="file-name"><a href="#">docs</a></span>
+                                        <span class="file-commit-message">更新文档</span>
+                                        <span class="file-commit-time">1 周前</span>
+                                    </div>
+                                    <div class="file-item">
+                                        <span class="file-icon"><i class="fas fa-file-code"></i></span>
+                                        <span class="file-name"><a href="#">package.json</a></span>
+                                        <span class="file-commit-message">更新依赖版本</span>
+                                        <span class="file-commit-time">2 天前</span>
+                                    </div>
+                                    <div class="file-item">
+                                        <span class="file-icon"><i class="fas fa-file-code"></i></span>
+                                        <span class="file-name"><a href="#">README.md</a></span>
+                                        <span class="file-commit-message">更新 README</span>
+                                        <span class="file-commit-time">4 天前</span>
+                                    </div>
+                                    <div class="file-item">
+                                        <span class="file-icon"><i class="fas fa-file-code"></i></span>
+                                        <span class="file-name"><a href="#">.gitignore</a></span>
+                                        <span class="file-commit-message">添加 .gitignore 文件</span>
+                                        <span class="file-commit-time">1 周前</span>
+                                    </div>
+                                    <div class="file-item">
+                                        <span class="file-icon"><i class="fas fa-file-code"></i></span>
+                                        <span class="file-name"><a href="#">LICENSE</a></span>
+                                        <span class="file-commit-message">添加 MIT 许可证</span>
+                                        <span class="file-commit-time">2 周前</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="readme-section">
+                                <div class="readme-header">
+                                    <i class="fas fa-book"></i>
+                                    README.md
+                                </div>
+                                <div class="readme-content">
+                                    <h1>GitFolio Core</h1>
+                                    <p>Git 仓库管理核心系统，提供完整的版本控制和协作功能。</p>
+                                    
+                                    <h2>功能特性</h2>
+                                    <ul>
+                                        <li>完整的 Git 仓库管理</li>
+                                        <li>Issue 跟踪系统</li>
+                                        <li>合并请求和代码审查</li>
+                                        <li>团队协作功能</li>
+                                        <li>Wiki 文档系统</li>
+                                    </ul>
+
+                                    <h2>快速开始</h2>
+                                    <pre><code class="language-bash"># 克隆仓库
+git clone https://gitfolio.com/ryan/gitfolio-core.git
+
+# 安装依赖
+npm install
+
+# 启动开发服务器
+npm run dev</code></pre>
+
+                                    <h2>技术栈</h2>
+                                    <ul>
+                                        <li>Node.js - 运行环境</li>
+                                        <li>Express - Web 框架</li>
+                                        <li>MongoDB - 数据库</li>
+                                        <li>Redis - 缓存</li>
+                                    </ul>
+
+                                    <h2>贡献指南</h2>
+                                    <p>欢迎贡献代码！请查看 <a href="#">CONTRIBUTING.md</a> 了解详情。</p>
+
+                                    <h2>许可证</h2>
+                                    <p>本项目采用 MIT 许可证 - 详见 <a href="#">LICENSE</a> 文件。</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="sidebar-info">
+                            <div class="info-card">
+                                <h3><i class="fas fa-download"></i> 克隆</h3>
+                                <div class="clone-box">
+                                    <input type="text" class="clone-url" value="https://gitfolio.com/ryan/gitfolio-core.git" readonly>
+                                    <button class="clone-btn" onclick="copyToClipboard('https://gitfolio.com/ryan/gitfolio-core.git')">
+                                        <i class="fas fa-copy"></i>
+                                    </button>
+                                </div>
+                                <div class="clone-box">
+                                    <input type="text" class="clone-url" value="git@gitfolio.com:ryan/gitfolio-core.git" readonly>
+                                    <button class="clone-btn" onclick="copyToClipboard('git@gitfolio.com:ryan/gitfolio-core.git')">
+                                        <i class="fas fa-copy"></i>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="info-card">
+                                <h3><i class="fas fa-chart-bar"></i> 统计</h3>
+                                <div class="stat-row">
+                                    <span class="stat-label">提交</span>
+                                    <span class="stat-value">1,234</span>
+                                </div>
+                                <div class="stat-row">
+                                    <span class="stat-label">分支</span>
+                                    <span class="stat-value">45</span>
+                                </div>
+                                <div class="stat-row">
+                                    <span class="stat-label">标签</span>
+                                    <span class="stat-value">12</span>
+                                </div>
+                                <div class="stat-row">
+                                    <span class="stat-label">文件</span>
+                                    <span class="stat-value">328</span>
+                                </div>
+                                <div class="stat-row">
+                                    <span class="stat-label">存储</span>
+                                    <span class="stat-value">45.2 MB</span>
+                                </div>
+                            </div>
+
+                            <div class="info-card">
+                                <h3><i class="fas fa-users"></i> 贡献者</h3>
+                                <div class="contributors-list">
+                                    <img src="https://via.placeholder.com/32" alt="贡献者" class="contributor-avatar" title="ryan (234 commits)">
+                                    <img src="https://via.placeholder.com/32" alt="贡献者" class="contributor-avatar" title="alice (89 commits)">
+                                    <img src="https://via.placeholder.com/32" alt="贡献者" class="contributor-avatar" title="bob (45 commits)">
+                                    <img src="https://via.placeholder.com/32" alt="贡献者" class="contributor-avatar" title="charlie (23 commits)">
+                                    <img src="https://via.placeholder.com/32" alt="贡献者" class="contributor-avatar" title="david (12 commits)">
+                                </div>
+                            </div>
+
+                            <div class="info-card">
+                                <h3><i class="fas fa-language"></i> 语言</h3>
+                                <div class="stat-row">
+                                    <span class="stat-label">
+                                        <span class="dot" style="background: #f1e05a;"></span> JavaScript
+                                    </span>
+                                    <span class="stat-value">68.5%</span>
+                                </div>
+                                <div class="stat-row">
+                                    <span class="stat-label">
+                                        <span class="dot" style="background: #3178c6;"></span> TypeScript
+                                    </span>
+                                    <span class="stat-value">21.3%</span>
+                                </div>
+                                <div class="stat-row">
+                                    <span class="stat-label">
+                                        <span class="dot" style="background: #e34c26;"></span> HTML
+                                    </span>
+                                    <span class="stat-value">7.2%</span>
+                                </div>
+                                <div class="stat-row">
+                                    <span class="stat-label">
+                                        <span class="dot" style="background: #563d7c;"></span> CSS
+                                    </span>
+                                    <span class="stat-value">3.0%</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script>
+        hljs.highlightAll();
+    </script>
+</body>
+</html>
