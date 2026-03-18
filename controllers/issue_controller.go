@@ -28,6 +28,45 @@ type CreateCommentRequest struct {
 	Body string `json:"body" validate:"required"`
 }
 
+type IssueResponse struct {
+	ID           uint   `json:"id"`
+	Number       int    `json:"number"`
+	Title        string `json:"title"`
+	Body         string `json:"body"`
+	RepositoryID uint   `json:"repository_id"`
+	Author       string `json:"author"`
+	AuthorID     uint   `json:"author_id"`
+	Assignee     string `json:"assignee,omitempty"`
+	AssigneeID   *uint  `json:"assignee_id,omitempty"`
+	IsClosed     bool   `json:"is_closed"`
+	IsLocked     bool   `json:"is_locked"`
+	CreatedAt    string `json:"created_at"`
+	UpdatedAt    string `json:"updated_at"`
+}
+
+func ToIssueResponse(issue *models.Issue, author *models.User, assignee *models.User) *IssueResponse {
+	response := &IssueResponse{
+		ID:           issue.ID,
+		Number:       issue.Number,
+		Title:        issue.Title,
+		Body:         issue.Body,
+		RepositoryID: issue.RepositoryID,
+		Author:       author.Username,
+		AuthorID:     issue.AuthorID,
+		AssigneeID:   issue.AssigneeID,
+		IsClosed:     issue.IsClosed,
+		IsLocked:     issue.IsLocked,
+		CreatedAt:    issue.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		UpdatedAt:    issue.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+	}
+
+	if assignee != nil {
+		response.Assignee = assignee.Username
+	}
+
+	return response
+}
+
 func CreateIssue(c fiber.Ctx) error {
 	owner := c.Params("owner")
 	repoName := c.Params("repo")
@@ -50,6 +89,12 @@ func CreateIssue(c fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Repository not found"})
 	}
 
+	authorUser, err := db.User.Select().Where("id = ?", userID).One()
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Author not found"})
+	}
+
+	var assigneeUser *models.User
 	issueModel := &models.Issue{
 		Title:        req.Title,
 		Body:         req.Body,
@@ -58,7 +103,7 @@ func CreateIssue(c fiber.Ctx) error {
 	}
 
 	if req.Assignee != "" {
-		assigneeUser, err := db.User.Select().Where("username = ?", req.Assignee).One()
+		assigneeUser, err = db.User.Select().Where("username = ?", req.Assignee).One()
 		if err == nil {
 			issueModel.AssigneeID = &assigneeUser.ID
 		}
@@ -69,7 +114,7 @@ func CreateIssue(c fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create issue"})
 	}
 
-	return c.Status(fiber.StatusCreated).JSON(issueModel)
+	return c.Status(fiber.StatusCreated).JSON(ToIssueResponse(issueModel, authorUser, assigneeUser))
 }
 
 func GetIssue(c fiber.Ctx) error {
@@ -94,7 +139,17 @@ func GetIssue(c fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Issue not found"})
 	}
 
-	return c.Status(fiber.StatusOK).JSON(issueModel)
+	authorUser, err := db.User.Select().Where("id = ?", issueModel.AuthorID).One()
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Author not found"})
+	}
+
+	var assigneeUser *models.User
+	if issueModel.AssigneeID != nil {
+		assigneeUser, _ = db.User.Select().Where("id = ?", *issueModel.AssigneeID).One()
+	}
+
+	return c.Status(fiber.StatusOK).JSON(ToIssueResponse(issueModel, authorUser, assigneeUser))
 }
 
 func ListIssues(c fiber.Ctx) error {
@@ -129,8 +184,23 @@ func ListIssues(c fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch issues"})
 	}
 
+	var response []*IssueResponse
+	for _, issue := range issues {
+		authorUser, err := db.User.Select().Where("id = ?", issue.AuthorID).One()
+		if err != nil {
+			continue
+		}
+
+		var assigneeUser *models.User
+		if issue.AssigneeID != nil {
+			assigneeUser, _ = db.User.Select().Where("id = ?", *issue.AssigneeID).One()
+		}
+
+		response = append(response, ToIssueResponse(issue, authorUser, assigneeUser))
+	}
+
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"data":     issues,
+		"data":     response,
 		"page":     page,
 		"per_page": perPage,
 	})
@@ -220,9 +290,10 @@ func CreateComment(c fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Issue not found"})
 	}
 
+	issueID := issueModel.ID
 	commentModel := &models.Comment{
 		Body:     req.Body,
-		IssueID:  issueModel.ID,
+		IssueID:  &issueID,
 		AuthorID: userID,
 	}
 

@@ -205,6 +205,33 @@ body {
     z-index: 999;
 }
 
+.sidebar-header {
+    padding: 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.sidebar-header .logo {
+    font-size: 20px;
+    font-weight: 600;
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.sidebar-header .logo i {
+    color: var(--primary-color);
+}
+
+.sidebar.collapsed .sidebar-header {
+    padding: 20px 10px;
+    text-align: center;
+}
+
+.sidebar.collapsed .sidebar-header .logo span {
+    display: none;
+}
+
 .sidebar-nav {
     padding: 20px 0;
 }

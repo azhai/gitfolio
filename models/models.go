@@ -22,6 +22,12 @@ type User struct {
 
 	IsActive bool `goe:"default:true"`
 	IsAdmin  bool `goe:"default:false"`
+
+	Repositories []*Repository `goe:"rel:hasMany;field:owner_id"`
+	Issues       []*Issue      `goe:"rel:hasMany;field:author_id"`
+	Comments     []*Comment    `goe:"rel:hasMany;field:author_id"`
+	Stars        []*Star       `goe:"rel:hasMany;field:user_id"`
+	Watches      []*Watch      `goe:"rel:hasMany;field:user_id"`
 }
 
 func (u *User) SetPassword(password string) error {
@@ -45,6 +51,7 @@ type Repository struct {
 
 	Name        string `goe:"index"`
 	Description string
+	Readme      string
 	OwnerID     uint `goe:"index"`
 
 	IsPrivate bool `goe:"default:false"`
@@ -55,6 +62,21 @@ type Repository struct {
 	WatchCount int `goe:"default:0"`
 
 	DefaultBranch string `goe:"default:'main'"`
+
+	Owner         *Owner          `goe:"rel:belongsTo;field:owner_id"`
+	Branches      []*Branch       `goe:"rel:hasMany;field:repository_id"`
+	Issues        []*Issue        `goe:"rel:hasMany;field:repository_id"`
+	Labels        []*Label        `goe:"rel:hasMany;field:repository_id"`
+	Releases      []*Release      `goe:"rel:hasMany;field:repository_id"`
+	MergeRequests []*MergeRequest `goe:"rel:hasMany;field:repository_id"`
+}
+
+type Owner struct {
+	ID       uint   `goe:"primaryKey"`
+	Username string `goe:"unique"`
+	Email    string
+	FullName string
+	Avatar   string
 }
 
 type Branch struct {
@@ -74,8 +96,9 @@ type Issue struct {
 	CreatedAt time.Time
 	UpdatedAt time.Time
 
-	Title string
-	Body  string
+	Title  string
+	Body   string
+	Number int `goe:"index"`
 
 	RepositoryID uint `goe:"index"`
 
@@ -85,6 +108,12 @@ type Issue struct {
 
 	IsClosed bool `goe:"default:false;index"`
 	IsLocked bool `goe:"default:false"`
+
+	Repository *Repository `goe:"rel:belongsTo;field:repository_id"`
+	Author     *User       `goe:"rel:belongsTo;field:author_id"`
+	Assignee   *User       `goe:"rel:belongsTo;field:assignee_id"`
+	Comments   []*Comment  `goe:"rel:hasMany;field:issue_id"`
+	Labels     []*Label    `goe:"rel:belongsToMany;table:issue_labels"`
 }
 
 type Label struct {
@@ -106,9 +135,14 @@ type Comment struct {
 
 	Body string
 
-	IssueID uint `goe:"index"`
+	IssueID        *uint `goe:"index"`
+	MergeRequestID *uint `goe:"index"`
 
 	AuthorID uint `goe:"index"`
+
+	Issue        *Issue        `goe:"rel:belongsTo;field:issue_id"`
+	MergeRequest *MergeRequest `goe:"rel:belongsTo;field:merge_request_id"`
+	Author       *User         `goe:"rel:belongsTo;field:author_id"`
 }
 
 type Release struct {
@@ -142,4 +176,59 @@ type Watch struct {
 
 	UserID       uint `goe:"uniqueIndex:idx_user_repo_watch"`
 	RepositoryID uint `goe:"uniqueIndex:idx_user_repo_watch"`
+
+	User       *User       `goe:"rel:belongsTo;field:user_id"`
+	Repository *Repository `goe:"rel:belongsTo;field:repository_id"`
+}
+
+type MergeRequest struct {
+	ID        uint `goe:"primaryKey"`
+	CreatedAt time.Time
+	UpdatedAt time.Time
+
+	Title  string
+	Body   string
+	Number int `goe:"index"`
+
+	RepositoryID uint `goe:"index"`
+
+	AuthorID uint `goe:"index"`
+
+	SourceBranch string
+	TargetBranch string `goe:"default:'main'"`
+
+	AssigneeID *uint
+
+	Status string `goe:"default:'open';index"`
+
+	IsMerged bool `goe:"default:false"`
+	IsClosed bool `goe:"default:false"`
+	IsLocked bool `goe:"default:false"`
+
+	Repository *Repository `goe:"rel:belongsTo;field:repository_id"`
+	Author     *User       `goe:"rel:belongsTo;field:author_id"`
+	Assignee   *User       `goe:"rel:belongsTo;field:assignee_id"`
+	Comments   []*Comment  `goe:"rel:hasMany;field:merge_request_id"`
+}
+
+type IssueLabel struct {
+	ID        uint `goe:"primaryKey"`
+	IssueID   uint `goe:"uniqueIndex:idx_issue_label"`
+	LabelID   uint `goe:"uniqueIndex:idx_issue_label"`
+	CreatedAt time.Time
+}
+
+type Webhook struct {
+	ID        uint `goe:"primaryKey"`
+	CreatedAt time.Time
+	UpdatedAt time.Time
+
+	RepositoryID uint `goe:"index"`
+
+	URL      string
+	Secret   string
+	IsActive bool `goe:"default:true"`
+	Events   string
+
+	Repository *Repository `goe:"rel:belongsTo;field:repository_id"`
 }

@@ -17,6 +17,8 @@ func main() {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
 
+	database.SeedData()
+
 	if err := os.MkdirAll(cfg.Repository.Root, 0755); err != nil {
 		log.Fatalf("Failed to create repository root: %v", err)
 	}

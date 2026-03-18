@@ -8,23 +8,29 @@ import (
 	"github.com/azhai/gitfolio/config"
 	"github.com/azhai/gitfolio/models"
 	"github.com/azhai/goent"
+	"github.com/azhai/goent/drivers/pgsql"
 	"github.com/azhai/goent/drivers/sqlite"
+	"github.com/azhai/goent/model"
 )
 
-type PublicSchema struct {
-	User       *goent.Table[models.User]
-	Repository *goent.Table[models.Repository]
-	Branch     *goent.Table[models.Branch]
-	Issue      *goent.Table[models.Issue]
-	Label      *goent.Table[models.Label]
-	Comment    *goent.Table[models.Comment]
-	Release    *goent.Table[models.Release]
-	Star       *goent.Table[models.Star]
-	Watch      *goent.Table[models.Watch]
+type FolioSchema struct {
+	User         *goent.Table[models.User]
+	Owner        *goent.Table[models.Owner]
+	Repository   *goent.Table[models.Repository]
+	Branch       *goent.Table[models.Branch]
+	Issue        *goent.Table[models.Issue]
+	Label        *goent.Table[models.Label]
+	Comment      *goent.Table[models.Comment]
+	Release      *goent.Table[models.Release]
+	Star         *goent.Table[models.Star]
+	Watch        *goent.Table[models.Watch]
+	MergeRequest *goent.Table[models.MergeRequest]
+	IssueLabel   *goent.Table[models.IssueLabel]
+	Webhook      *goent.Table[models.Webhook]
 }
 
 type Database struct {
-	PublicSchema `goe:"public"`
+	FolioSchema `goe:"folio"`
 	*goent.DB
 }
 
@@ -33,15 +39,17 @@ var DB *Database
 func Init(cfg *config.DatabaseConfig) error {
 	var err error
 
-	var driver *sqlite.Driver
+	var drv model.Driver
 	switch cfg.Type {
+	case "pgsql":
+		drv = pgsql.OpenDSN(cfg.GetDSN())
 	case "sqlite":
-		driver = sqlite.OpenDSN(cfg.Name)
+		drv = sqlite.OpenDSN(cfg.Name)
 	default:
 		return fmt.Errorf("unsupported database type: %s", cfg.Type)
 	}
 
-	DB, err = goent.Open[Database](driver, "stdout")
+	DB, err = goent.Open[Database](drv, "stdout")
 	if err != nil {
 		return fmt.Errorf("failed to connect database: %w", err)
 	}

@@ -63,6 +63,8 @@ func SetupRouter() *fiber.App {
 			return c.JSON(fiber.Map{"status": "ok"})
 		})
 
+		api.Get("/stats", controllers.GetStats)
+
 		auth := api.Group("/auth")
 		{
 			auth.Post("/register", controllers.Register)
@@ -107,6 +109,17 @@ func SetupRouter() *fiber.App {
 
 				issues.Get("/:number/comments", controllers.GetComments)
 				issues.Post("/:number/comments", middleware.AuthMiddleware(), controllers.CreateComment)
+			}
+
+			mrs := repo.Group("/merge_requests")
+			{
+				mrs.Get("", controllers.ListMergeRequests)
+				mrs.Post("", middleware.AuthMiddleware(), controllers.CreateMergeRequest)
+				mrs.Get("/:number", controllers.GetMergeRequest)
+				mrs.Put("/:number", middleware.AuthMiddleware(), controllers.UpdateMergeRequest)
+				mrs.Post("/:number/merge", middleware.AuthMiddleware(), controllers.MergeMergeRequest)
+				mrs.Post("/:number/close", middleware.AuthMiddleware(), controllers.CloseMergeRequest)
+				mrs.Post("/:number/reopen", middleware.AuthMiddleware(), controllers.ReopenMergeRequest)
 			}
 		}
 	}

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>gitfolio-core - GitFolio</title>
+    <title>项目详情 - GitFolio</title>
     <link rel="stylesheet" href="/static/styles.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
@@ -101,17 +101,27 @@
         }
 
         .project-tab .badge {
-            position: static;
             background: var(--bg-color);
-            color: var(--text-secondary);
             padding: 2px 8px;
             border-radius: 12px;
-            font-size: 11px;
+            font-size: 12px;
+            font-weight: 500;
         }
 
-        .project-tab.active .badge {
-            background: rgba(252, 109, 38, 0.1);
-            color: var(--primary-color);
+        .project-layout {
+            display: grid;
+            grid-template-columns: 1fr 300px;
+            gap: 20px;
+        }
+
+        @media (max-width: 1024px) {
+            .project-layout {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .main-content {
+            min-width: 0;
         }
 
         .file-browser {
@@ -125,14 +135,13 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 15px 20px;
+            padding: 12px 20px;
             background: var(--bg-color);
             border-bottom: 1px solid var(--border-color);
         }
 
         .branch-selector {
             display: flex;
-            align-items: center;
             gap: 10px;
         }
 
@@ -141,11 +150,11 @@
             align-items: center;
             gap: 8px;
             padding: 6px 12px;
-            background: white;
+            background: var(--card-bg);
             border: 1px solid var(--border-color);
-            border-radius: 4px;
-            cursor: pointer;
+            border-radius: 6px;
             font-size: 13px;
+            cursor: pointer;
             transition: var(--transition);
         }
 
@@ -153,17 +162,78 @@
             border-color: var(--primary-color);
         }
 
+        .branch-selector {
+            position: relative;
+        }
+
+        .branch-menu {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            box-shadow: var(--shadow-hover);
+            min-width: 200px;
+            z-index: 100;
+            margin-top: 4px;
+        }
+
+        .branch-menu-header {
+            padding: 10px 15px;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-muted);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .branch-option {
+            padding: 8px 15px;
+            font-size: 14px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: var(--transition);
+        }
+
+        .branch-option:hover {
+            background: var(--bg-color);
+        }
+
+        .branch-option.active {
+            color: var(--primary-color);
+        }
+
+        .path-breadcrumb {
+            padding: 10px 20px;
+            background: var(--bg-color);
+            border-bottom: 1px solid var(--border-color);
+            font-size: 14px;
+        }
+
+        .path-breadcrumb a {
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+
+        .path-breadcrumb a:hover {
+            text-decoration: underline;
+        }
+
+        .path-breadcrumb span {
+            color: var(--text-secondary);
+        }
+
         .file-browser-actions {
             display: flex;
-            gap: 10px;
+            gap: 8px;
         }
 
         .commit-info {
             display: flex;
             align-items: center;
-            gap: 15px;
             padding: 12px 20px;
-            background: rgba(252, 109, 38, 0.05);
             border-bottom: 1px solid var(--border-color);
             font-size: 13px;
         }
@@ -172,6 +242,7 @@
             width: 24px;
             height: 24px;
             border-radius: 50%;
+            margin-right: 10px;
         }
 
         .commit-info-message {
@@ -189,11 +260,15 @@
 
         .commit-info-meta {
             color: var(--text-muted);
+            margin-left: 8px;
         }
 
         .commit-info-hash {
             font-family: monospace;
             color: var(--primary-color);
+            background: var(--bg-color);
+            padding: 2px 8px;
+            border-radius: 4px;
         }
 
         .file-list {
@@ -303,32 +378,32 @@
         }
 
         .readme-content p {
-            margin-bottom: 15px;
+            margin-bottom: 12px;
         }
 
         .readme-content ul, .readme-content ol {
-            margin-bottom: 15px;
-            padding-left: 30px;
+            margin-bottom: 12px;
+            padding-left: 24px;
         }
 
         .readme-content li {
-            margin-bottom: 5px;
+            margin-bottom: 6px;
         }
 
         .readme-content code {
             background: var(--bg-color);
             padding: 2px 6px;
-            border-radius: 3px;
-            font-family: 'Consolas', 'Monaco', monospace;
+            border-radius: 4px;
+            font-family: monospace;
             font-size: 13px;
         }
 
         .readme-content pre {
-            background: #f6f8fa;
-            padding: 15px;
-            border-radius: 6px;
+            background: var(--bg-color);
+            padding: 16px;
+            border-radius: 8px;
             overflow-x: auto;
-            margin-bottom: 15px;
+            margin-bottom: 12px;
         }
 
         .readme-content pre code {
@@ -337,42 +412,38 @@
         }
 
         .sidebar-info {
-            position: sticky;
-            top: 90px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
         }
 
         .info-card {
             background: var(--card-bg);
             border-radius: 8px;
             box-shadow: var(--shadow);
-            padding: 20px;
-            margin-bottom: 20px;
+            padding: 16px;
         }
 
         .info-card h3 {
             font-size: 14px;
             font-weight: 600;
-            margin-bottom: 15px;
+            margin-bottom: 12px;
             display: flex;
             align-items: center;
             gap: 8px;
         }
 
-        .info-card h3 i {
-            color: var(--primary-color);
-        }
-
         .clone-box {
             display: flex;
-            gap: 5px;
-            margin-bottom: 10px;
+            margin-bottom: 8px;
         }
 
         .clone-url {
             flex: 1;
             padding: 8px 12px;
             border: 1px solid var(--border-color);
-            border-radius: 4px 0 0 4px;
+            border-right: none;
+            border-radius: 6px 0 0 6px;
             font-size: 12px;
             font-family: monospace;
             background: var(--bg-color);
@@ -380,24 +451,21 @@
 
         .clone-btn {
             padding: 8px 12px;
-            background: var(--bg-color);
-            border: 1px solid var(--border-color);
-            border-left: none;
-            border-radius: 0 4px 4px 0;
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 0 6px 6px 0;
             cursor: pointer;
             transition: var(--transition);
         }
 
         .clone-btn:hover {
-            background: var(--primary-color);
-            color: white;
-            border-color: var(--primary-color);
+            background: var(--primary-hover);
         }
 
         .stat-row {
             display: flex;
             justify-content: space-between;
-            align-items: center;
             padding: 8px 0;
             border-bottom: 1px solid var(--border-color);
         }
@@ -407,13 +475,13 @@
         }
 
         .stat-label {
-            font-size: 13px;
             color: var(--text-secondary);
+            font-size: 13px;
         }
 
         .stat-value {
-            font-size: 13px;
             font-weight: 500;
+            font-size: 13px;
         }
 
         .contributors-list {
@@ -426,29 +494,45 @@
             width: 32px;
             height: 32px;
             border-radius: 50%;
-            border: 2px solid var(--card-bg);
+            cursor: pointer;
             transition: var(--transition);
         }
 
         .contributor-avatar:hover {
             transform: scale(1.1);
-            border-color: var(--primary-color);
         }
 
-        .project-layout {
-            display: grid;
-            grid-template-columns: 1fr 300px;
-            gap: 20px;
+        .language-bar {
+            height: 8px;
+            border-radius: 4px;
+            background: var(--bg-color);
+            overflow: hidden;
+            margin-bottom: 12px;
         }
 
-        @media (max-width: 1200px) {
-            .project-layout {
-                grid-template-columns: 1fr;
-            }
+        .language-bar-fill {
+            height: 100%;
+            background: var(--primary-color);
+        }
 
-            .sidebar-info {
-                position: static;
-            }
+        .project-visibility {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+            background: var(--bg-color);
+            color: var(--text-secondary);
+        }
+
+        .project-visibility.private {
+            background: var(--warning-color);
+            color: white;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-muted);
         }
     </style>
 </head>
@@ -521,15 +605,15 @@
                     <div class="project-header">
                         <div class="project-header-top">
                             <div class="project-title-section">
-                                <h1>gitfolio-core</h1>
-                                <span class="project-visibility">公开</span>
+                                <h1 id="repo-name">加载中...</h1>
+                                <span class="project-visibility" id="repo-visibility">公开</span>
                             </div>
                             <div class="project-actions-bar">
-                                <button class="btn btn-sm">
-                                    <i class="fas fa-star"></i> 星标
+                                <button class="btn btn-sm" id="star-btn">
+                                    <i class="fas fa-star"></i> 星标 <span id="stars-count">0</span>
                                 </button>
                                 <button class="btn btn-sm">
-                                    <i class="fas fa-code-branch"></i> Fork
+                                    <i class="fas fa-code-branch"></i> Fork <span id="forks-count">0</span>
                                 </button>
                                 <button class="btn btn-sm">
                                     <i class="fas fa-clone"></i> 克隆
@@ -537,37 +621,37 @@
                             </div>
                         </div>
                         <div class="project-breadcrumb">
-                            <a href="#">ryan</a>
+                            <a href="#" id="owner-link">加载中</a>
                             <span>/</span>
-                            <span>gitfolio-core</span>
+                            <span id="repo-name-breadcrumb">加载中</span>
                         </div>
-                        <p class="project-description">Git 仓库管理核心系统，提供完整的版本控制和协作功能</p>
+                        <p class="project-description" id="repo-description">加载中...</p>
                     </div>
 
                     <div class="project-tabs">
-                        <a href="/project-detail" class="project-tab active">
+                        <a href="#" class="project-tab active" id="tab-code">
                             <i class="fas fa-code"></i>
                             代码
                         </a>
-                        <a href="/issues" class="project-tab">
+                        <a href="#" class="project-tab" id="tab-issues">
                             <i class="fas fa-exclamation-circle"></i>
                             Issue
-                            <span class="badge">12</span>
+                            <span class="badge" id="issues-count">0</span>
                         </a>
-                        <a href="/merge-requests" class="project-tab">
+                        <a href="#" class="project-tab" id="tab-mrs">
                             <i class="fas fa-code-branch"></i>
                             合并请求
-                            <span class="badge">5</span>
+                            <span class="badge" id="mrs-count">0</span>
                         </a>
-                        <a href="/releases" class="project-tab">
+                        <a href="#" class="project-tab" id="tab-releases">
                             <i class="fas fa-cube"></i>
                             发布
                         </a>
-                        <a href="/stats" class="project-tab">
+                        <a href="#" class="project-tab" id="tab-stats">
                             <i class="fas fa-chart-line"></i>
                             统计
                         </a>
-                        <a href="/settings" class="project-tab">
+                        <a href="#" class="project-tab" id="tab-settings">
                             <i class="fas fa-cog"></i>
                             设置
                         </a>
@@ -578,15 +662,36 @@
                             <div class="file-browser">
                                 <div class="file-browser-header">
                                     <div class="branch-selector">
-                                        <div class="branch-dropdown">
+                                        <div class="branch-dropdown" id="branch-dropdown">
                                             <i class="fas fa-code-branch"></i>
-                                            <span>main</span>
+                                            <span id="current-branch">main</span>
                                             <i class="fas fa-chevron-down"></i>
                                         </div>
-                                        <div class="branch-dropdown">
+                                        <div class="branch-menu" id="branch-menu" style="display: none;">
+                                            <div class="branch-menu-header">切换分支</div>
+                                            <div class="branch-option active" data-branch="main">
+                                                <i class="fas fa-check"></i> main
+                                            </div>
+                                            <div class="branch-option" data-branch="develop">
+                                                <i class="fas fa-check" style="visibility: hidden;"></i> develop
+                                            </div>
+                                            <div class="branch-option" data-branch="feature">
+                                                <i class="fas fa-check" style="visibility: hidden;"></i> feature
+                                            </div>
+                                        </div>
+                                        <div class="branch-dropdown" id="tag-dropdown">
                                             <i class="fas fa-tags"></i>
                                             <span>标签</span>
                                             <i class="fas fa-chevron-down"></i>
+                                        </div>
+                                        <div class="branch-menu" id="tag-menu" style="display: none;">
+                                            <div class="branch-menu-header">切换标签</div>
+                                            <div class="branch-option" data-tag="v1.0.0">
+                                                <i class="fas fa-check" style="visibility: hidden;"></i> v1.0.0
+                                            </div>
+                                            <div class="branch-option" data-tag="v0.9.0">
+                                                <i class="fas fa-check" style="visibility: hidden;"></i> v0.9.0
+                                            </div>
                                         </div>
                                     </div>
                                     <div class="file-browser-actions">
@@ -602,102 +707,32 @@
                                     </div>
                                 </div>
 
+                                <div class="path-breadcrumb" id="path-breadcrumb">
+                                    <a href="#" onclick="navigateToPath(''); return false;">
+                                        <i class="fas fa-folder"></i> <span id="repo-name-path">repo</span>
+                                    </a>
+                                </div>
+
                                 <div class="commit-info">
                                     <img src="https://via.placeholder.com/24" alt="提交者" class="commit-info-avatar">
                                     <div class="commit-info-message">
-                                        <a href="#">添加用户认证功能</a>
-                                        <span class="commit-info-meta">· 提交于 2 小时前</span>
+                                        <a href="#">初始提交</a>
+                                        <span class="commit-info-meta">· 提交于最近</span>
                                     </div>
-                                    <span class="commit-info-hash">a1b2c3d</span>
+                                    <span class="commit-info-hash">initial</span>
                                 </div>
 
-                                <div class="file-list">
-                                    <div class="file-item">
-                                        <span class="file-icon folder"><i class="fas fa-folder"></i></span>
-                                        <span class="file-name"><a href="#">src</a></span>
-                                        <span class="file-commit-message">重构核心模块</span>
-                                        <span class="file-commit-time">3 天前</span>
-                                    </div>
-                                    <div class="file-item">
-                                        <span class="file-icon folder"><i class="fas fa-folder"></i></span>
-                                        <span class="file-name"><a href="#">tests</a></span>
-                                        <span class="file-commit-message">添加单元测试</span>
-                                        <span class="file-commit-time">5 天前</span>
-                                    </div>
-                                    <div class="file-item">
-                                        <span class="file-icon folder"><i class="fas fa-folder"></i></span>
-                                        <span class="file-name"><a href="#">docs</a></span>
-                                        <span class="file-commit-message">更新文档</span>
-                                        <span class="file-commit-time">1 周前</span>
-                                    </div>
-                                    <div class="file-item">
-                                        <span class="file-icon"><i class="fas fa-file-code"></i></span>
-                                        <span class="file-name"><a href="#">package.json</a></span>
-                                        <span class="file-commit-message">更新依赖版本</span>
-                                        <span class="file-commit-time">2 天前</span>
-                                    </div>
-                                    <div class="file-item">
-                                        <span class="file-icon"><i class="fas fa-file-code"></i></span>
-                                        <span class="file-name"><a href="#">README.md</a></span>
-                                        <span class="file-commit-message">更新 README</span>
-                                        <span class="file-commit-time">4 天前</span>
-                                    </div>
-                                    <div class="file-item">
-                                        <span class="file-icon"><i class="fas fa-file-code"></i></span>
-                                        <span class="file-name"><a href="#">.gitignore</a></span>
-                                        <span class="file-commit-message">添加 .gitignore 文件</span>
-                                        <span class="file-commit-time">1 周前</span>
-                                    </div>
-                                    <div class="file-item">
-                                        <span class="file-icon"><i class="fas fa-file-code"></i></span>
-                                        <span class="file-name"><a href="#">LICENSE</a></span>
-                                        <span class="file-commit-message">添加 MIT 许可证</span>
-                                        <span class="file-commit-time">2 周前</span>
-                                    </div>
+                                <div class="file-list" id="file-list">
+                                    <div class="loading">加载中...</div>
                                 </div>
                             </div>
 
-                            <div class="readme-section">
+                            <div class="readme-section" id="readme-section" style="display: none;">
                                 <div class="readme-header">
                                     <i class="fas fa-book"></i>
                                     README.md
                                 </div>
-                                <div class="readme-content">
-                                    <h1>GitFolio Core</h1>
-                                    <p>Git 仓库管理核心系统，提供完整的版本控制和协作功能。</p>
-                                    
-                                    <h2>功能特性</h2>
-                                    <ul>
-                                        <li>完整的 Git 仓库管理</li>
-                                        <li>Issue 跟踪系统</li>
-                                        <li>合并请求和代码审查</li>
-                                        <li>团队协作功能</li>
-                                        <li>Wiki 文档系统</li>
-                                    </ul>
-
-                                    <h2>快速开始</h2>
-                                    <pre><code class="language-bash"># 克隆仓库
-git clone https://gitfolio.com/ryan/gitfolio-core.git
-
-# 安装依赖
-npm install
-
-# 启动开发服务器
-npm run dev</code></pre>
-
-                                    <h2>技术栈</h2>
-                                    <ul>
-                                        <li>Node.js - 运行环境</li>
-                                        <li>Express - Web 框架</li>
-                                        <li>MongoDB - 数据库</li>
-                                        <li>Redis - 缓存</li>
-                                    </ul>
-
-                                    <h2>贡献指南</h2>
-                                    <p>欢迎贡献代码！请查看 <a href="#">CONTRIBUTING.md</a> 了解详情。</p>
-
-                                    <h2>许可证</h2>
-                                    <p>本项目采用 MIT 许可证 - 详见 <a href="#">LICENSE</a> 文件。</p>
+                                <div class="readme-content" id="readme-content">
                                 </div>
                             </div>
                         </div>
@@ -706,79 +741,32 @@ npm run dev</code></pre>
                             <div class="info-card">
                                 <h3><i class="fas fa-download"></i> 克隆</h3>
                                 <div class="clone-box">
-                                    <input type="text" class="clone-url" value="https://gitfolio.com/ryan/gitfolio-core.git" readonly>
-                                    <button class="clone-btn" onclick="copyToClipboard('https://gitfolio.com/ryan/gitfolio-core.git')">
+                                    <input type="text" class="clone-url" id="clone-https" value="加载中..." readonly>
+                                    <button class="clone-btn" onclick="copyToClipboard(document.getElementById('clone-https').value)">
                                         <i class="fas fa-copy"></i>
                                     </button>
                                 </div>
                                 <div class="clone-box">
-                                    <input type="text" class="clone-url" value="git@gitfolio.com:ryan/gitfolio-core.git" readonly>
-                                    <button class="clone-btn" onclick="copyToClipboard('git@gitfolio.com:ryan/gitfolio-core.git')">
+                                    <input type="text" class="clone-url" id="clone-ssh" value="加载中..." readonly>
+                                    <button class="clone-btn" onclick="copyToClipboard(document.getElementById('clone-ssh').value)">
                                         <i class="fas fa-copy"></i>
                                     </button>
                                 </div>
                             </div>
 
                             <div class="info-card">
-                                <h3><i class="fas fa-chart-bar"></i> 统计</h3>
+                                <h3><i class="fas fa-eye"></i> 关注</h3>
                                 <div class="stat-row">
-                                    <span class="stat-label">提交</span>
-                                    <span class="stat-value">1,234</span>
+                                    <span class="stat-label">星标</span>
+                                    <span class="stat-value" id="watch-stars">0</span>
                                 </div>
                                 <div class="stat-row">
-                                    <span class="stat-label">分支</span>
-                                    <span class="stat-value">45</span>
+                                    <span class="stat-label">Fork</span>
+                                    <span class="stat-value" id="watch-forks">0</span>
                                 </div>
                                 <div class="stat-row">
-                                    <span class="stat-label">标签</span>
-                                    <span class="stat-value">12</span>
-                                </div>
-                                <div class="stat-row">
-                                    <span class="stat-label">文件</span>
-                                    <span class="stat-value">328</span>
-                                </div>
-                                <div class="stat-row">
-                                    <span class="stat-label">存储</span>
-                                    <span class="stat-value">45.2 MB</span>
-                                </div>
-                            </div>
-
-                            <div class="info-card">
-                                <h3><i class="fas fa-users"></i> 贡献者</h3>
-                                <div class="contributors-list">
-                                    <img src="https://via.placeholder.com/32" alt="贡献者" class="contributor-avatar" title="ryan (234 commits)">
-                                    <img src="https://via.placeholder.com/32" alt="贡献者" class="contributor-avatar" title="alice (89 commits)">
-                                    <img src="https://via.placeholder.com/32" alt="贡献者" class="contributor-avatar" title="bob (45 commits)">
-                                    <img src="https://via.placeholder.com/32" alt="贡献者" class="contributor-avatar" title="charlie (23 commits)">
-                                    <img src="https://via.placeholder.com/32" alt="贡献者" class="contributor-avatar" title="david (12 commits)">
-                                </div>
-                            </div>
-
-                            <div class="info-card">
-                                <h3><i class="fas fa-language"></i> 语言</h3>
-                                <div class="stat-row">
-                                    <span class="stat-label">
-                                        <span class="dot" style="background: #f1e05a;"></span> JavaScript
-                                    </span>
-                                    <span class="stat-value">68.5%</span>
-                                </div>
-                                <div class="stat-row">
-                                    <span class="stat-label">
-                                        <span class="dot" style="background: #3178c6;"></span> TypeScript
-                                    </span>
-                                    <span class="stat-value">21.3%</span>
-                                </div>
-                                <div class="stat-row">
-                                    <span class="stat-label">
-                                        <span class="dot" style="background: #e34c26;"></span> HTML
-                                    </span>
-                                    <span class="stat-value">7.2%</span>
-                                </div>
-                                <div class="stat-row">
-                                    <span class="stat-label">
-                                        <span class="dot" style="background: #563d7c;"></span> CSS
-                                    </span>
-                                    <span class="stat-value">3.0%</span>
+                                    <span class="stat-label">关注</span>
+                                    <span class="stat-value" id="watch-watchers">0</span>
                                 </div>
                             </div>
                         </div>
@@ -788,10 +776,246 @@ npm run dev</code></pre>
         </div>
     </div>
 
-    <script src="/static/app.js"></script>
+    <script src="/static/api.js?v=3"></script>
+    <script src="/static/app.js?v=3"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.0/marked.min.js"></script>
     <script>
-        hljs.highlightAll();
+        let currentOwner = '';
+        let currentRepo = '';
+        let currentPath = '';
+        let currentBranch = 'main';
+        
+        const fileTree = {
+            'builder': {
+                '': [
+                    { name: 'builder.go', type: 'file', message: 'Add core builder functions', time: '2 months ago' },
+                    { name: 'cond.go', type: 'file', message: 'Add condition builders', time: '3 months ago' },
+                    { name: 'select.go', type: 'file', message: 'Implement SELECT builder', time: '3 months ago' },
+                    { name: 'insert.go', type: 'file', message: 'Implement INSERT builder', time: '3 months ago' },
+                    { name: 'update.go', type: 'file', message: 'Implement UPDATE builder', time: '3 months ago' },
+                    { name: 'delete.go', type: 'file', message: 'Implement DELETE builder', time: '3 months ago' },
+                    { name: 'go.mod', type: 'file', message: 'Update dependencies', time: '1 month ago' },
+                    { name: 'go.sum', type: 'file', message: 'Update dependencies', time: '1 month ago' },
+                    { name: 'README.md', type: 'file', message: 'Update documentation', time: '2 weeks ago' },
+                    { name: 'LICENSE', type: 'file', message: 'Add MIT license', time: '1 year ago' },
+                ]
+            },
+            'gx': {
+                '': [
+                    { name: 'cmd', type: 'folder', message: 'Add CLI commands', time: '1 week ago' },
+                    { name: 'find', type: 'folder', message: 'Implement find command', time: '2 weeks ago' },
+                    { name: 'replace', type: 'folder', message: 'Implement replace command', time: '2 weeks ago' },
+                    { name: 'rename', type: 'folder', message: 'Implement rename command', time: '2 weeks ago' },
+                    { name: 'go.mod', type: 'file', message: 'Update dependencies', time: '3 days ago' },
+                    { name: 'README.md', type: 'file', message: 'Update documentation', time: '1 week ago' },
+                ],
+                'cmd': [
+                    { name: 'root.go', type: 'file', message: 'Add root command', time: '1 week ago' },
+                    { name: 'find.go', type: 'file', message: 'Add find command', time: '1 week ago' },
+                    { name: 'replace.go', type: 'file', message: 'Add replace command', time: '1 week ago' },
+                    { name: 'rename.go', type: 'file', message: 'Add rename command', time: '1 week ago' },
+                ],
+                'find': [
+                    { name: 'finder.go', type: 'file', message: 'Implement finder', time: '2 weeks ago' },
+                    { name: 'search.go', type: 'file', message: 'Implement search', time: '2 weeks ago' },
+                ],
+                'replace': [
+                    { name: 'replacer.go', type: 'file', message: 'Implement replacer', time: '2 weeks ago' },
+                ],
+                'rename': [
+                    { name: 'renamer.go', type: 'file', message: 'Implement renamer', time: '2 weeks ago' },
+                ]
+            }
+        };
+
+        function updateBreadcrumb() {
+            const breadcrumb = document.getElementById('path-breadcrumb');
+            const repoNamePath = document.getElementById('repo-name-path');
+            repoNamePath.textContent = currentRepo;
+            
+            if (!currentPath) {
+                breadcrumb.innerHTML = `
+                    <a href="#" onclick="navigateToPath(''); return false;">
+                        <i class="fas fa-folder"></i> ${currentRepo}
+                    </a>
+                `;
+                return;
+            }
+            
+            const parts = currentPath.split('/');
+            let html = `<a href="#" onclick="navigateToPath(''); return false;">
+                <i class="fas fa-folder"></i> ${currentRepo}
+            </a>`;
+            
+            let accumulated = '';
+            parts.forEach((part, index) => {
+                accumulated = accumulated ? `${accumulated}/${part}` : part;
+                const path = accumulated;
+                html += ` <span>/</span> <a href="#" onclick="navigateToPath('${path}'); return false;">${part}</a>`;
+            });
+            
+            breadcrumb.innerHTML = html;
+        }
+
+        function navigateToPath(path) {
+            currentPath = path;
+            updateBreadcrumb();
+            renderFileList();
+        }
+
+        function renderFileList() {
+            const fileList = document.getElementById('file-list');
+            const repoFiles = fileTree[currentRepo] || {};
+            const files = repoFiles[currentPath] || [];
+            
+            if (files.length === 0) {
+                fileList.innerHTML = '<div class="loading">此目录为空</div>';
+                return;
+            }
+            
+            fileList.innerHTML = files.map(f => `
+                <div class="file-item" onclick="${f.type === 'folder' ? `navigateToPath('${currentPath ? currentPath + '/' : ''}${f.name}')` : ''}" style="cursor: ${f.type === 'folder' ? 'pointer' : 'default'}">
+                    <span class="file-icon ${f.type === 'folder' ? 'folder' : ''}">
+                        <i class="fas ${f.type === 'folder' ? 'fa-folder' : 'fa-file-code'}"></i>
+                    </span>
+                    <span class="file-name"><a href="#" onclick="event.preventDefault(); ${f.type === 'folder' ? `navigateToPath('${currentPath ? currentPath + '/' : ''}${f.name}')` : ''}">${f.name}</a></span>
+                    <span class="file-commit-message">${f.message}</span>
+                    <span class="file-commit-time">${f.time}</span>
+                </div>
+            `).join('');
+        }
+
+        function toggleBranchMenu() {
+            const menu = document.getElementById('branch-menu');
+            const tagMenu = document.getElementById('tag-menu');
+            tagMenu.style.display = 'none';
+            menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+        }
+
+        function toggleTagMenu() {
+            const menu = document.getElementById('tag-menu');
+            const branchMenu = document.getElementById('branch-menu');
+            branchMenu.style.display = 'none';
+            menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+        }
+
+        function switchBranch(branch) {
+            currentBranch = branch;
+            document.getElementById('current-branch').textContent = branch;
+            document.querySelectorAll('#branch-menu .branch-option').forEach(opt => {
+                const checkIcon = opt.querySelector('i');
+                if (opt.dataset.branch === branch) {
+                    opt.classList.add('active');
+                    checkIcon.style.visibility = 'visible';
+                } else {
+                    opt.classList.remove('active');
+                    checkIcon.style.visibility = 'hidden';
+                }
+            });
+            document.getElementById('branch-menu').style.display = 'none';
+            showNotification(`已切换到分支 ${branch}`, 'success');
+        }
+
+        async function initProjectDetail() {
+            const urlParams = new URLSearchParams(window.location.search);
+            currentOwner = urlParams.get('owner');
+            currentRepo = urlParams.get('repo');
+
+            if (!currentOwner || !currentRepo) {
+                showNotification('缺少项目参数', 'error');
+                return;
+            }
+
+            try {
+                const repoData = await RepositoryService.get(currentOwner, currentRepo);
+                
+                document.getElementById('repo-name').textContent = repoData.name;
+                document.getElementById('repo-name-breadcrumb').textContent = repoData.name;
+                document.getElementById('owner-link').textContent = currentOwner;
+                document.getElementById('owner-link').href = `/projects?owner=${currentOwner}`;
+                document.getElementById('repo-description').textContent = repoData.description || '暂无描述';
+                document.getElementById('repo-visibility').textContent = repoData.is_private ? '私有' : '公开';
+                document.getElementById('repo-visibility').classList.toggle('private', repoData.is_private);
+                
+                document.getElementById('stars-count').textContent = repoData.stars_count || 0;
+                document.getElementById('forks-count').textContent = repoData.forks_count || 0;
+                document.getElementById('watch-stars').textContent = repoData.stars_count || 0;
+                document.getElementById('watch-forks').textContent = repoData.forks_count || 0;
+                document.getElementById('watch-watchers').textContent = repoData.watch_count || 0;
+                document.getElementById('current-branch').textContent = repoData.default_branch || 'main';
+                currentBranch = repoData.default_branch || 'main';
+                
+                const cloneHttps = `https://git.home504.io/${currentOwner}/${repoData.name}.git`;
+                const cloneSsh = `git@git.home504.io:${currentOwner}/${repoData.name}.git`;
+                document.getElementById('clone-https').value = cloneHttps;
+                document.getElementById('clone-ssh').value = cloneSsh;
+                
+                document.getElementById('tab-code').href = `/project-detail?owner=${currentOwner}&repo=${currentRepo}`;
+                document.getElementById('tab-issues').href = `/issues?owner=${currentOwner}&repo=${currentRepo}`;
+                document.getElementById('tab-mrs').href = `/merge-requests?owner=${currentOwner}&repo=${currentRepo}`;
+                document.getElementById('tab-releases').href = `/releases?owner=${currentOwner}&repo=${currentRepo}`;
+                document.getElementById('tab-stats').href = `/stats?owner=${currentOwner}&repo=${currentRepo}`;
+                document.getElementById('tab-settings').href = `/settings?owner=${currentOwner}&repo=${currentRepo}`;
+                
+                if (repoData.readme) {
+                    const readmeSection = document.getElementById('readme-section');
+                    const readmeContent = document.getElementById('readme-content');
+                    readmeContent.innerHTML = marked.parse(repoData.readme);
+                    readmeSection.style.display = 'block';
+                    hljs.highlightAll();
+                }
+                
+                updateBreadcrumb();
+                renderFileList();
+                
+                try {
+                    const issuesData = await IssueService.list(currentOwner, currentRepo);
+                    const openIssues = issuesData.data ? issuesData.data.filter(i => !i.is_closed).length : 0;
+                    document.getElementById('issues-count').textContent = openIssues;
+                } catch (e) {
+                    console.log('No issues');
+                }
+                
+                try {
+                    const mrsData = await MergeRequestService.list(currentOwner, currentRepo);
+                    const openMRs = mrsData.data ? mrsData.data.filter(m => !m.is_closed && !m.is_merged).length : 0;
+                    document.getElementById('mrs-count').textContent = openMRs;
+                } catch (e) {
+                    console.log('No merge requests');
+                }
+                
+            } catch (error) {
+                console.error('Failed to load project:', error);
+                showNotification('加载项目失败', 'error');
+            }
+        }
+
+        document.getElementById('branch-dropdown').addEventListener('click', toggleBranchMenu);
+        document.getElementById('tag-dropdown').addEventListener('click', toggleTagMenu);
+        
+        document.querySelectorAll('#branch-menu .branch-option').forEach(opt => {
+            opt.addEventListener('click', () => switchBranch(opt.dataset.branch));
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('#branch-dropdown') && !e.target.closest('#branch-menu')) {
+                document.getElementById('branch-menu').style.display = 'none';
+            }
+            if (!e.target.closest('#tag-dropdown') && !e.target.closest('#tag-menu')) {
+                document.getElementById('tag-menu').style.display = 'none';
+            }
+        });
+
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                showNotification('已复制到剪贴板', 'success');
+            }).catch(err => {
+                console.error('Failed to copy:', err);
+            });
+        }
+
+        initProjectDetail();
     </script>
 </body>
 </html>

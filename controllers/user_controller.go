@@ -27,6 +27,44 @@ type UpdateUserRequest struct {
 	Location string `json:"location"`
 }
 
+type UserResponse struct {
+	ID        uint   `json:"id"`
+	Username  string `json:"username"`
+	Email     string `json:"email,omitempty"`
+	FullName  string `json:"full_name"`
+	Avatar    string `json:"avatar"`
+	AvatarURL string `json:"avatar_url"`
+	Bio       string `json:"bio"`
+	Website   string `json:"website"`
+	Location  string `json:"location"`
+	IsActive  bool   `json:"is_active"`
+	IsAdmin   bool   `json:"is_admin"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
+}
+
+func ToUserResponse(user *models.User) *UserResponse {
+	avatarURL := user.Avatar
+	if avatarURL == "" {
+		avatarURL = "https://via.placeholder.com/32?text=" + string(user.Username[0])
+	}
+	return &UserResponse{
+		ID:        user.ID,
+		Username:  user.Username,
+		Email:     user.Email,
+		FullName:  user.FullName,
+		Avatar:    user.Avatar,
+		AvatarURL: avatarURL,
+		Bio:       user.Bio,
+		Website:   user.Website,
+		Location:  user.Location,
+		IsActive:  user.IsActive,
+		IsAdmin:   user.IsAdmin,
+		CreatedAt: user.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		UpdatedAt: user.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+	}
+}
+
 func Register(c fiber.Ctx) error {
 	var req RegisterRequest
 	if err := c.Bind().JSON(&req); err != nil {
@@ -65,7 +103,7 @@ func Register(c fiber.Ctx) error {
 	}
 
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
-		"user":  userModel,
+		"user":  ToUserResponse(userModel),
 		"token": token,
 	})
 }
@@ -97,7 +135,7 @@ func Login(c fiber.Ctx) error {
 	}
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"user":  userModel,
+		"user":  ToUserResponse(userModel),
 		"token": token,
 	})
 }
@@ -115,7 +153,7 @@ func GetCurrentUser(c fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "User not found"})
 	}
 
-	return c.Status(fiber.StatusOK).JSON(userModel)
+	return c.Status(fiber.StatusOK).JSON(ToUserResponse(userModel))
 }
 
 func GetUser(c fiber.Ctx) error {
@@ -128,7 +166,7 @@ func GetUser(c fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "User not found"})
 	}
 
-	return c.Status(fiber.StatusOK).JSON(userModel)
+	return c.Status(fiber.StatusOK).JSON(ToUserResponse(userModel))
 }
 
 func UpdateUser(c fiber.Ctx) error {
@@ -164,7 +202,7 @@ func UpdateUser(c fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update user"})
 	}
 
-	return c.Status(fiber.StatusOK).JSON(userModel)
+	return c.Status(fiber.StatusOK).JSON(ToUserResponse(userModel))
 }
 
 func GetUserRepositories(c fiber.Ctx) error {

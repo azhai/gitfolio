@@ -492,8 +492,8 @@
                     <div class="project-header">
                         <div class="project-header-top">
                             <div class="project-title-section">
-                                <h1>gitfolio-core</h1>
-                                <span class="project-visibility">公开</span>
+                                <h1 id="repo-name">加载中...</h1>
+                                <span class="project-visibility" id="repo-visibility">公开</span>
                             </div>
                             <div class="project-actions-bar">
                                 <button class="btn btn-sm">
@@ -508,37 +508,37 @@
                             </div>
                         </div>
                         <div class="project-breadcrumb">
-                            <a href="#">ryan</a>
+                            <a href="#" id="owner-link">加载中</a>
                             <span>/</span>
-                            <span>gitfolio-core</span>
+                            <span id="repo-name-breadcrumb">加载中</span>
                         </div>
-                        <p class="project-description">Git 仓库管理核心系统，提供完整的版本控制和协作功能</p>
+                        <p class="project-description" id="repo-description">加载中...</p>
                     </div>
 
                     <div class="project-tabs">
-                        <a href="/project-detail" class="project-tab">
+                        <a href="#" class="project-tab" id="tab-code">
                             <i class="fas fa-code"></i>
                             代码
                         </a>
-                        <a href="/issues" class="project-tab">
+                        <a href="#" class="project-tab" id="tab-issues">
                             <i class="fas fa-exclamation-circle"></i>
                             Issue
-                            <span class="badge">12</span>
+                            <span class="badge" id="issues-count">0</span>
                         </a>
-                        <a href="/merge-requests" class="project-tab active">
+                        <a href="#" class="project-tab active" id="tab-mrs">
                             <i class="fas fa-code-branch"></i>
                             合并请求
-                            <span class="badge">5</span>
+                            <span class="badge" id="mrs-count">0</span>
                         </a>
-                        <a href="/releases" class="project-tab">
+                        <a href="#" class="project-tab">
                             <i class="fas fa-cube"></i>
                             发布
                         </a>
-                        <a href="/stats" class="project-tab">
+                        <a href="#" class="project-tab">
                             <i class="fas fa-chart-line"></i>
                             统计
                         </a>
-                        <a href="/settings" class="project-tab">
+                        <a href="#" class="project-tab">
                             <i class="fas fa-cog"></i>
                             设置
                         </a>
@@ -552,32 +552,32 @@
                     </div>
 
                     <div class="mr-tabs">
-                        <a href="#" class="mr-tab active">
+                        <a href="#" class="mr-tab active" id="tab-open">
                             <i class="fas fa-code-branch"></i>
                             打开
-                            <span class="count">5</span>
+                            <span class="count" id="open-count">0</span>
                         </a>
-                        <a href="#" class="mr-tab">
+                        <a href="#" class="mr-tab" id="tab-merged">
                             <i class="fas fa-check"></i>
                             已合并
-                            <span class="count">23</span>
+                            <span class="count" id="merged-count">0</span>
                         </a>
-                        <a href="#" class="mr-tab">
+                        <a href="#" class="mr-tab" id="tab-closed">
                             <i class="fas fa-times"></i>
                             已关闭
-                            <span class="count">8</span>
+                            <span class="count" id="closed-count">0</span>
                         </a>
-                        <a href="#" class="mr-tab">
+                        <a href="#" class="mr-tab" id="tab-all">
                             <i class="fas fa-list"></i>
                             全部
-                            <span class="count">36</span>
+                            <span class="count" id="all-count">0</span>
                         </a>
                     </div>
 
                     <div class="mr-filters">
                         <div class="search-mr">
                             <i class="fas fa-search"></i>
-                            <input type="text" placeholder="搜索合并请求...">
+                            <input type="text" placeholder="搜索合并请求..." id="search-input">
                         </div>
 
                         <select class="filter-dropdown">
@@ -608,130 +608,18 @@
                         </select>
                     </div>
 
-                    <div class="mr-list">
-                        <div class="mr-row">
-                            <div class="mr-icon open">
-                                <i class="fas fa-code-branch"></i>
-                            </div>
-                            <div class="mr-content">
-                                <div class="mr-row-title">
-                                    <a href="#">重构用户认证模块</a>
-                                    <span class="mr-labels">
-                                        <span class="mr-label refactor">重构</span>
-                                    </span>
-                                </div>
-                                <div class="mr-meta">
-                                    <a href="#">!46</a> · <span class="mr-branch">feature/auth-refactor → main</span> · 打开于 3 天前 · <a href="#">ryan</a>
-                                </div>
-                            </div>
-                            <div class="mr-assignees">
-                                <img src="https://via.placeholder.com/24" alt="指派给" class="mr-assignee" title="ryan">
-                            </div>
-                            <div class="mr-comments">
-                                <i class="fas fa-comment"></i>
-                                <span>8</span>
-                            </div>
-                        </div>
-
-                        <div class="mr-row">
-                            <div class="mr-icon open">
-                                <i class="fas fa-code-branch"></i>
-                            </div>
-                            <div class="mr-content">
-                                <div class="mr-row-title">
-                                    <a href="#">添加暗色主题支持</a>
-                                    <span class="mr-labels">
-                                        <span class="mr-label feature">功能</span>
-                                    </span>
-                                </div>
-                                <div class="mr-meta">
-                                    <a href="#">!45</a> · <span class="mr-branch">feature/dark-theme → main</span> · 打开于 5 天前 · <a href="#">alice</a>
-                                </div>
-                            </div>
-                            <div class="mr-assignees">
-                                <img src="https://via.placeholder.com/24" alt="指派给" class="mr-assignee" title="alice">
-                            </div>
-                            <div class="mr-comments">
-                                <i class="fas fa-comment"></i>
-                                <span>12</span>
-                            </div>
-                        </div>
-
-                        <div class="mr-row">
-                            <div class="mr-icon open">
-                                <i class="fas fa-code-branch"></i>
-                            </div>
-                            <div class="mr-content">
-                                <div class="mr-row-title">
-                                    <a href="#">修复权限验证问题</a>
-                                    <span class="mr-labels">
-                                        <span class="mr-label bugfix">修复</span>
-                                    </span>
-                                </div>
-                                <div class="mr-meta">
-                                    <a href="#">!44</a> · <span class="mr-branch">fix/permission → main</span> · 打开于 1 周前 · <a href="#">bob</a>
-                                </div>
-                            </div>
-                            <div class="mr-comments">
-                                <i class="fas fa-comment"></i>
-                                <span>5</span>
-                            </div>
-                        </div>
-
-                        <div class="mr-row">
-                            <div class="mr-icon open">
-                                <i class="fas fa-code-branch"></i>
-                            </div>
-                            <div class="mr-content">
-                                <div class="mr-row-title">
-                                    <a href="#">优化数据库查询性能</a>
-                                    <span class="mr-labels">
-                                        <span class="mr-label refactor">优化</span>
-                                    </span>
-                                </div>
-                                <div class="mr-meta">
-                                    <a href="#">!43</a> · <span class="mr-branch">perf/db-query → main</span> · 打开于 2 周前 · <a href="#">ryan</a>
-                                </div>
-                            </div>
-                            <div class="mr-assignees">
-                                <img src="https://via.placeholder.com/24" alt="指派给" class="mr-assignee" title="ryan">
-                            </div>
-                            <div class="mr-comments">
-                                <i class="fas fa-comment"></i>
-                                <span>3</span>
-                            </div>
-                        </div>
-
-                        <div class="mr-row">
-                            <div class="mr-icon open">
-                                <i class="fas fa-code-branch"></i>
-                            </div>
-                            <div class="mr-content">
-                                <div class="mr-row-title">
-                                    <a href="#">更新 API 文档</a>
-                                    <span class="mr-labels">
-                                        <span class="mr-label feature">文档</span>
-                                    </span>
-                                </div>
-                                <div class="mr-meta">
-                                    <a href="#">!42</a> · <span class="mr-branch">docs/api → main</span> · 打开于 3 周前 · <a href="#">charlie</a>
-                                </div>
-                            </div>
-                            <div class="mr-comments">
-                                <i class="fas fa-comment"></i>
-                                <span>2</span>
-                            </div>
-                        </div>
+                    <div class="mr-list" id="mr-list">
+                        <div class="loading">加载中...</div>
                     </div>
 
                     <div class="pagination">
-                        <span class="pagination-info">显示 1-5 条，共 5 条</span>
+                        <span class="pagination-info" id="pagination-info">加载中...</span>
                         <div class="pagination-nav">
-                            <button class="pagination-btn" disabled>
+                            <button class="pagination-btn" disabled id="prev-btn">
                                 <i class="fas fa-chevron-left"></i>
                             </button>
                             <button class="pagination-btn active">1</button>
-                            <button class="pagination-btn" disabled>
+                            <button class="pagination-btn" disabled id="next-btn">
                                 <i class="fas fa-chevron-right"></i>
                             </button>
                         </div>
@@ -741,6 +629,155 @@
         </div>
     </div>
 
-    <script src="/static/app.js"></script>
+    <script src="/static/api.js?v=3"></script>
+    <script src="/static/app.js?v=3"></script>
+    <script>
+        let currentOwner = '';
+        let currentRepo = '';
+        let currentFilter = 'open';
+
+        async function initMRsPage() {
+            const urlParams = new URLSearchParams(window.location.search);
+            currentOwner = urlParams.get('owner');
+            currentRepo = urlParams.get('repo');
+
+            if (!currentOwner || !currentRepo) {
+                showNotification('缺少项目参数', 'error');
+                return;
+            }
+
+            try {
+                const repoData = await RepositoryService.get(currentOwner, currentRepo);
+                
+                document.getElementById('repo-name').textContent = repoData.name;
+                document.getElementById('repo-name-breadcrumb').textContent = repoData.name;
+                document.getElementById('owner-link').textContent = currentOwner;
+                document.getElementById('owner-link').href = `/projects?owner=${currentOwner}`;
+                document.getElementById('repo-description').textContent = repoData.description || '暂无描述';
+                document.getElementById('repo-visibility').textContent = repoData.is_private ? '私有' : '公开';
+                
+                document.getElementById('tab-code').href = `/project-detail?owner=${currentOwner}&repo=${currentRepo}`;
+                document.getElementById('tab-issues').href = `/issues?owner=${currentOwner}&repo=${currentRepo}`;
+                document.getElementById('tab-mrs').href = `/merge-requests?owner=${currentOwner}&repo=${currentRepo}`;
+                
+                loadMRs();
+            } catch (error) {
+                console.error('Failed to load project:', error);
+                showNotification('加载项目失败', 'error');
+            }
+        }
+
+        async function loadMRs() {
+            try {
+                const mrsData = await MergeRequestService.list(currentOwner, currentRepo);
+                const mrs = mrsData.data || [];
+                
+                const openMRs = mrs.filter(m => !m.is_closed && !m.is_merged);
+                const mergedMRs = mrs.filter(m => m.is_merged);
+                const closedMRs = mrs.filter(m => m.is_closed && !m.is_merged);
+                
+                document.getElementById('open-count').textContent = openMRs.length;
+                document.getElementById('merged-count').textContent = mergedMRs.length;
+                document.getElementById('closed-count').textContent = closedMRs.length;
+                document.getElementById('all-count').textContent = mrs.length;
+                document.getElementById('mrs-count').textContent = openMRs.length;
+                
+                let displayMRs = mrs;
+                if (currentFilter === 'open') {
+                    displayMRs = openMRs;
+                } else if (currentFilter === 'merged') {
+                    displayMRs = mergedMRs;
+                } else if (currentFilter === 'closed') {
+                    displayMRs = closedMRs;
+                }
+                
+                const mrList = document.getElementById('mr-list');
+                mrList.innerHTML = '';
+                
+                if (displayMRs.length === 0) {
+                    mrList.innerHTML = '<div class="loading">暂无合并请求</div>';
+                    return;
+                }
+                
+                displayMRs.forEach(mr => {
+                    const row = document.createElement('div');
+                    row.className = 'mr-row';
+                    
+                    let iconClass = 'open';
+                    let iconName = 'code-branch';
+                    if (mr.is_merged) {
+                        iconClass = 'merged';
+                        iconName = 'check';
+                    } else if (mr.is_closed) {
+                        iconClass = 'closed';
+                        iconName = 'times';
+                    }
+                    
+                    row.innerHTML = `
+                        <div class="mr-icon ${iconClass}">
+                            <i class="fas fa-${iconName}"></i>
+                        </div>
+                        <div class="mr-content">
+                            <div class="mr-row-title">
+                                <a href="#">${mr.title}</a>
+                            </div>
+                            <div class="mr-meta">
+                                <a href="#">!${mr.number}</a> · <span class="mr-branch">${mr.source_branch} → ${mr.target_branch}</span> · ${mr.is_merged ? '合并' : (mr.is_closed ? '关闭' : '打开')}于 ${formatTime(mr.created_at)} · <a href="#">${mr.author || 'unknown'}</a>
+                            </div>
+                        </div>
+                    `;
+                    mrList.appendChild(row);
+                });
+                
+                document.getElementById('pagination-info').textContent = `显示 1-${displayMRs.length} 条，共 ${displayMRs.length} 条`;
+                
+                try {
+                    const issuesData = await IssueService.list(currentOwner, currentRepo);
+                    const openIssues = issuesData.data ? issuesData.data.filter(i => !i.is_closed).length : 0;
+                    document.getElementById('issues-count').textContent = openIssues;
+                } catch (e) {
+                    console.log('No issues');
+                }
+                
+            } catch (error) {
+                console.error('Failed to load merge requests:', error);
+                showNotification('加载合并请求失败', 'error');
+            }
+        }
+
+        document.getElementById('tab-open').addEventListener('click', (e) => {
+            e.preventDefault();
+            currentFilter = 'open';
+            document.querySelectorAll('.mr-tab').forEach(t => t.classList.remove('active'));
+            document.getElementById('tab-open').classList.add('active');
+            loadMRs();
+        });
+
+        document.getElementById('tab-merged').addEventListener('click', (e) => {
+            e.preventDefault();
+            currentFilter = 'merged';
+            document.querySelectorAll('.mr-tab').forEach(t => t.classList.remove('active'));
+            document.getElementById('tab-merged').classList.add('active');
+            loadMRs();
+        });
+
+        document.getElementById('tab-closed').addEventListener('click', (e) => {
+            e.preventDefault();
+            currentFilter = 'closed';
+            document.querySelectorAll('.mr-tab').forEach(t => t.classList.remove('active'));
+            document.getElementById('tab-closed').classList.add('active');
+            loadMRs();
+        });
+
+        document.getElementById('tab-all').addEventListener('click', (e) => {
+            e.preventDefault();
+            currentFilter = 'all';
+            document.querySelectorAll('.mr-tab').forEach(t => t.classList.remove('active'));
+            document.getElementById('tab-all').classList.add('active');
+            loadMRs();
+        });
+
+        initMRsPage();
+    </script>
 </body>
 </html>

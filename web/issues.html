@@ -531,8 +531,8 @@
                     <div class="project-header">
                         <div class="project-header-top">
                             <div class="project-title-section">
-                                <h1>gitfolio-core</h1>
-                                <span class="project-visibility">公开</span>
+                                <h1 id="repo-name">加载中...</h1>
+                                <span class="project-visibility" id="repo-visibility">公开</span>
                             </div>
                             <div class="project-actions-bar">
                                 <button class="btn btn-sm">
@@ -547,37 +547,37 @@
                             </div>
                         </div>
                         <div class="project-breadcrumb">
-                            <a href="#">ryan</a>
+                            <a href="#" id="owner-link">加载中</a>
                             <span>/</span>
-                            <span>gitfolio-core</span>
+                            <span id="repo-name-breadcrumb">加载中</span>
                         </div>
-                        <p class="project-description">Git 仓库管理核心系统，提供完整的版本控制和协作功能</p>
+                        <p class="project-description" id="repo-description">加载中...</p>
                     </div>
 
                     <div class="project-tabs">
-                        <a href="/project-detail" class="project-tab">
+                        <a href="#" class="project-tab" id="tab-code">
                             <i class="fas fa-code"></i>
                             代码
                         </a>
-                        <a href="/issues" class="project-tab active">
+                        <a href="#" class="project-tab active" id="tab-issues">
                             <i class="fas fa-exclamation-circle"></i>
                             Issue
-                            <span class="badge">12</span>
+                            <span class="badge" id="issues-count">0</span>
                         </a>
-                        <a href="/merge-requests" class="project-tab">
+                        <a href="#" class="project-tab" id="tab-mrs">
                             <i class="fas fa-code-branch"></i>
                             合并请求
-                            <span class="badge">5</span>
+                            <span class="badge" id="mrs-count">0</span>
                         </a>
-                        <a href="/releases" class="project-tab">
+                        <a href="#" class="project-tab">
                             <i class="fas fa-cube"></i>
                             发布
                         </a>
-                        <a href="/stats" class="project-tab">
+                        <a href="#" class="project-tab">
                             <i class="fas fa-chart-line"></i>
                             统计
                         </a>
-                        <a href="/settings" class="project-tab">
+                        <a href="#" class="project-tab">
                             <i class="fas fa-cog"></i>
                             设置
                         </a>
@@ -591,27 +591,27 @@
                     </div>
 
                     <div class="issues-tabs">
-                        <a href="#" class="issues-tab active">
+                        <a href="#" class="issues-tab active" id="tab-open">
                             <i class="fas fa-exclamation-circle"></i>
                             打开
-                            <span class="count">12</span>
+                            <span class="count" id="open-count">0</span>
                         </a>
-                        <a href="#" class="issues-tab">
+                        <a href="#" class="issues-tab" id="tab-closed">
                             <i class="fas fa-check-circle"></i>
                             已关闭
-                            <span class="count">45</span>
+                            <span class="count" id="closed-count">0</span>
                         </a>
-                        <a href="#" class="issues-tab">
+                        <a href="#" class="issues-tab" id="tab-all">
                             <i class="fas fa-list"></i>
                             全部
-                            <span class="count">57</span>
+                            <span class="count" id="all-count">0</span>
                         </a>
                     </div>
 
                     <div class="issues-filters">
                         <div class="search-issues">
                             <i class="fas fa-search"></i>
-                            <input type="text" placeholder="搜索 Issue...">
+                            <input type="text" placeholder="搜索 Issue..." id="search-input">
                         </div>
 
                         <select class="filter-dropdown">
@@ -644,175 +644,18 @@
                         </select>
                     </div>
 
-                    <div class="issues-list">
-                        <div class="issue-row">
-                            <div class="issue-checkbox">
-                                <input type="checkbox">
-                            </div>
-                            <div class="issue-icon open">
-                                <i class="fas fa-exclamation-circle"></i>
-                            </div>
-                            <div class="issue-content">
-                                <div class="issue-title">
-                                    <a href="#">修复用户权限验证问题</a>
-                                    <span class="issue-labels">
-                                        <span class="issue-label bug">Bug</span>
-                                        <span class="issue-label help-wanted">Help Wanted</span>
-                                    </span>
-                                </div>
-                                <div class="issue-meta">
-                                    <a href="#">#124</a> · 打开于 3 天前 · <a href="#">ryan</a>
-                                </div>
-                            </div>
-                            <div class="issue-assignees">
-                                <img src="https://via.placeholder.com/24" alt="指派给" class="issue-assignee" title="ryan">
-                            </div>
-                            <div class="issue-comments">
-                                <i class="fas fa-comment"></i>
-                                <span>5</span>
-                            </div>
-                        </div>
-
-                        <div class="issue-row">
-                            <div class="issue-checkbox">
-                                <input type="checkbox">
-                            </div>
-                            <div class="issue-icon open">
-                                <i class="fas fa-exclamation-circle"></i>
-                            </div>
-                            <div class="issue-content">
-                                <div class="issue-title">
-                                    <a href="#">添加暗色主题支持</a>
-                                    <span class="issue-labels">
-                                        <span class="issue-label feature">Feature</span>
-                                        <span class="issue-label enhancement">Enhancement</span>
-                                    </span>
-                                </div>
-                                <div class="issue-meta">
-                                    <a href="#">#122</a> · 打开于 5 天前 · <a href="#">alice</a>
-                                </div>
-                            </div>
-                            <div class="issue-assignees">
-                                <img src="https://via.placeholder.com/24" alt="指派给" class="issue-assignee" title="alice">
-                            </div>
-                            <div class="issue-comments">
-                                <i class="fas fa-comment"></i>
-                                <span>12</span>
-                            </div>
-                        </div>
-
-                        <div class="issue-row">
-                            <div class="issue-checkbox">
-                                <input type="checkbox">
-                            </div>
-                            <div class="issue-icon open">
-                                <i class="fas fa-exclamation-circle"></i>
-                            </div>
-                            <div class="issue-content">
-                                <div class="issue-title">
-                                    <a href="#">优化数据库查询性能</a>
-                                    <span class="issue-labels">
-                                        <span class="issue-label enhancement">Enhancement</span>
-                                    </span>
-                                </div>
-                                <div class="issue-meta">
-                                    <a href="#">#120</a> · 打开于 1 周前 · <a href="#">bob</a>
-                                </div>
-                            </div>
-                            <div class="issue-comments">
-                                <i class="fas fa-comment"></i>
-                                <span>8</span>
-                            </div>
-                        </div>
-
-                        <div class="issue-row">
-                            <div class="issue-checkbox">
-                                <input type="checkbox">
-                            </div>
-                            <div class="issue-icon open">
-                                <i class="fas fa-exclamation-circle"></i>
-                            </div>
-                            <div class="issue-content">
-                                <div class="issue-title">
-                                    <a href="#">更新 API 文档</a>
-                                    <span class="issue-labels">
-                                        <span class="issue-label documentation">Documentation</span>
-                                    </span>
-                                </div>
-                                <div class="issue-meta">
-                                    <a href="#">#118</a> · 打开于 2 周前 · <a href="#">ryan</a>
-                                </div>
-                            </div>
-                            <div class="issue-comments">
-                                <i class="fas fa-comment"></i>
-                                <span>3</span>
-                            </div>
-                        </div>
-
-                        <div class="issue-row">
-                            <div class="issue-checkbox">
-                                <input type="checkbox">
-                            </div>
-                            <div class="issue-icon open">
-                                <i class="fas fa-exclamation-circle"></i>
-                            </div>
-                            <div class="issue-content">
-                                <div class="issue-title">
-                                    <a href="#">添加单元测试覆盖率报告</a>
-                                    <span class="issue-labels">
-                                        <span class="issue-label enhancement">Enhancement</span>
-                                    </span>
-                                </div>
-                                <div class="issue-meta">
-                                    <a href="#">#115</a> · 打开于 3 周前 · <a href="#">charlie</a>
-                                </div>
-                            </div>
-                            <div class="issue-assignees">
-                                <img src="https://via.placeholder.com/24" alt="指派给" class="issue-assignee" title="charlie">
-                            </div>
-                            <div class="issue-comments">
-                                <i class="fas fa-comment"></i>
-                                <span>6</span>
-                            </div>
-                        </div>
-
-                        <div class="issue-row">
-                            <div class="issue-checkbox">
-                                <input type="checkbox">
-                            </div>
-                            <div class="issue-icon closed">
-                                <i class="fas fa-check-circle"></i>
-                            </div>
-                            <div class="issue-content">
-                                <div class="issue-title">
-                                    <a href="#">修复登录页面样式问题</a>
-                                    <span class="issue-labels">
-                                        <span class="issue-label bug">Bug</span>
-                                    </span>
-                                </div>
-                                <div class="issue-meta">
-                                    <a href="#">#112</a> · 关闭于 1 个月前 · <a href="#">ryan</a>
-                                </div>
-                            </div>
-                            <div class="issue-comments">
-                                <i class="fas fa-comment"></i>
-                                <span>2</span>
-                            </div>
-                        </div>
+                    <div class="issues-list" id="issues-list">
+                        <div class="loading">加载中...</div>
                     </div>
 
                     <div class="pagination">
-                        <span class="pagination-info">显示 1-10 条，共 57 条</span>
+                        <span class="pagination-info" id="pagination-info">加载中...</span>
                         <div class="pagination-nav">
-                            <button class="pagination-btn" disabled>
+                            <button class="pagination-btn" disabled id="prev-btn">
                                 <i class="fas fa-chevron-left"></i>
                             </button>
                             <button class="pagination-btn active">1</button>
-                            <button class="pagination-btn">2</button>
-                            <button class="pagination-btn">3</button>
-                            <span class="pagination-ellipsis">...</span>
-                            <button class="pagination-btn">6</button>
-                            <button class="pagination-btn">
+                            <button class="pagination-btn" id="next-btn">
                                 <i class="fas fa-chevron-right"></i>
                             </button>
                         </div>
@@ -822,6 +665,135 @@
         </div>
     </div>
 
-    <script src="/static/app.js"></script>
+    <script src="/static/api.js?v=3"></script>
+    <script src="/static/app.js?v=3"></script>
+    <script>
+        let currentOwner = '';
+        let currentRepo = '';
+        let currentFilter = 'open';
+
+        async function initIssuesPage() {
+            const urlParams = new URLSearchParams(window.location.search);
+            currentOwner = urlParams.get('owner');
+            currentRepo = urlParams.get('repo');
+
+            if (!currentOwner || !currentRepo) {
+                showNotification('缺少项目参数', 'error');
+                return;
+            }
+
+            try {
+                const repoData = await RepositoryService.get(currentOwner, currentRepo);
+                
+                document.getElementById('repo-name').textContent = repoData.name;
+                document.getElementById('repo-name-breadcrumb').textContent = repoData.name;
+                document.getElementById('owner-link').textContent = currentOwner;
+                document.getElementById('owner-link').href = `/projects?owner=${currentOwner}`;
+                document.getElementById('repo-description').textContent = repoData.description || '暂无描述';
+                document.getElementById('repo-visibility').textContent = repoData.is_private ? '私有' : '公开';
+                
+                document.getElementById('tab-code').href = `/project-detail?owner=${currentOwner}&repo=${currentRepo}`;
+                document.getElementById('tab-issues').href = `/issues?owner=${currentOwner}&repo=${currentRepo}`;
+                document.getElementById('tab-mrs').href = `/merge-requests?owner=${currentOwner}&repo=${currentRepo}`;
+                
+                loadIssues();
+            } catch (error) {
+                console.error('Failed to load project:', error);
+                showNotification('加载项目失败', 'error');
+            }
+        }
+
+        async function loadIssues() {
+            try {
+                const issuesData = await IssueService.list(currentOwner, currentRepo);
+                const issues = issuesData.data || [];
+                
+                const openIssues = issues.filter(i => !i.is_closed);
+                const closedIssues = issues.filter(i => i.is_closed);
+                
+                document.getElementById('open-count').textContent = openIssues.length;
+                document.getElementById('closed-count').textContent = closedIssues.length;
+                document.getElementById('all-count').textContent = issues.length;
+                document.getElementById('issues-count').textContent = openIssues.length;
+                
+                let displayIssues = issues;
+                if (currentFilter === 'open') {
+                    displayIssues = openIssues;
+                } else if (currentFilter === 'closed') {
+                    displayIssues = closedIssues;
+                }
+                
+                const issuesList = document.getElementById('issues-list');
+                issuesList.innerHTML = '';
+                
+                if (displayIssues.length === 0) {
+                    issuesList.innerHTML = '<div class="loading">暂无 Issue</div>';
+                    return;
+                }
+                
+                displayIssues.forEach(issue => {
+                    const row = document.createElement('div');
+                    row.className = 'issue-row';
+                    row.innerHTML = `
+                        <div class="issue-checkbox">
+                            <input type="checkbox">
+                        </div>
+                        <div class="issue-icon ${issue.is_closed ? 'closed' : 'open'}">
+                            <i class="fas fa-${issue.is_closed ? 'check-circle' : 'exclamation-circle'}"></i>
+                        </div>
+                        <div class="issue-content">
+                            <div class="issue-title">
+                                <a href="#">${issue.title}</a>
+                            </div>
+                            <div class="issue-meta">
+                                <a href="#">#${issue.number}</a> · ${issue.is_closed ? '关闭' : '打开'}于 ${formatTime(issue.created_at)} · <a href="#">${issue.author || 'unknown'}</a>
+                            </div>
+                        </div>
+                    `;
+                    issuesList.appendChild(row);
+                });
+                
+                document.getElementById('pagination-info').textContent = `显示 1-${displayIssues.length} 条，共 ${displayIssues.length} 条`;
+                
+                try {
+                    const mrsData = await MergeRequestService.list(currentOwner, currentRepo);
+                    const openMRs = mrsData.data ? mrsData.data.filter(m => !m.is_closed && !m.is_merged).length : 0;
+                    document.getElementById('mrs-count').textContent = openMRs;
+                } catch (e) {
+                    console.log('No merge requests');
+                }
+                
+            } catch (error) {
+                console.error('Failed to load issues:', error);
+                showNotification('加载 Issue 失败', 'error');
+            }
+        }
+
+        document.getElementById('tab-open').addEventListener('click', (e) => {
+            e.preventDefault();
+            currentFilter = 'open';
+            document.querySelectorAll('.issues-tab').forEach(t => t.classList.remove('active'));
+            document.getElementById('tab-open').classList.add('active');
+            loadIssues();
+        });
+
+        document.getElementById('tab-closed').addEventListener('click', (e) => {
+            e.preventDefault();
+            currentFilter = 'closed';
+            document.querySelectorAll('.issues-tab').forEach(t => t.classList.remove('active'));
+            document.getElementById('tab-closed').classList.add('active');
+            loadIssues();
+        });
+
+        document.getElementById('tab-all').addEventListener('click', (e) => {
+            e.preventDefault();
+            currentFilter = 'all';
+            document.querySelectorAll('.issues-tab').forEach(t => t.classList.remove('active'));
+            document.getElementById('tab-all').classList.add('active');
+            loadIssues();
+        });
+
+        initIssuesPage();
+    </script>
 </body>
 </html>

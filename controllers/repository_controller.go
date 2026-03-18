@@ -22,6 +22,42 @@ type UpdateRepositoryRequest struct {
 	DefaultBranch string `json:"default_branch"`
 }
 
+type RepositoryResponse struct {
+	ID            uint   `json:"id"`
+	Name          string `json:"name"`
+	Description   string `json:"description"`
+	Readme        string `json:"readme"`
+	Owner         string `json:"owner"`
+	OwnerID       uint   `json:"owner_id"`
+	IsPrivate     bool   `json:"is_private"`
+	IsFork        bool   `json:"is_fork"`
+	StarsCount    int    `json:"stars_count"`
+	ForksCount    int    `json:"forks_count"`
+	WatchCount    int    `json:"watch_count"`
+	DefaultBranch string `json:"default_branch"`
+	CreatedAt     string `json:"created_at"`
+	UpdatedAt     string `json:"updated_at"`
+}
+
+func ToRepositoryResponse(repo *models.Repository, owner *models.User) *RepositoryResponse {
+	return &RepositoryResponse{
+		ID:            repo.ID,
+		Name:          repo.Name,
+		Description:   repo.Description,
+		Readme:        repo.Readme,
+		Owner:         owner.Username,
+		OwnerID:       repo.OwnerID,
+		IsPrivate:     repo.IsPrivate,
+		IsFork:        repo.IsFork,
+		StarsCount:    repo.StarsCount,
+		ForksCount:    repo.ForksCount,
+		WatchCount:    repo.WatchCount,
+		DefaultBranch: repo.DefaultBranch,
+		CreatedAt:     repo.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		UpdatedAt:     repo.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+	}
+}
+
 func CreateRepository(c fiber.Ctx) error {
 	userID := middleware.GetCurrentUserID(c)
 	var req CreateRepositoryRequest
@@ -31,6 +67,11 @@ func CreateRepository(c fiber.Ctx) error {
 	}
 
 	db := database.GetDB()
+
+	ownerUser, err := db.User.Select().Where("id = ?", userID).One()
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "User not found"})
+	}
 
 	existingRepo, _ := db.Repository.Select().Where("owner_id = ? AND name = ?", userID, req.Name).One()
 	if existingRepo != nil {
@@ -45,12 +86,12 @@ func CreateRepository(c fiber.Ctx) error {
 		DefaultBranch: "main",
 	}
 
-	err := db.Repository.Insert().One(repo)
+	err = db.Repository.Insert().One(repo)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create repository"})
 	}
 
-	return c.Status(fiber.StatusCreated).JSON(repo)
+	return c.Status(fiber.StatusCreated).JSON(ToRepositoryResponse(repo, ownerUser))
 }
 
 func GetRepository(c fiber.Ctx) error {
@@ -76,7 +117,7 @@ func GetRepository(c fiber.Ctx) error {
 		}
 	}
 
-	return c.Status(fiber.StatusOK).JSON(repo)
+	return c.Status(fiber.StatusOK).JSON(ToRepositoryResponse(repo, ownerUser))
 }
 
 func ListRepositories(c fiber.Ctx) error {
@@ -97,8 +138,17 @@ func ListRepositories(c fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch repositories"})
 	}
 
+	var response []*RepositoryResponse
+	for _, repo := range repos {
+		ownerUser, err := db.User.Select().Where("id = ?", repo.OwnerID).One()
+		if err != nil {
+			continue
+		}
+		response = append(response, ToRepositoryResponse(repo, ownerUser))
+	}
+
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"data":     repos,
+		"data":     response,
 		"page":     page,
 		"per_page": perPage,
 	})

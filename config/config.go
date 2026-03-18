@@ -33,7 +33,7 @@ func (d DatabaseConfig) GetDSN() string {
 	if d.Type == "sqlite" {
 		return d.Name
 	}
-	tpl := "pgsql://%s:%s@%s:%d/%s?sslmode=%s"
+	tpl := "postgres://%s:%s@%s:%d/%s?sslmode=%s"
 	return fmt.Sprintf(tpl, d.User, d.Password, d.Host, d.Port, d.Name, d.SSLMode)
 }
 
