@@ -9,6 +9,7 @@
 *.test
 
 # Output of the go coverage tool
+bin/
 *.out
 
 # Dependency directories
@@ -39,6 +40,7 @@ repos/
 # OS
 .DS_Store
 Thumbs.db
+tmp/
 
 # Logs
 *.log

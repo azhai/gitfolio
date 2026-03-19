@@ -54,8 +54,14 @@ type Repository struct {
 	Readme      string
 	OwnerID     uint `goe:"index"`
 
-	IsPrivate bool `goe:"default:false"`
-	IsFork    bool `goe:"default:false"`
+	ProjectType string `goe:"default:'owned';index"`
+	IsPrivate   bool   `goe:"default:false"`
+	IsFork      bool   `goe:"default:false"`
+	IsMirror    bool   `goe:"default:false"`
+
+	MirrorURL  string
+	LastSyncAt *time.Time
+	LocalPath  string
 
 	StarsCount int `goe:"default:0"`
 	ForksCount int `goe:"default:0"`
@@ -63,12 +69,14 @@ type Repository struct {
 
 	DefaultBranch string `goe:"default:'main'"`
 
-	Owner         *Owner          `goe:"rel:belongsTo;field:owner_id"`
-	Branches      []*Branch       `goe:"rel:hasMany;field:repository_id"`
-	Issues        []*Issue        `goe:"rel:hasMany;field:repository_id"`
-	Labels        []*Label        `goe:"rel:hasMany;field:repository_id"`
-	Releases      []*Release      `goe:"rel:hasMany;field:repository_id"`
-	MergeRequests []*MergeRequest `goe:"rel:hasMany;field:repository_id"`
+	Owner         *Owner              `goe:"rel:belongsTo;field:owner_id"`
+	Branches      []*Branch           `goe:"rel:hasMany;field:repository_id"`
+	Issues        []*Issue            `goe:"rel:hasMany;field:repository_id"`
+	Labels        []*Label            `goe:"rel:hasMany;field:repository_id"`
+	Releases      []*Release          `goe:"rel:hasMany;field:repository_id"`
+	MergeRequests []*MergeRequest     `goe:"rel:hasMany;field:repository_id"`
+	RemoteRepos   []*RemoteRepository `goe:"rel:hasMany;field:repository_id"`
+	SyncPoints    []*SyncPoint        `goe:"rel:hasMany;field:repository_id"`
 }
 
 type Owner struct {
@@ -231,4 +239,122 @@ type Webhook struct {
 	Events   string
 
 	Repository *Repository `goe:"rel:belongsTo;field:repository_id"`
+}
+
+type ProjectType string
+
+const (
+	ProjectTypeMirror ProjectType = "mirror"
+	ProjectTypeOwned  ProjectType = "owned"
+	ProjectTypeFork   ProjectType = "fork"
+)
+
+type PlatformType string
+
+const (
+	PlatformGitHub   PlatformType = "github"
+	PlatformGitea    PlatformType = "gitea"
+	PlatformGitFolio PlatformType = "gitfolio"
+	PlatformGitLab   PlatformType = "gitlab"
+)
+
+type PlatformAccount struct {
+	ID        uint `goe:"primaryKey"`
+	CreatedAt time.Time
+	UpdatedAt time.Time
+
+	Platform  string `goe:"index"`
+	Username  string `goe:"index"`
+	Email     string
+	AvatarURL string
+	APIURL    string
+	IsActive  bool `goe:"default:true"`
+	UserID    uint `goe:"index"`
+
+	User *User `goe:"rel:belongsTo;field:user_id"`
+}
+
+type SyncToken struct {
+	ID        uint `goe:"primaryKey"`
+	CreatedAt time.Time
+	UpdatedAt time.Time
+
+	Platform     string `goe:"index"`
+	Name         string
+	AccessToken  string
+	RefreshToken string
+	TokenType    string
+	ExpiresAt    *time.Time
+	Scopes       string
+	AccountID    uint  `goe:"index"`
+	RepositoryID *uint `goe:"index"`
+	IsActive     bool  `goe:"default:true"`
+
+	Account    *PlatformAccount `goe:"rel:belongsTo;field:account_id"`
+	Repository *Repository      `goe:"rel:belongsTo;field:repository_id"`
+}
+
+type RemoteRepository struct {
+	ID        uint `goe:"primaryKey"`
+	CreatedAt time.Time
+	UpdatedAt time.Time
+
+	Platform     string `goe:"index"`
+	Owner        string `goe:"index"`
+	RepoName     string `goe:"index"`
+	CloneURL     string
+	SSHURL       string
+	APIURL       string
+	WebURL       string
+	RepositoryID uint   `goe:"index"`
+	AccountID    *uint  `goe:"index"`
+	IsPrimary    bool   `goe:"default:false"`
+	Direction    string `goe:"default:'pull'"`
+	LastSyncAt   *time.Time
+	SyncEnabled  bool `goe:"default:true"`
+
+	Repository *Repository      `goe:"rel:belongsTo;field:repository_id"`
+	Account    *PlatformAccount `goe:"rel:belongsTo;field:account_id"`
+}
+
+type SyncPoint struct {
+	ID        uint `goe:"primaryKey"`
+	CreatedAt time.Time
+	UpdatedAt time.Time
+
+	RepositoryID    uint   `goe:"index"`
+	RemoteRepoID    uint   `goe:"index"`
+	SyncType        string `goe:"index"`
+	LastSyncAt      *time.Time
+	LastSuccessAt   *time.Time
+	LastFailureAt   *time.Time
+	FailureCount    int `goe:"default:0"`
+	LastCommitHash  string
+	LastIssueNumber int
+	LastPRNumber    int
+	LastETag        string
+	LastModified    string
+	NextSyncAt      *time.Time
+	SyncInterval    int `goe:"default:3600"`
+	LastError       string
+	IsPaused        bool `goe:"default:false"`
+
+	Repository *Repository       `goe:"rel:belongsTo;field:repository_id"`
+	RemoteRepo *RemoteRepository `goe:"rel:belongsTo;field:remote_repo_id"`
+}
+
+type SyncLog struct {
+	ID        uint `goe:"primaryKey"`
+	CreatedAt time.Time
+
+	SyncPointID uint `goe:"index"`
+	SyncType    string
+	Status      string
+	Message     string
+	Duration    int64
+	ItemsSynced int
+	ItemsFailed int
+	Details     string
+
+	SyncPoint *SyncPoint `goe:"rel:belongsTo;field:sync_point_id"`
 }

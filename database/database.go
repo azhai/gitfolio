@@ -14,19 +14,24 @@ import (
 )
 
 type FolioSchema struct {
-	User         *goent.Table[models.User]
-	Owner        *goent.Table[models.Owner]
-	Repository   *goent.Table[models.Repository]
-	Branch       *goent.Table[models.Branch]
-	Issue        *goent.Table[models.Issue]
-	Label        *goent.Table[models.Label]
-	Comment      *goent.Table[models.Comment]
-	Release      *goent.Table[models.Release]
-	Star         *goent.Table[models.Star]
-	Watch        *goent.Table[models.Watch]
-	MergeRequest *goent.Table[models.MergeRequest]
-	IssueLabel   *goent.Table[models.IssueLabel]
-	Webhook      *goent.Table[models.Webhook]
+	User             *goent.Table[models.User]
+	Owner            *goent.Table[models.Owner]
+	Repository       *goent.Table[models.Repository]
+	Branch           *goent.Table[models.Branch]
+	Issue            *goent.Table[models.Issue]
+	Label            *goent.Table[models.Label]
+	Comment          *goent.Table[models.Comment]
+	Release          *goent.Table[models.Release]
+	Star             *goent.Table[models.Star]
+	Watch            *goent.Table[models.Watch]
+	MergeRequest     *goent.Table[models.MergeRequest]
+	IssueLabel       *goent.Table[models.IssueLabel]
+	Webhook          *goent.Table[models.Webhook]
+	PlatformAccount  *goent.Table[models.PlatformAccount]
+	SyncToken        *goent.Table[models.SyncToken]
+	RemoteRepository *goent.Table[models.RemoteRepository]
+	SyncPoint        *goent.Table[models.SyncPoint]
+	SyncLog          *goent.Table[models.SyncLog]
 }
 
 type Database struct {

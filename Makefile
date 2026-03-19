@@ -1,5 +1,5 @@
 SINGLETON = folio
-COMMANDS  =
+COMMANDS  = mirror sync account
 
 
 ifndef GOAMD64
@@ -24,10 +24,6 @@ BINFILES = $(SINGLETON) $(COMMANDS)
 
 all: clean build
 
-dev:
-	@which air > /dev/null || go install github.com/air-verse/air@latest
-	air -c .air.toml
-
 $(SINGLETON):
 	@echo "Compile $@ ..."
 	$(GOBUILD) -o ./bin/$@ ./
@@ -36,8 +32,17 @@ $(COMMANDS):
 	@echo "Compile $@ ..."
 	$(GOBUILD) -o ./bin/$@ ./cmd/$@
 
-build: $(BINFILES)
+frontend:
+	@echo "Build frontend..."
+	@./build-frontend.sh
+
+build: frontend $(BINFILES)
 	@echo "Build success."
+
+dev: frontend
+	@echo "Start development server..."
+	@which air > /dev/null || go install github.com/air-verse/air@latest
+	air -c .air.toml
 
 clean:
 	rm -f $(BINFILES:%=./bin/%)
