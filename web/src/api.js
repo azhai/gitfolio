@@ -25,22 +25,29 @@ const Auth = {
 
 const API = {
     request(options) {
-        const headers = {
-            'Content-Type': 'application/json',
-            ...options.headers
-        };
-        
+        const headers = {};
+
+        if (options.headers) {
+            Object.keys(options.headers).forEach(key => {
+                headers[key] = options.headers[key];
+            });
+        }
+
         if (Auth.token) {
             headers['Authorization'] = `Bearer ${Auth.token}`;
         }
-        
-        return request({
+
+        const requestOptions = {
             url: `${API_BASE_URL}${options.url}`,
             method: options.method || 'GET',
-            body: options.body,
-            headers
-        }).catch((error) => {
-            console.error('API Error:', error);
+            headers: headers
+        };
+
+        if (options.body) {
+            requestOptions.body = options.body;
+        }
+
+        return m.request(requestOptions).catch(error => {
             if (error.code === 401) {
                 Auth.setToken(null);
                 m.route.set('/login');
@@ -108,6 +115,30 @@ const RepositoryService = {
 
     delete(owner, repo) {
         return API.delete(`/${owner}/${repo}`);
+    },
+
+    syncPull(owner, repo) {
+        return API.post(`/${owner}/${repo}/sync/pull`);
+    },
+
+    syncPush(owner, repo, remoteUrl) {
+        return API.post(`/${owner}/${repo}/sync/push`, { remote_url: remoteUrl });
+    },
+
+    getTree(owner, repo, path, ref) {
+        let url = `/${owner}/${repo}/tree?path=${encodeURIComponent(path || '')}`;
+        if (ref) url += `&ref=${encodeURIComponent(ref)}`;
+        return API.get(url);
+    },
+
+    getFile(owner, repo, path, ref) {
+        let url = `/${owner}/${repo}/file?path=${encodeURIComponent(path || '')}`;
+        if (ref) url += `&ref=${encodeURIComponent(ref)}`;
+        return API.get(url);
+    },
+
+    getBranches(owner, repo) {
+        return API.get(`/${owner}/${repo}/branches`);
     }
 };
 
@@ -153,4 +184,77 @@ const MergeRequestService = {
     }
 };
 
-export { Auth, API, UserService, RepositoryService, IssueService, MergeRequestService };
+const GroupService = {
+    list(page, perPage) {
+        let url = '/groups';
+        const params = [];
+        if (page) params.push(`page=${page}`);
+        if (perPage) params.push(`per_page=${perPage}`);
+        if (params.length) url += '?' + params.join('&');
+        return API.get(url);
+    },
+
+    get(name) {
+        return API.get(`/groups/${name}`);
+    },
+
+    create(data) {
+        return API.post('/groups', data);
+    }
+};
+
+const ActivityService = {
+    list(page, perPage, userId) {
+        let url = '/activities';
+        const params = [];
+        if (page) params.push(`page=${page}`);
+        if (perPage) params.push(`per_page=${perPage}`);
+        if (userId) params.push(`user_id=${userId}`);
+        if (params.length) url += '?' + params.join('&');
+        return API.get(url);
+    },
+
+    create(data) {
+        return API.post('/activities', data);
+    }
+};
+
+const MilestoneService = {
+    list(owner, repo) {
+        return API.get(`/${owner}/${repo}/milestones`);
+    },
+
+    create(owner, repo, data) {
+        return API.post(`/${owner}/${repo}/milestones`, data);
+    }
+};
+
+const SnippetService = {
+    list(page, perPage, language) {
+        let url = '/snippets';
+        const params = [];
+        if (page) params.push(`page=${page}`);
+        if (perPage) params.push(`per_page=${perPage}`);
+        if (language) params.push(`language=${language}`);
+        if (params.length) url += '?' + params.join('&');
+        return API.get(url);
+    },
+
+    get(id) {
+        return API.get(`/snippets/${id}`);
+    },
+
+    create(data) {
+        return API.post('/snippets', data);
+    },
+
+    update(id, data) {
+        return API.put(`/snippets/${id}`, data);
+    },
+
+    delete(id) {
+        return API.delete(`/snippets/${id}`);
+    }
+};
+
+export { Auth, API, UserService, RepositoryService, IssueService, MergeRequestService, GroupService, ActivityService, MilestoneService, SnippetService };

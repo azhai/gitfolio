@@ -1,6 +1,82 @@
 import { Layout, Loading, ProjectHeader, ProjectTabs, EmptyState } from '../components.js';
 import { RepositoryService, IssueService, MergeRequestService } from '../api.js';
-import { formatTime } from './dashboard.js';
+
+const getLanguageFromPath = (path) => {
+    const ext = path.split('.').pop().toLowerCase();
+    const langMap = {
+        'js': 'javascript',
+        'jsx': 'javascript',
+        'ts': 'typescript',
+        'tsx': 'typescript',
+        'py': 'python',
+        'rb': 'ruby',
+        'go': 'go',
+        'java': 'java',
+        'c': 'c',
+        'cpp': 'cpp',
+        'cc': 'cpp',
+        'cxx': 'cpp',
+        'h': 'c',
+        'hpp': 'cpp',
+        'cs': 'csharp',
+        'php': 'php',
+        'swift': 'swift',
+        'kt': 'kotlin',
+        'rs': 'rust',
+        'sh': 'bash',
+        'bash': 'bash',
+        'zsh': 'bash',
+        'ps1': 'powershell',
+        'html': 'html',
+        'htm': 'html',
+        'css': 'css',
+        'scss': 'scss',
+        'sass': 'sass',
+        'less': 'less',
+        'json': 'json',
+        'xml': 'xml',
+        'yaml': 'yaml',
+        'yml': 'yaml',
+        'md': 'markdown',
+        'sql': 'sql',
+        'vue': 'vue',
+        'svelte': 'svelte',
+        'dockerfile': 'dockerfile',
+        'makefile': 'makefile',
+        'toml': 'toml',
+        'ini': 'ini',
+        'cfg': 'ini',
+        'conf': 'nginx',
+        'nginx': 'nginx',
+        'apache': 'apache',
+        'diff': 'diff',
+        'patch': 'diff'
+    };
+    return langMap[ext] || null;
+};
+
+const highlightFile = (code, path) => {
+    if (typeof hljs === 'undefined') {
+        return code;
+    }
+    
+    const language = getLanguageFromPath(path);
+    if (language && hljs.getLanguage(language)) {
+        try {
+            return hljs.highlight(code, { language: language }).value;
+        } catch (e) {
+            console.error('Highlight error:', e);
+        }
+    }
+    
+    try {
+        return hljs.highlightAuto(code).value;
+    } catch (e) {
+        console.error('Auto-highlight error:', e);
+    }
+    
+    return code;
+};
 
 const ProjectDetail = {
     oninit(vnode) {
@@ -11,7 +87,39 @@ const ProjectDetail = {
         vnode.state.mrsCount = 0;
         vnode.state.loading = true;
         vnode.state.currentPath = '';
-        vnode.state.currentBranch = 'main';
+        vnode.state.currentBranch = 'HEAD';
+        vnode.state.branches = [];
+        vnode.state.treeEntries = [];
+        vnode.state.fileContent = null;
+        vnode.state.showBranchMenu = false;
+        
+        vnode.state.loadBranches = function() {
+            RepositoryService.getBranches(owner, repo).then(result => {
+                vnode.state.branches = result.branches || [];
+                m.redraw();
+            }).catch(() => {});
+        };
+        
+        vnode.state.loadTree = function() {
+            vnode.state.fileContent = null;
+            RepositoryService.getTree(owner, repo, vnode.state.currentPath, vnode.state.currentBranch).then(result => {
+                vnode.state.treeEntries = result.entries || [];
+                m.redraw();
+            }).catch(() => {
+                vnode.state.treeEntries = [];
+                m.redraw();
+            });
+        };
+        
+        vnode.state.loadFile = function(path) {
+            RepositoryService.getFile(owner, repo, path, vnode.state.currentBranch).then(result => {
+                vnode.state.fileContent = result.content;
+                m.redraw();
+            }).catch(() => {
+                vnode.state.fileContent = null;
+                m.redraw();
+            });
+        };
         
         Promise.all([
             RepositoryService.get(owner, repo),
@@ -22,16 +130,17 @@ const ProjectDetail = {
             vnode.state.issuesCount = (issuesResult.data || issuesResult || []).filter(i => !i.is_closed).length;
             vnode.state.mrsCount = (mrsResult.data || mrsResult || []).filter(m => !m.is_closed && !m.is_merged).length;
             vnode.state.loading = false;
+            vnode.state.loadBranches();
+            vnode.state.loadTree();
             m.redraw();
         }).catch(error => {
-            console.error('Failed to load project:', error);
             vnode.state.loading = false;
             m.redraw();
         });
     },
     
     view(vnode) {
-        const { repo, issuesCount, mrsCount, loading, currentPath, currentBranch } = vnode.state;
+        const { repo, issuesCount, mrsCount, loading, currentPath, currentBranch, branches, treeEntries, fileContent, showBranchMenu } = vnode.state;
         const { owner, repo: repoName } = vnode.attrs;
         
         if (loading) {
@@ -41,9 +150,6 @@ const ProjectDetail = {
         if (!repo) {
             return m(Layout, m(EmptyState, { message: '项目不存在', icon: 'fa-exclamation-triangle' }));
         }
-        
-        const fileTree = getFileTree(repoName);
-        const files = fileTree[currentPath] || [];
         
         return m(Layout, [
             m('div.project-detail-page', [
@@ -71,31 +177,29 @@ const ProjectDetail = {
                                 m('div.branch-selector', [
                                     m('div.branch-dropdown', {
                                         onclick: (e) => {
-                                            const menu = document.getElementById('branch-menu');
-                                            if (menu) menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+                                            vnode.state.showBranchMenu = !vnode.state.showBranchMenu;
                                         }
                                     }, [
                                         m('i.fas.fa-code-branch'),
-                                        m('span', currentBranch),
+                                        m('span', currentBranch === 'HEAD' ? (repo.default_branch || 'main') : currentBranch),
                                         m('i.fas.fa-chevron-down')
                                     ]),
-                                    m('div.branch-menu#branch-menu', { style: { display: 'none' } }, [
+                                    showBranchMenu ? m('div.branch-menu', [
                                         m('div.branch-menu-header', '切换分支'),
-                                        m('div.branch-option', {
-                                            class: currentBranch === 'main' ? 'active' : '',
-                                            onclick: () => { vnode.state.currentBranch = 'main'; }
-                                        }, [
-                                            m('i.fas.fa-check', { style: { visibility: currentBranch === 'main' ? 'visible' : 'hidden' } }),
-                                            'main'
-                                        ]),
-                                        m('div.branch-option', {
-                                            class: currentBranch === 'develop' ? 'active' : '',
-                                            onclick: () => { vnode.state.currentBranch = 'develop'; }
-                                        }, [
-                                            m('i.fas.fa-check', { style: { visibility: currentBranch === 'develop' ? 'visible' : 'hidden' } }),
-                                            'develop'
-                                        ])
-                                    ])
+                                        branches.map(branch => 
+                                            m('div.branch-option', {
+                                                class: currentBranch === branch ? 'active' : '',
+                                                onclick: () => { 
+                                                    vnode.state.currentBranch = branch;
+                                                    vnode.state.showBranchMenu = false;
+                                                    vnode.state.loadTree();
+                                                }
+                                            }, [
+                                                m('i.fas.fa-check', { style: { visibility: currentBranch === branch ? 'visible' : 'hidden' } }),
+                                                branch
+                                            ])
+                                        )
+                                    ]) : null
                                 ]),
                                 m('div.file-actions', [
                                     m('button.btn.btn-sm', [
@@ -109,45 +213,46 @@ const ProjectDetail = {
                                 ])
                             ]),
                             
-                            m('div.path-breadcrumb', renderBreadcrumb(owner, repo.name, currentPath)),
+                            m('div.path-breadcrumb', renderBreadcrumb(owner, repo.name, currentPath, (path) => {
+                                vnode.state.currentPath = path;
+                                vnode.state.loadTree();
+                            })),
                             
-                            m('div.commit-info', [
-                                m('img.commit-info-avatar', { src: 'https://via.placeholder.com/24', alt: '提交者' }),
-                                m('div.commit-info-message', [
-                                    m('a', { href: '#' }, '初始提交'),
-                                    m('span.commit-info-meta', '· 提交于最近')
+                            fileContent !== null ? [
+                                m('div.file-content-header', [
+                                    m('span', currentPath.split('/').pop()),
+                                    m('button.btn.btn-sm', { onclick: () => { vnode.state.fileContent = null; } }, '返回')
                                 ]),
-                                m('span.commit-info-hash', 'initial')
-                            ]),
-                            
-                            files.length === 0 
-                                ? m(EmptyState, { message: '此目录为空', icon: 'fa-folder-open' })
-                                : m('div.file-list', files.map(file => 
-                                    m(FileItem, { 
-                                        file, 
-                                        owner, 
-                                        repo: repo.name,
-                                        currentPath,
-                                        onNavigate: (path) => { vnode.state.currentPath = path; }
-                                    })
-                                ))
-                        ]),
-                        
-                        repo.readme ? m('div.readme-section', [
-                            m('div.readme-header', [
-                                m('i.fas.fa-book'),
-                                ' README.md'
-                            ]),
-                            m('div.readme-content', {
-                                oncreate: (vnode) => {
-                                    if (typeof marked !== 'undefined') {
-                                        vnode.dom.innerHTML = marked.parse(repo.readme);
-                                    } else {
-                                        vnode.dom.textContent = repo.readme;
-                                    }
-                                }
-                            })
-                        ]) : null
+                                m('pre.file-content', [
+                                    m('code', {
+                                        class: 'hljs',
+                                        oncreate: (vnode) => {
+                                            const highlighted = highlightFile(fileContent, currentPath);
+                                            vnode.dom.innerHTML = highlighted;
+                                        }
+                                    }, fileContent)
+                                ])
+                            ] : [
+                                treeEntries.length === 0 
+                                    ? m(EmptyState, { message: repo.local_path ? '此目录为空' : '仓库未初始化，请先同步代码', icon: 'fa-folder-open' })
+                                    : m('div.file-list', treeEntries.map(entry => 
+                                        m(TreeEntry, { 
+                                            entry, 
+                                            owner, 
+                                            repo: repo.name,
+                                            currentPath,
+                                            onNavigate: (path, isFile) => {
+                                                if (isFile) {
+                                                    vnode.state.loadFile(path);
+                                                } else {
+                                                    vnode.state.currentPath = path;
+                                                    vnode.state.loadTree();
+                                                }
+                                            }
+                                        })
+                                    ))
+                            ]
+                        ])
                     ]),
                     
                     m('div.sidebar-info', [
@@ -186,97 +291,57 @@ const ProjectDetail = {
     }
 };
 
-const FileItem = {
+const TreeEntry = {
     view(vnode) {
-        const { file, owner, repo, currentPath, onNavigate } = vnode.attrs;
-        const newPath = currentPath ? `${currentPath}/${file.name}` : file.name;
+        const { entry, owner, repo, currentPath, onNavigate } = vnode.attrs;
+        const newPath = currentPath ? `${currentPath}/${entry.name}` : entry.name;
+        const isTree = entry.type === 'tree';
         
         return m('div.file-item', {
-            onclick: () => {
-                if (file.type === 'folder') {
-                    onNavigate(newPath);
-                }
-            },
-            style: { cursor: file.type === 'folder' ? 'pointer' : 'default' }
+            onclick: () => onNavigate(newPath, !isTree),
+            style: { cursor: 'pointer' }
         }, [
-            m('span.file-icon', { class: file.type === 'folder' ? 'folder' : '' }, [
-                m(`i.fas.${file.type === 'folder' ? 'fa-folder' : 'fa-file-code'}`)
+            m('span.file-icon', { class: isTree ? 'folder' : '' }, [
+                m(`i.fas.${isTree ? 'fa-folder' : 'fa-file-code'}`)
             ]),
-            m('span.file-name', 
-                file.type === 'folder' 
-                    ? m('a', { href: '#', onclick: (e) => { e.preventDefault(); onNavigate(newPath); } }, file.name)
-                    : file.name
-            ),
-            m('span.file-commit-message', file.message),
-            m('span.file-commit-time', file.time)
+            m('span.file-name', entry.name),
+            m('span.file-commit-message', entry.hash ? entry.hash.substring(0, 7) : ''),
+            m('span.file-commit-time', entry.size && !isTree ? formatSize(entry.size) : '')
         ]);
     }
 };
 
-function renderBreadcrumb(owner, repo, currentPath) {
-    const parts = currentPath ? currentPath.split('/') : [];
-    
-    let html = m('a', { href: `/project/${owner}/${repo}`, oncreate: m.route.link }, [
-        m('i.fas.fa-folder'),
-        ` ${repo}`
-    ]);
-    
-    if (parts.length === 0) return html;
-    
-    return [html, ...parts.map((part, index) => {
-        const path = parts.slice(0, index + 1).join('/');
-        return [
-            m('span', ' / '),
-            m('a', { href: '#', onclick: (e) => { e.preventDefault(); /* navigate to path */ } }, part)
-        ];
-    })];
+function formatSize(size) {
+    const s = parseInt(size);
+    if (isNaN(s) || s < 0) return '';
+    if (s < 1024) return s + ' B';
+    if (s < 1024 * 1024) return (s / 1024).toFixed(1) + ' KB';
+    return (s / 1024 / 1024).toFixed(1) + ' MB';
 }
 
-function getFileTree(repoName) {
-    const trees = {
-        'builder': {
-            '': [
-                { name: 'builder.go', type: 'file', message: 'Add core builder functions', time: '2 months ago' },
-                { name: 'cond.go', type: 'file', message: 'Add condition builders', time: '3 months ago' },
-                { name: 'select.go', type: 'file', message: 'Implement SELECT builder', time: '3 months ago' },
-                { name: 'insert.go', type: 'file', message: 'Implement INSERT builder', time: '3 months ago' },
-                { name: 'update.go', type: 'file', message: 'Implement UPDATE builder', time: '3 months ago' },
-                { name: 'delete.go', type: 'file', message: 'Implement DELETE builder', time: '3 months ago' },
-                { name: 'go.mod', type: 'file', message: 'Update dependencies', time: '1 month ago' },
-                { name: 'go.sum', type: 'file', message: 'Update dependencies', time: '1 month ago' },
-                { name: 'README.md', type: 'file', message: 'Update documentation', time: '2 weeks ago' },
-                { name: 'LICENSE', type: 'file', message: 'Add MIT license', time: '1 year ago' }
-            ]
-        },
-        'gx': {
-            '': [
-                { name: 'cmd', type: 'folder', message: 'Add CLI commands', time: '1 week ago' },
-                { name: 'find', type: 'folder', message: 'Implement find command', time: '2 weeks ago' },
-                { name: 'replace', type: 'folder', message: 'Implement replace command', time: '2 weeks ago' },
-                { name: 'rename', type: 'folder', message: 'Implement rename command', time: '2 weeks ago' },
-                { name: 'go.mod', type: 'file', message: 'Update dependencies', time: '3 days ago' },
-                { name: 'README.md', type: 'file', message: 'Update documentation', time: '1 week ago' }
-            ],
-            'cmd': [
-                { name: 'root.go', type: 'file', message: 'Add root command', time: '1 week ago' },
-                { name: 'find.go', type: 'file', message: 'Add find command', time: '1 week ago' },
-                { name: 'replace.go', type: 'file', message: 'Add replace command', time: '1 week ago' },
-                { name: 'rename.go', type: 'file', message: 'Add rename command', time: '1 week ago' }
-            ],
-            'find': [
-                { name: 'finder.go', type: 'file', message: 'Implement finder', time: '2 weeks ago' },
-                { name: 'search.go', type: 'file', message: 'Implement search', time: '2 weeks ago' }
-            ],
-            'replace': [
-                { name: 'replacer.go', type: 'file', message: 'Implement replacer', time: '2 weeks ago' }
-            ],
-            'rename': [
-                { name: 'renamer.go', type: 'file', message: 'Implement renamer', time: '2 weeks ago' }
-            ]
-        }
-    };
+function renderBreadcrumb(owner, repo, currentPath, onNavigate) {
+    const parts = currentPath ? currentPath.split('/').filter(p => p) : [];
     
-    return trees[repoName] || {};
+    let elements = [
+        m('a', { 
+            href: '#', 
+            onclick: (e) => { e.preventDefault(); onNavigate(''); } 
+        }, [
+            m('i.fas.fa-folder'),
+            ` ${repo}`
+        ])
+    ];
+    
+    parts.forEach((part, index) => {
+        const path = parts.slice(0, index + 1).join('/');
+        elements.push(m('span', ' / '));
+        elements.push(m('a', { 
+            href: '#', 
+            onclick: (e) => { e.preventDefault(); onNavigate(path); } 
+        }, part));
+    });
+    
+    return elements;
 }
 
 function copyToClipboard(text) {

@@ -1,19 +1,15 @@
 import { Layout, Loading, EmptyState } from '../components.js';
 import { RepositoryService } from '../api.js';
 import { ProjectCard, formatTime } from './dashboard.js';
-import { CreateProjectModal } from '../project-modals.js';
 
 const ProjectList = {
     oninit(vnode) {
-        console.log('ProjectList initializing...');
         vnode.state.projects = [];
         vnode.state.loading = true;
         vnode.state.filter = 'all';
         vnode.state.search = '';
-        vnode.state.showCreateModal = false;
-        
+
         RepositoryService.list().then(result => {
-            console.log('Projects loaded:', result);
             vnode.state.projects = result.data || [];
             vnode.state.loading = false;
             m.redraw();
@@ -23,44 +19,50 @@ const ProjectList = {
             m.redraw();
         });
     },
-    
+
     view(vnode) {
-        const { projects, loading, filter, search, showCreateModal } = vnode.state;
-        
+        const { projects, loading, filter, search } = vnode.state;
+
         if (loading) {
             return m(Layout, m(Loading));
         }
-        
+
         let filteredProjects = projects;
-        
+
         if (filter === 'mine') {
             filteredProjects = projects.filter(p => p.owner === 'ryan');
         } else if (filter === 'starred') {
             filteredProjects = projects.filter(p => p.starred);
         }
-        
+
         if (search) {
             const searchLower = search.toLowerCase();
-            filteredProjects = filteredProjects.filter(p => 
+            filteredProjects = filteredProjects.filter(p =>
                 p.name.toLowerCase().includes(searchLower) ||
                 (p.description && p.description.toLowerCase().includes(searchLower))
             );
         }
-        
+
         return m(Layout, [
             m('div.projects-page', [
                 m('div.page-header', [
                     m('h1', '项目'),
                     m('div.page-actions', [
-                        m('button.btn.btn-primary', {
-                            onclick: () => { vnode.state.showCreateModal = true; }
+                        m('a.btn.btn-outline', {
+                            href: '/projects/migrate'
+                        }, [
+                            m('i.fas.fa-download'),
+                            ' 迁移项目'
+                        ]),
+                        m('a.btn.btn-primary', {
+                            href: '/projects/new'
                         }, [
                             m('i.fas.fa-plus'),
                             ' 新建项目'
                         ])
                     ])
                 ]),
-                
+
                 m('div.projects-toolbar', [
                     m('div.filter-tabs', [
                         m('button.filter-tab', {
@@ -84,25 +86,13 @@ const ProjectList = {
                         })
                     ])
                 ]),
-                
-                filteredProjects.length === 0 
+
+                filteredProjects.length === 0
                     ? m(EmptyState, { message: '暂无项目', icon: 'fa-folder-open' })
-                    : m('div.projects-grid', filteredProjects.map(project => 
+                    : m('div.projects-grid', filteredProjects.map(project =>
                         m(ProjectCard, { project })
                     ))
-            ]),
-            
-            m(CreateProjectModal, {
-                isOpen: showCreateModal,
-                onClose: () => { vnode.state.showCreateModal = false; },
-                onSubmit: (formData) => {
-                    return RepositoryService.create('ryan', formData).then(result => {
-                        vnode.state.projects.unshift(result.data || result);
-                        vnode.state.showCreateModal = false;
-                        m.redraw();
-                    });
-                }
-            })
+            ])
         ]);
     }
 };

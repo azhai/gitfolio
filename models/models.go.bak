@@ -205,6 +205,7 @@ type Webhook struct {
 	IsActive bool `goe:"default:true"`
 	Events   string
 
+	Repository *Repository `goe:"rel:belongsTo;field:repository_id"`
 }
 
 type ProjectType string
@@ -237,6 +238,7 @@ type PlatformAccount struct {
 	IsActive  bool `goe:"default:true"`
 	UserID    uint `goe:"index"`
 
+	User *User `goe:"rel:belongsTo;field:user_id"`
 }
 
 type SyncToken struct {
@@ -255,6 +257,8 @@ type SyncToken struct {
 	RepositoryID *uint `goe:"index"`
 	IsActive     bool  `goe:"default:true"`
 
+	Account    *PlatformAccount `goe:"rel:belongsTo;field:account_id"`
+	Repository *Repository      `goe:"rel:belongsTo;field:repository_id"`
 }
 
 type RemoteRepository struct {
@@ -276,6 +280,8 @@ type RemoteRepository struct {
 	LastSyncAt   *time.Time
 	SyncEnabled  bool `goe:"default:true"`
 
+	Repository *Repository      `goe:"rel:belongsTo;field:repository_id"`
+	Account    *PlatformAccount `goe:"rel:belongsTo;field:account_id"`
 }
 
 type SyncPoint struct {
@@ -300,6 +306,8 @@ type SyncPoint struct {
 	LastError       string
 	IsPaused        bool `goe:"default:false"`
 
+	Repository *Repository       `goe:"rel:belongsTo;field:repository_id"`
+	RemoteRepo *RemoteRepository `goe:"rel:belongsTo;field:remote_repo_id"`
 }
 
 type SyncLog struct {
@@ -315,6 +323,7 @@ type SyncLog struct {
 	ItemsFailed int
 	Details     string
 
+	SyncPoint *SyncPoint `goe:"rel:belongsTo;field:sync_point_id"`
 }
 
 type Group struct {
@@ -331,6 +340,8 @@ type Group struct {
 
 	OwnerID uint `goe:"index"`
 
+	Owner   *User          `goe:"rel:belongsTo;field:owner_id"`
+	Members []*GroupMember `goe:"rel:hasMany;field:group_id"`
 }
 
 type GroupMember struct {
@@ -341,6 +352,8 @@ type GroupMember struct {
 	UserID  uint `goe:"uniqueIndex:idx_group_user"`
 	Role    string
 
+	Group *Group `goe:"rel:belongsTo;field:group_id"`
+	User  *User  `goe:"rel:belongsTo;field:user_id"`
 }
 
 type Activity struct {
@@ -357,6 +370,9 @@ type Activity struct {
 	TargetID     *uint
 	TargetType   string
 
+	User       *User       `goe:"rel:belongsTo;field:user_id"`
+	Repository *Repository `goe:"rel:belongsTo;field:repository_id"`
+	Group      *Group      `goe:"rel:belongsTo;field:group_id"`
 }
 
 type Milestone struct {
@@ -372,6 +388,7 @@ type Milestone struct {
 
 	IsClosed bool `goe:"default:false;index"`
 
+	Repository *Repository `goe:"rel:belongsTo;field:repository_id"`
 }
 
 type Snippet struct {
@@ -399,4 +416,5 @@ type Contributor struct {
 	RepositoryID uint   `goe:"index"`
 	CommitsCount int    `goe:"default:0"`
 
+	Repository *Repository `goe:"rel:belongsTo;field:repository_id"`
 }

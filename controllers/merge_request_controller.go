@@ -122,7 +122,11 @@ func ListMergeRequests(c fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Repository not found"})
 	}
 
-	query := db.MergeRequest.Select().Where("repository_id = ?", repo.ID)
+	query := db.MergeRequest.Select(
+		"id", "created_at", "updated_at", "title", "body", "number",
+		"repository_id", "author_id", "source_branch", "target_branch",
+		"assignee_id", "status", "is_merged", "is_closed", "is_locked",
+	).Where("repository_id = ?", repo.ID)
 
 	switch state {
 	case "open":

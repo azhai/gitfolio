@@ -159,3 +159,156 @@ const CreateProjectModal = {
         ]);
     }
 };
+
+const CloneProjectModal = {
+    oninit(vnode) {
+        vnode.state.formData = {
+            clone_url: '',
+            name: '',
+            description: '',
+            is_private: false,
+            project_type: 'mirror'
+        };
+        vnode.state.loading = false;
+        vnode.state.detected = null;
+    },
+
+    detectPlatform(url) {
+        if (!url) return null;
+        if (url.includes('github.com')) return 'github';
+        if (url.includes('gitea.com') || url.includes('gitea.')) return 'gitea';
+        if (url.includes('gitlab.com') || url.includes('gitlab.')) return 'gitlab';
+        return 'other';
+    },
+
+    extractRepoInfo(url) {
+        const patterns = [
+            /github\.com\/([^\/]+)\/([^\/\?#]+)/,
+            /gitea\.(com|org)\/([^\/]+)\/([^\/\?#]+)/,
+            /gitlab\.com\/([^\/]+)\/([^\/\?#]+)/
+        ];
+
+        for (const pattern of patterns) {
+            const match = url.match(pattern);
+            if (match) {
+                return {
+                    owner: match[1],
+                    repo: match[2].replace(/\.git$/, ''),
+                    platform: this.detectPlatform(url)
+                };
+            }
+        }
+        return null;
+    },
+
+    view(vnode) {
+        const { isOpen, onClose, onSubmit } = vnode.attrs;
+        const { formData, loading, detected } = vnode.state;
+
+        const detectedInfo = this.extractRepoInfo(formData.clone_url);
+
+        return m(Modal, {
+            isOpen,
+            onClose,
+            title: '克隆项目'
+        }, [
+            m('form', {
+                onsubmit: (e) => {
+                    e.preventDefault();
+                    if (loading) return;
+
+                    const submitData = { ...formData };
+                    if (detectedInfo) {
+                        submitData.mirror_url = formData.clone_url;
+                        submitData.platform = detectedInfo.platform;
+                    }
+
+                    vnode.state.loading = true;
+                    onSubmit(submitData).then(() => {
+                        vnode.state.loading = false;
+                        vnode.state.formData = {
+                            clone_url: '',
+                            name: '',
+                            description: '',
+                            is_private: false,
+                            project_type: 'mirror'
+                        };
+                        onClose();
+                    }).catch(err => {
+                        vnode.state.loading = false;
+                        console.error('Failed to clone project:', err);
+                        alert('克隆项目失败: ' + (err.message || '未知错误'));
+                    });
+                }
+            }, [
+                m('div.form-group', [
+                    m('label.form-label', { for: 'clone-url' }, '仓库 URL'),
+                    m('input#clone-url.form-input', {
+                        type: 'url',
+                        placeholder: 'https://github.com/user/repo',
+                        value: formData.clone_url,
+                        oninput: (e) => {
+                            vnode.state.formData.clone_url = e.target.value;
+                            vnode.state.detected = this.detectPlatform(e.target.value);
+                            if (detectedInfo) {
+                                vnode.state.formData.name = detectedInfo.repo;
+                            }
+                        }
+                    }),
+                    m('p.form-hint', '支持 GitHub、Gitea、GitLab 等平台的仓库地址'),
+                    detectedInfo ? m('p.form-hint', [
+                        m('i.fas.fa-check-circle', { style: { color: 'var(--success-color)', marginRight: '4px' } }),
+                        `检测到 ${detectedInfo.platform} 仓库: ${detectedInfo.owner}/${detectedInfo.repo}`
+                    ]) : null
+                ]),
+
+                m('div.form-group', [
+                    m('label.form-label', { for: 'project-name' }, '项目名称'),
+                    m('input#project-name.form-input', {
+                        type: 'text',
+                        placeholder: '输入项目名称',
+                        value: formData.name,
+                        oninput: (e) => {
+                            vnode.state.formData.name = e.target.value.toLowerCase().replace(/[^a-z0-9-_]/g, '');
+                        }
+                    })
+                ]),
+
+                m('div.form-group', [
+                    m('label.form-label', { for: 'project-desc' }, '描述'),
+                    m('textarea#project-desc.form-input.form-textarea', {
+                        placeholder: '简短描述项目...',
+                        rows: 3,
+                        value: formData.description,
+                        oninput: (e) => {
+                            vnode.state.formData.description = e.target.value;
+                        }
+                    })
+                ]),
+
+                m('div.form-group', [
+                    m('div.form-checkbox-group', [
+                        m('input.form-checkbox', {
+                            type: 'checkbox',
+                            id: 'is-private-clone',
+                            checked: formData.is_private
+                        }),
+                        m('label', { for: 'is-private-clone' }, '私有仓库')
+                    ])
+                ]),
+
+                m('div.modal-footer', [
+                    m('button.btn', {
+                        type: 'button',
+                        onclick: onClose,
+                        disabled: loading
+                    }, '取消'),
+                    m('button.btn.btn-primary', {
+                        type: 'submit',
+                        disabled: loading || !formData.clone_url.trim() || !formData.name.trim()
+                    }, loading ? '克隆中...' : '克隆项目')
+                ])
+            ])
+        ]);
+    }
+};

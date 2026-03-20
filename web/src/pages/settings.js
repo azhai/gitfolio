@@ -34,7 +34,7 @@ const SettingsPage = {
         });
     },
 
-    handleSave(vnode) {
+    handleSave: function(vnode) {
         const { owner, repo } = vnode.attrs;
         const { formData, saving } = vnode.state;
 
@@ -42,24 +42,28 @@ const SettingsPage = {
         vnode.state.saving = true;
 
         RepositoryService.update(owner, repo, formData).then(result => {
-            vnode.state.repo = result.data || result;
+            const updatedRepo = result.data || result;
+            vnode.state.repo = updatedRepo;
             vnode.state.saving = false;
             alert('设置已保存！');
-            m.redraw();
+            if (formData.name && formData.name !== repo) {
+                m.route.set('/settings/' + owner + '/' + formData.name);
+            } else {
+                m.redraw();
+            }
         }).catch(error => {
             vnode.state.saving = false;
-            console.error('Failed to save settings:', error);
             alert('保存设置失败: ' + (error.message || '未知错误'));
             m.redraw();
         });
     },
 
-    handleDelete(vnode) {
+    handleDelete: function(vnode) {
         const { owner, repo } = vnode.attrs;
-        const { deleting } = vnode.state;
+        const { deleting, repo: repoData } = vnode.state;
 
         if (deleting) return;
-        if (!confirm(`确定要删除项目 "${repo.name}" 吗？此操作不可撤销！`)) {
+        if (!confirm(`确定要删除项目 "${repoData.name}" 吗？此操作不可撤销！`)) {
             return;
         }
 
@@ -71,7 +75,6 @@ const SettingsPage = {
             m.route.set('/projects');
         }).catch(error => {
             vnode.state.deleting = false;
-            console.error('Failed to delete repository:', error);
             alert('删除项目失败: ' + (error.message || '未知错误'));
             m.redraw();
         });
@@ -133,6 +136,13 @@ const SettingsPage = {
                                 m('span', '仓库设置')
                             ]),
                             m('a.settings-nav-item', {
+                                class: activeSection === 'sync' ? 'active' : '',
+                                onclick: () => { vnode.state.activeSection = 'sync'; }
+                            }, [
+                                m('i.fas.fa-sync'),
+                                m('span', '代码同步')
+                            ]),
+                            m('a.settings-nav-item', {
                                 class: activeSection === 'danger' ? 'active' : '',
                                 onclick: () => { vnode.state.activeSection = 'danger'; }
                             }, [
@@ -143,12 +153,13 @@ const SettingsPage = {
                     ]),
                     
                     m('div.settings-content', [
-                        activeSection === 'general' ? m(GeneralSettings, { formData, repo }) : null,
+                        activeSection === 'general' ? m(GeneralSettings, { formData, repo, parent: SettingsPage, parentVnode: vnode }) : null,
                         activeSection === 'members' ? m(MembersSettings, { repo }) : null,
                         activeSection === 'integrations' ? m(IntegrationsSettings, { repo }) : null,
                         activeSection === 'webhooks' ? m(WebhooksSettings, { repo }) : null,
                         activeSection === 'repository' ? m(RepositorySettings, { repo }) : null,
-                        activeSection === 'danger' ? m(DangerSettings, { repo }) : null
+                        activeSection === 'sync' ? m(SyncSettings, { repo, owner, parent: SettingsPage, parentVnode: vnode }) : null,
+                        activeSection === 'danger' ? m(DangerSettings, { repo: repo, parent: SettingsPage, parentVnode: vnode }) : null
                     ])
                 ])
             ])
@@ -235,7 +246,12 @@ const GeneralSettings = {
             
             m('div.form-group', [
                 m('button.btn.btn-primary', {
-                    onclick: () => { SettingsPage.handleSave(vnode); }
+                    onclick: function() {
+                        const pv = vnode && vnode.attrs && vnode.attrs.parentVnode;
+                        if (pv) {
+                            vnode.attrs.parent.handleSave(pv);
+                        }
+                    }
                 }, '保存更改')
             ])
         ]);
@@ -417,9 +433,109 @@ const DangerSettings = {
                 m('h4', '删除项目'),
                 m('p', '永久删除此项目及其所有相关数据'),
                 m('button.btn.btn-danger', {
-                    onclick: () => { SettingsPage.handleDelete(vnode); }
+                    onclick: function() {
+                        const pv = vnode && vnode.attrs && vnode.attrs.parentVnode;
+                        if (pv) {
+                            vnode.attrs.parent.handleDelete(pv);
+                        }
+                    }
                 }, '删除项目')
             ])
+        ]);
+    }
+};
+
+const SyncSettings = {
+    oninit(vnode) {
+        vnode.state.syncing = false;
+        vnode.state.pushUrl = '';
+    },
+
+    handleSyncPull(vnode) {
+        const { owner, repo } = vnode.attrs;
+        if (vnode.state.syncing) return;
+
+        vnode.state.syncing = true;
+        RepositoryService.syncPull(owner, repo.name).then(result => {
+            vnode.state.syncing = false;
+            alert('同步成功！最后同步时间: ' + (result.last_sync || '未知'));
+            m.redraw();
+        }).catch(error => {
+            vnode.state.syncing = false;
+            alert('同步失败: ' + (error.message || '未知错误'));
+            m.redraw();
+        });
+    },
+
+    handleSyncPush(vnode) {
+        const { owner, repo } = vnode.attrs;
+        const { pushUrl, syncing } = vnode.state;
+
+        if (syncing) return;
+        if (!pushUrl || !pushUrl.trim()) {
+            alert('请输入推送目标 URL');
+            return;
+        }
+
+        vnode.state.syncing = true;
+        RepositoryService.syncPush(owner, repo.name, pushUrl).then(result => {
+            vnode.state.syncing = false;
+            alert('推送成功！');
+            m.redraw();
+        }).catch(error => {
+            vnode.state.syncing = false;
+            alert('推送失败: ' + (error.message || '未知错误'));
+            m.redraw();
+        });
+    },
+
+    view(vnode) {
+        const { repo } = vnode.attrs;
+        const { syncing, pushUrl } = vnode.state;
+        const isMirror = repo.is_mirror;
+
+        return m('div.settings-section', [
+            m('div.settings-section-header', [
+                m('h2.settings-section-title', '代码同步'),
+                m('p.settings-section-description', '管理代码的拉取和推送同步')
+            ]),
+
+            isMirror ? [
+                m('div.form-group', [
+                    m('h4', '镜像同步'),
+                    m('p', '从远程仓库拉取最新代码更新'),
+                    m('p', [
+                        m('strong', '镜像地址: '),
+                        repo.mirror_url || '未设置'
+                    ]),
+                    repo.last_sync_at ? m('p', [
+                        m('strong', '最后同步: '),
+                        repo.last_sync_at
+                    ]) : null,
+                    m('button.btn.btn-primary', {
+                        onclick: () => SyncSettings.handleSyncPull(vnode),
+                        disabled: syncing
+                    }, syncing ? '同步中...' : '立即同步')
+                ])
+            ] : [
+                m('div.form-group', [
+                    m('h4', '推送到远程'),
+                    m('p', '将代码推送到远程仓库'),
+                    m('div.form-row', [
+                        m('input.form-input', {
+                            type: 'text',
+                            placeholder: '输入目标仓库 URL (例如: git@github.com:user/repo.git)',
+                            value: pushUrl,
+                            oninput: (e) => { vnode.state.pushUrl = e.target.value; },
+                            style: 'flex: 1; margin-right: 10px;'
+                        }),
+                        m('button.btn.btn-primary', {
+                            onclick: () => SyncSettings.handleSyncPush(vnode),
+                            disabled: syncing
+                        }, syncing ? '推送中...' : '推送')
+                    ])
+                ])
+            ]
         ]);
     }
 };

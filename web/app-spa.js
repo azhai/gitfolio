@@ -1,4 +1,4 @@
-// GitFolio Frontend Build - 2026年 3月19日 星期四 21时04分01秒 CST
+// GitFolio Frontend Build - 2026年 3月20日 星期五 14时47分03秒 CST
 
 const API_BASE_URL = '/api/v1';
 
@@ -25,22 +25,29 @@ const Auth = {
 
 const API = {
     request(options) {
-        const headers = {
-            'Content-Type': 'application/json',
-            ...options.headers
-        };
-        
+        const headers = {};
+
+        if (options.headers) {
+            Object.keys(options.headers).forEach(key => {
+                headers[key] = options.headers[key];
+            });
+        }
+
         if (Auth.token) {
             headers['Authorization'] = `Bearer ${Auth.token}`;
         }
-        
-        return m.request({
+
+        const requestOptions = {
             url: `${API_BASE_URL}${options.url}`,
             method: options.method || 'GET',
-            body: options.body,
-            headers
-        }).catch((error) => {
-            console.error('API Error:', error);
+            headers: headers
+        };
+
+        if (options.body) {
+            requestOptions.body = options.body;
+        }
+
+        return m.request(requestOptions).catch(error => {
             if (error.code === 401) {
                 Auth.setToken(null);
                 m.route.set('/login');
@@ -108,6 +115,30 @@ const RepositoryService = {
 
     delete(owner, repo) {
         return API.delete(`/${owner}/${repo}`);
+    },
+
+    syncPull(owner, repo) {
+        return API.post(`/${owner}/${repo}/sync/pull`);
+    },
+
+    syncPush(owner, repo, remoteUrl) {
+        return API.post(`/${owner}/${repo}/sync/push`, { remote_url: remoteUrl });
+    },
+
+    getTree(owner, repo, path, ref) {
+        let url = `/${owner}/${repo}/tree?path=${encodeURIComponent(path || '')}`;
+        if (ref) url += `&ref=${encodeURIComponent(ref)}`;
+        return API.get(url);
+    },
+
+    getFile(owner, repo, path, ref) {
+        let url = `/${owner}/${repo}/file?path=${encodeURIComponent(path || '')}`;
+        if (ref) url += `&ref=${encodeURIComponent(ref)}`;
+        return API.get(url);
+    },
+
+    getBranches(owner, repo) {
+        return API.get(`/${owner}/${repo}/branches`);
     }
 };
 
@@ -150,6 +181,79 @@ const MergeRequestService = {
     
     update(owner, repo, number, data) {
         return API.put(`/${owner}/${repo}/merge_requests/${number}`, data);
+    }
+};
+
+const GroupService = {
+    list(page, perPage) {
+        let url = '/groups';
+        const params = [];
+        if (page) params.push(`page=${page}`);
+        if (perPage) params.push(`per_page=${perPage}`);
+        if (params.length) url += '?' + params.join('&');
+        return API.get(url);
+    },
+
+    get(name) {
+        return API.get(`/groups/${name}`);
+    },
+
+    create(data) {
+        return API.post('/groups', data);
+    }
+};
+
+const ActivityService = {
+    list(page, perPage, userId) {
+        let url = '/activities';
+        const params = [];
+        if (page) params.push(`page=${page}`);
+        if (perPage) params.push(`per_page=${perPage}`);
+        if (userId) params.push(`user_id=${userId}`);
+        if (params.length) url += '?' + params.join('&');
+        return API.get(url);
+    },
+
+    create(data) {
+        return API.post('/activities', data);
+    }
+};
+
+const MilestoneService = {
+    list(owner, repo) {
+        return API.get(`/${owner}/${repo}/milestones`);
+    },
+
+    create(owner, repo, data) {
+        return API.post(`/${owner}/${repo}/milestones`, data);
+    }
+};
+
+const SnippetService = {
+    list(page, perPage, language) {
+        let url = '/snippets';
+        const params = [];
+        if (page) params.push(`page=${page}`);
+        if (perPage) params.push(`per_page=${perPage}`);
+        if (language) params.push(`language=${language}`);
+        if (params.length) url += '?' + params.join('&');
+        return API.get(url);
+    },
+
+    get(id) {
+        return API.get(`/snippets/${id}`);
+    },
+
+    create(data) {
+        return API.post('/snippets', data);
+    },
+
+    update(id, data) {
+        return API.put(`/snippets/${id}`, data);
+    },
+
+    delete(id) {
+        return API.delete(`/snippets/${id}`);
     }
 };
 
@@ -244,14 +348,6 @@ const Sidebar = {
                         m('span', '活动')
                     ]),
                     m('a.nav-item', { 
-                        href: '/milestones', 
-                        oncreate: m.route.link,
-                        class: currentRoute === '/milestones' ? 'active' : ''
-                    }, [
-                        m('i.fas.fa-flag'),
-                        m('span', '里程碑')
-                    ]),
-                    m('a.nav-item', { 
                         href: '/snippets', 
                         oncreate: m.route.link,
                         class: currentRoute === '/snippets' ? 'active' : ''
@@ -267,20 +363,27 @@ const Sidebar = {
 
 const ProjectHeader = {
     view(vnode) {
-        const { owner, repo: repoObj, description, stars, forks, visibility } = vnode.attrs;
+        const { owner, repo: repoObj, description, stars, forks, visibility, projectType } = vnode.attrs;
         
         const repo = typeof repoObj === 'string' ? repoObj : (repoObj?.name || '加载中...');
         const repoDesc = description || (repoObj?.description || '');
         const repoStars = stars !== undefined ? stars : (repoObj?.stars_count || 0);
         const repoForks = forks !== undefined ? forks : (repoObj?.forks_count || 0);
         const repoVisibility = visibility || (repoObj?.is_private ? 'private' : 'public');
+        const repoType = projectType || (repoObj?.project_type || 'owned');
         
         return m('div.project-header', [
             m('div.project-header-top', [
                 m('div.project-title-section', [
                     m('h1', repo),
-                    m('span.project-visibility', { class: repoVisibility === 'private' ? 'private' : '' }, 
-                        repoVisibility === 'private' ? '私有' : '公开')
+                    m('div.project-badges', [
+                        repoType === 'mirror' ? m('span.project-type-badge.mirror', [
+                            m('i.fas.fa-clone'),
+                            ' 镜像'
+                        ]) : null,
+                        m('span.project-visibility', { class: repoVisibility === 'private' ? 'private' : '' }, 
+                            repoVisibility === 'private' ? '私有' : '公开')
+                    ])
                 ]),
                 m('div.project-actions-bar', [
                     m('button.btn.btn-sm', [
@@ -318,6 +421,7 @@ const ProjectTabs = {
             { id: 'code', icon: 'fa-code', label: '代码', href: `/project/${owner}/${repo}` },
             { id: 'issues', icon: 'fa-exclamation-circle', label: 'Issue', href: `/issues/${owner}/${repo}`, count: issuesCount },
             { id: 'mrs', icon: 'fa-code-branch', label: '合并请求', href: `/merge-requests/${owner}/${repo}`, count: mrsCount },
+            { id: 'milestones', icon: 'fa-flag', label: '里程碑', href: `/milestones/${owner}/${repo}` },
             { id: 'releases', icon: 'fa-cube', label: '发布', href: `/releases/${owner}/${repo}` },
             { id: 'stats', icon: 'fa-chart-line', label: '统计', href: `/stats/${owner}/${repo}` },
             { id: 'settings', icon: 'fa-cog', label: '设置', href: `/settings/${owner}/${repo}` }
@@ -417,7 +521,13 @@ const ProjectCard = {
                     href: `/project/${project.owner}/${project.name}`,
                     oncreate: m.route.link
                 }, project.name)),
-                m('span.project-visibility', project.is_private ? '私有' : '公开')
+                m('div.project-badges', [
+                    project.project_type === 'mirror' ? m('span.project-type-badge.mirror', [
+                        m('i.fas.fa-clone'),
+                        ' 镜像'
+                    ]) : null,
+                    m('span.project-visibility', project.is_private ? '私有' : '公开')
+                ])
             ]),
             m('p.project-card-description', project.description || '暂无描述'),
             m('div.project-card-meta', [
@@ -896,6 +1006,159 @@ const CreateProjectModal = {
     }
 };
 
+const CloneProjectModal = {
+    oninit(vnode) {
+        vnode.state.formData = {
+            clone_url: '',
+            name: '',
+            description: '',
+            is_private: false,
+            project_type: 'mirror'
+        };
+        vnode.state.loading = false;
+        vnode.state.detected = null;
+    },
+
+    detectPlatform(url) {
+        if (!url) return null;
+        if (url.includes('github.com')) return 'github';
+        if (url.includes('gitea.com') || url.includes('gitea.')) return 'gitea';
+        if (url.includes('gitlab.com') || url.includes('gitlab.')) return 'gitlab';
+        return 'other';
+    },
+
+    extractRepoInfo(url) {
+        const patterns = [
+            /github\.com\/([^\/]+)\/([^\/\?#]+)/,
+            /gitea\.(com|org)\/([^\/]+)\/([^\/\?#]+)/,
+            /gitlab\.com\/([^\/]+)\/([^\/\?#]+)/
+        ];
+
+        for (const pattern of patterns) {
+            const match = url.match(pattern);
+            if (match) {
+                return {
+                    owner: match[1],
+                    repo: match[2].replace(/\.git$/, ''),
+                    platform: this.detectPlatform(url)
+                };
+            }
+        }
+        return null;
+    },
+
+    view(vnode) {
+        const { isOpen, onClose, onSubmit } = vnode.attrs;
+        const { formData, loading, detected } = vnode.state;
+
+        const detectedInfo = this.extractRepoInfo(formData.clone_url);
+
+        return m(Modal, {
+            isOpen,
+            onClose,
+            title: '克隆项目'
+        }, [
+            m('form', {
+                onsubmit: (e) => {
+                    e.preventDefault();
+                    if (loading) return;
+
+                    const submitData = { ...formData };
+                    if (detectedInfo) {
+                        submitData.mirror_url = formData.clone_url;
+                        submitData.platform = detectedInfo.platform;
+                    }
+
+                    vnode.state.loading = true;
+                    onSubmit(submitData).then(() => {
+                        vnode.state.loading = false;
+                        vnode.state.formData = {
+                            clone_url: '',
+                            name: '',
+                            description: '',
+                            is_private: false,
+                            project_type: 'mirror'
+                        };
+                        onClose();
+                    }).catch(err => {
+                        vnode.state.loading = false;
+                        console.error('Failed to clone project:', err);
+                        alert('克隆项目失败: ' + (err.message || '未知错误'));
+                    });
+                }
+            }, [
+                m('div.form-group', [
+                    m('label.form-label', { for: 'clone-url' }, '仓库 URL'),
+                    m('input#clone-url.form-input', {
+                        type: 'url',
+                        placeholder: 'https://github.com/user/repo',
+                        value: formData.clone_url,
+                        oninput: (e) => {
+                            vnode.state.formData.clone_url = e.target.value;
+                            vnode.state.detected = this.detectPlatform(e.target.value);
+                            if (detectedInfo) {
+                                vnode.state.formData.name = detectedInfo.repo;
+                            }
+                        }
+                    }),
+                    m('p.form-hint', '支持 GitHub、Gitea、GitLab 等平台的仓库地址'),
+                    detectedInfo ? m('p.form-hint', [
+                        m('i.fas.fa-check-circle', { style: { color: 'var(--success-color)', marginRight: '4px' } }),
+                        `检测到 ${detectedInfo.platform} 仓库: ${detectedInfo.owner}/${detectedInfo.repo}`
+                    ]) : null
+                ]),
+
+                m('div.form-group', [
+                    m('label.form-label', { for: 'project-name' }, '项目名称'),
+                    m('input#project-name.form-input', {
+                        type: 'text',
+                        placeholder: '输入项目名称',
+                        value: formData.name,
+                        oninput: (e) => {
+                            vnode.state.formData.name = e.target.value.toLowerCase().replace(/[^a-z0-9-_]/g, '');
+                        }
+                    })
+                ]),
+
+                m('div.form-group', [
+                    m('label.form-label', { for: 'project-desc' }, '描述'),
+                    m('textarea#project-desc.form-input.form-textarea', {
+                        placeholder: '简短描述项目...',
+                        rows: 3,
+                        value: formData.description,
+                        oninput: (e) => {
+                            vnode.state.formData.description = e.target.value;
+                        }
+                    })
+                ]),
+
+                m('div.form-group', [
+                    m('div.form-checkbox-group', [
+                        m('input.form-checkbox', {
+                            type: 'checkbox',
+                            id: 'is-private-clone',
+                            checked: formData.is_private
+                        }),
+                        m('label', { for: 'is-private-clone' }, '私有仓库')
+                    ])
+                ]),
+
+                m('div.modal-footer', [
+                    m('button.btn', {
+                        type: 'button',
+                        onclick: onClose,
+                        disabled: loading
+                    }, '取消'),
+                    m('button.btn.btn-primary', {
+                        type: 'submit',
+                        disabled: loading || !formData.clone_url.trim() || !formData.name.trim()
+                    }, loading ? '克隆中...' : '克隆项目')
+                ])
+            ])
+        ]);
+    }
+};
+
 const Dashboard = {
     oninit(vnode) {
         vnode.state.projects = [];
@@ -979,15 +1242,12 @@ const Dashboard = {
 
 const ProjectList = {
     oninit(vnode) {
-        console.log('ProjectList initializing...');
         vnode.state.projects = [];
         vnode.state.loading = true;
         vnode.state.filter = 'all';
         vnode.state.search = '';
-        vnode.state.showCreateModal = false;
-        
+
         RepositoryService.list().then(result => {
-            console.log('Projects loaded:', result);
             vnode.state.projects = result.data || [];
             vnode.state.loading = false;
             m.redraw();
@@ -997,44 +1257,50 @@ const ProjectList = {
             m.redraw();
         });
     },
-    
+
     view(vnode) {
-        const { projects, loading, filter, search, showCreateModal } = vnode.state;
-        
+        const { projects, loading, filter, search } = vnode.state;
+
         if (loading) {
             return m(Layout, m(Loading));
         }
-        
+
         let filteredProjects = projects;
-        
+
         if (filter === 'mine') {
             filteredProjects = projects.filter(p => p.owner === 'ryan');
         } else if (filter === 'starred') {
             filteredProjects = projects.filter(p => p.starred);
         }
-        
+
         if (search) {
             const searchLower = search.toLowerCase();
-            filteredProjects = filteredProjects.filter(p => 
+            filteredProjects = filteredProjects.filter(p =>
                 p.name.toLowerCase().includes(searchLower) ||
                 (p.description && p.description.toLowerCase().includes(searchLower))
             );
         }
-        
+
         return m(Layout, [
             m('div.projects-page', [
                 m('div.page-header', [
                     m('h1', '项目'),
                     m('div.page-actions', [
-                        m('button.btn.btn-primary', {
-                            onclick: () => { vnode.state.showCreateModal = true; }
+                        m('a.btn.btn-outline', {
+                            href: '/projects/migrate'
+                        }, [
+                            m('i.fas.fa-download'),
+                            ' 迁移项目'
+                        ]),
+                        m('a.btn.btn-primary', {
+                            href: '/projects/new'
                         }, [
                             m('i.fas.fa-plus'),
                             ' 新建项目'
                         ])
                     ])
                 ]),
-                
+
                 m('div.projects-toolbar', [
                     m('div.filter-tabs', [
                         m('button.filter-tab', {
@@ -1058,29 +1324,94 @@ const ProjectList = {
                         })
                     ])
                 ]),
-                
-                filteredProjects.length === 0 
+
+                filteredProjects.length === 0
                     ? m(EmptyState, { message: '暂无项目', icon: 'fa-folder-open' })
-                    : m('div.projects-grid', filteredProjects.map(project => 
+                    : m('div.projects-grid', filteredProjects.map(project =>
                         m(ProjectCard, { project })
                     ))
-            ]),
-            
-            m(CreateProjectModal, {
-                isOpen: showCreateModal,
-                onClose: () => { vnode.state.showCreateModal = false; },
-                onSubmit: (formData) => {
-                    return RepositoryService.create('ryan', formData).then(result => {
-                        vnode.state.projects.unshift(result.data || result);
-                        vnode.state.showCreateModal = false;
-                        m.redraw();
-                    });
-                }
-            })
+            ])
         ]);
     }
 };
 
+
+const getLanguageFromPath = (path) => {
+    const ext = path.split('.').pop().toLowerCase();
+    const langMap = {
+        'js': 'javascript',
+        'jsx': 'javascript',
+        'ts': 'typescript',
+        'tsx': 'typescript',
+        'py': 'python',
+        'rb': 'ruby',
+        'go': 'go',
+        'java': 'java',
+        'c': 'c',
+        'cpp': 'cpp',
+        'cc': 'cpp',
+        'cxx': 'cpp',
+        'h': 'c',
+        'hpp': 'cpp',
+        'cs': 'csharp',
+        'php': 'php',
+        'swift': 'swift',
+        'kt': 'kotlin',
+        'rs': 'rust',
+        'sh': 'bash',
+        'bash': 'bash',
+        'zsh': 'bash',
+        'ps1': 'powershell',
+        'html': 'html',
+        'htm': 'html',
+        'css': 'css',
+        'scss': 'scss',
+        'sass': 'sass',
+        'less': 'less',
+        'json': 'json',
+        'xml': 'xml',
+        'yaml': 'yaml',
+        'yml': 'yaml',
+        'md': 'markdown',
+        'sql': 'sql',
+        'vue': 'vue',
+        'svelte': 'svelte',
+        'dockerfile': 'dockerfile',
+        'makefile': 'makefile',
+        'toml': 'toml',
+        'ini': 'ini',
+        'cfg': 'ini',
+        'conf': 'nginx',
+        'nginx': 'nginx',
+        'apache': 'apache',
+        'diff': 'diff',
+        'patch': 'diff'
+    };
+    return langMap[ext] || null;
+};
+
+const highlightFile = (code, path) => {
+    if (typeof hljs === 'undefined') {
+        return code;
+    }
+    
+    const language = getLanguageFromPath(path);
+    if (language && hljs.getLanguage(language)) {
+        try {
+            return hljs.highlight(code, { language: language }).value;
+        } catch (e) {
+            console.error('Highlight error:', e);
+        }
+    }
+    
+    try {
+        return hljs.highlightAuto(code).value;
+    } catch (e) {
+        console.error('Auto-highlight error:', e);
+    }
+    
+    return code;
+};
 
 const ProjectDetail = {
     oninit(vnode) {
@@ -1091,7 +1422,39 @@ const ProjectDetail = {
         vnode.state.mrsCount = 0;
         vnode.state.loading = true;
         vnode.state.currentPath = '';
-        vnode.state.currentBranch = 'main';
+        vnode.state.currentBranch = 'HEAD';
+        vnode.state.branches = [];
+        vnode.state.treeEntries = [];
+        vnode.state.fileContent = null;
+        vnode.state.showBranchMenu = false;
+        
+        vnode.state.loadBranches = function() {
+            RepositoryService.getBranches(owner, repo).then(result => {
+                vnode.state.branches = result.branches || [];
+                m.redraw();
+            }).catch(() => {});
+        };
+        
+        vnode.state.loadTree = function() {
+            vnode.state.fileContent = null;
+            RepositoryService.getTree(owner, repo, vnode.state.currentPath, vnode.state.currentBranch).then(result => {
+                vnode.state.treeEntries = result.entries || [];
+                m.redraw();
+            }).catch(() => {
+                vnode.state.treeEntries = [];
+                m.redraw();
+            });
+        };
+        
+        vnode.state.loadFile = function(path) {
+            RepositoryService.getFile(owner, repo, path, vnode.state.currentBranch).then(result => {
+                vnode.state.fileContent = result.content;
+                m.redraw();
+            }).catch(() => {
+                vnode.state.fileContent = null;
+                m.redraw();
+            });
+        };
         
         Promise.all([
             RepositoryService.get(owner, repo),
@@ -1102,16 +1465,17 @@ const ProjectDetail = {
             vnode.state.issuesCount = (issuesResult.data || issuesResult || []).filter(i => !i.is_closed).length;
             vnode.state.mrsCount = (mrsResult.data || mrsResult || []).filter(m => !m.is_closed && !m.is_merged).length;
             vnode.state.loading = false;
+            vnode.state.loadBranches();
+            vnode.state.loadTree();
             m.redraw();
         }).catch(error => {
-            console.error('Failed to load project:', error);
             vnode.state.loading = false;
             m.redraw();
         });
     },
     
     view(vnode) {
-        const { repo, issuesCount, mrsCount, loading, currentPath, currentBranch } = vnode.state;
+        const { repo, issuesCount, mrsCount, loading, currentPath, currentBranch, branches, treeEntries, fileContent, showBranchMenu } = vnode.state;
         const { owner, repo: repoName } = vnode.attrs;
         
         if (loading) {
@@ -1121,9 +1485,6 @@ const ProjectDetail = {
         if (!repo) {
             return m(Layout, m(EmptyState, { message: '项目不存在', icon: 'fa-exclamation-triangle' }));
         }
-        
-        const fileTree = getFileTree(repoName);
-        const files = fileTree[currentPath] || [];
         
         return m(Layout, [
             m('div.project-detail-page', [
@@ -1151,31 +1512,29 @@ const ProjectDetail = {
                                 m('div.branch-selector', [
                                     m('div.branch-dropdown', {
                                         onclick: (e) => {
-                                            const menu = document.getElementById('branch-menu');
-                                            if (menu) menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+                                            vnode.state.showBranchMenu = !vnode.state.showBranchMenu;
                                         }
                                     }, [
                                         m('i.fas.fa-code-branch'),
-                                        m('span', currentBranch),
+                                        m('span', currentBranch === 'HEAD' ? (repo.default_branch || 'main') : currentBranch),
                                         m('i.fas.fa-chevron-down')
                                     ]),
-                                    m('div.branch-menu#branch-menu', { style: { display: 'none' } }, [
+                                    showBranchMenu ? m('div.branch-menu', [
                                         m('div.branch-menu-header', '切换分支'),
-                                        m('div.branch-option', {
-                                            class: currentBranch === 'main' ? 'active' : '',
-                                            onclick: () => { vnode.state.currentBranch = 'main'; }
-                                        }, [
-                                            m('i.fas.fa-check', { style: { visibility: currentBranch === 'main' ? 'visible' : 'hidden' } }),
-                                            'main'
-                                        ]),
-                                        m('div.branch-option', {
-                                            class: currentBranch === 'develop' ? 'active' : '',
-                                            onclick: () => { vnode.state.currentBranch = 'develop'; }
-                                        }, [
-                                            m('i.fas.fa-check', { style: { visibility: currentBranch === 'develop' ? 'visible' : 'hidden' } }),
-                                            'develop'
-                                        ])
-                                    ])
+                                        branches.map(branch => 
+                                            m('div.branch-option', {
+                                                class: currentBranch === branch ? 'active' : '',
+                                                onclick: () => { 
+                                                    vnode.state.currentBranch = branch;
+                                                    vnode.state.showBranchMenu = false;
+                                                    vnode.state.loadTree();
+                                                }
+                                            }, [
+                                                m('i.fas.fa-check', { style: { visibility: currentBranch === branch ? 'visible' : 'hidden' } }),
+                                                branch
+                                            ])
+                                        )
+                                    ]) : null
                                 ]),
                                 m('div.file-actions', [
                                     m('button.btn.btn-sm', [
@@ -1189,45 +1548,46 @@ const ProjectDetail = {
                                 ])
                             ]),
                             
-                            m('div.path-breadcrumb', renderBreadcrumb(owner, repo.name, currentPath)),
+                            m('div.path-breadcrumb', renderBreadcrumb(owner, repo.name, currentPath, (path) => {
+                                vnode.state.currentPath = path;
+                                vnode.state.loadTree();
+                            })),
                             
-                            m('div.commit-info', [
-                                m('img.commit-info-avatar', { src: 'https://via.placeholder.com/24', alt: '提交者' }),
-                                m('div.commit-info-message', [
-                                    m('a', { href: '#' }, '初始提交'),
-                                    m('span.commit-info-meta', '· 提交于最近')
+                            fileContent !== null ? [
+                                m('div.file-content-header', [
+                                    m('span', currentPath.split('/').pop()),
+                                    m('button.btn.btn-sm', { onclick: () => { vnode.state.fileContent = null; } }, '返回')
                                 ]),
-                                m('span.commit-info-hash', 'initial')
-                            ]),
-                            
-                            files.length === 0 
-                                ? m(EmptyState, { message: '此目录为空', icon: 'fa-folder-open' })
-                                : m('div.file-list', files.map(file => 
-                                    m(FileItem, { 
-                                        file, 
-                                        owner, 
-                                        repo: repo.name,
-                                        currentPath,
-                                        onNavigate: (path) => { vnode.state.currentPath = path; }
-                                    })
-                                ))
-                        ]),
-                        
-                        repo.readme ? m('div.readme-section', [
-                            m('div.readme-header', [
-                                m('i.fas.fa-book'),
-                                ' README.md'
-                            ]),
-                            m('div.readme-content', {
-                                oncreate: (vnode) => {
-                                    if (typeof marked !== 'undefined') {
-                                        vnode.dom.innerHTML = marked.parse(repo.readme);
-                                    } else {
-                                        vnode.dom.textContent = repo.readme;
-                                    }
-                                }
-                            })
-                        ]) : null
+                                m('pre.file-content', [
+                                    m('code', {
+                                        class: 'hljs',
+                                        oncreate: (vnode) => {
+                                            const highlighted = highlightFile(fileContent, currentPath);
+                                            vnode.dom.innerHTML = highlighted;
+                                        }
+                                    }, fileContent)
+                                ])
+                            ] : [
+                                treeEntries.length === 0 
+                                    ? m(EmptyState, { message: repo.local_path ? '此目录为空' : '仓库未初始化，请先同步代码', icon: 'fa-folder-open' })
+                                    : m('div.file-list', treeEntries.map(entry => 
+                                        m(TreeEntry, { 
+                                            entry, 
+                                            owner, 
+                                            repo: repo.name,
+                                            currentPath,
+                                            onNavigate: (path, isFile) => {
+                                                if (isFile) {
+                                                    vnode.state.loadFile(path);
+                                                } else {
+                                                    vnode.state.currentPath = path;
+                                                    vnode.state.loadTree();
+                                                }
+                                            }
+                                        })
+                                    ))
+                            ]
+                        ])
                     ]),
                     
                     m('div.sidebar-info', [
@@ -1266,97 +1626,57 @@ const ProjectDetail = {
     }
 };
 
-const FileItem = {
+const TreeEntry = {
     view(vnode) {
-        const { file, owner, repo, currentPath, onNavigate } = vnode.attrs;
-        const newPath = currentPath ? `${currentPath}/${file.name}` : file.name;
+        const { entry, owner, repo, currentPath, onNavigate } = vnode.attrs;
+        const newPath = currentPath ? `${currentPath}/${entry.name}` : entry.name;
+        const isTree = entry.type === 'tree';
         
         return m('div.file-item', {
-            onclick: () => {
-                if (file.type === 'folder') {
-                    onNavigate(newPath);
-                }
-            },
-            style: { cursor: file.type === 'folder' ? 'pointer' : 'default' }
+            onclick: () => onNavigate(newPath, !isTree),
+            style: { cursor: 'pointer' }
         }, [
-            m('span.file-icon', { class: file.type === 'folder' ? 'folder' : '' }, [
-                m(`i.fas.${file.type === 'folder' ? 'fa-folder' : 'fa-file-code'}`)
+            m('span.file-icon', { class: isTree ? 'folder' : '' }, [
+                m(`i.fas.${isTree ? 'fa-folder' : 'fa-file-code'}`)
             ]),
-            m('span.file-name', 
-                file.type === 'folder' 
-                    ? m('a', { href: '#', onclick: (e) => { e.preventDefault(); onNavigate(newPath); } }, file.name)
-                    : file.name
-            ),
-            m('span.file-commit-message', file.message),
-            m('span.file-commit-time', file.time)
+            m('span.file-name', entry.name),
+            m('span.file-commit-message', entry.hash ? entry.hash.substring(0, 7) : ''),
+            m('span.file-commit-time', entry.size && !isTree ? formatSize(entry.size) : '')
         ]);
     }
 };
 
-function renderBreadcrumb(owner, repo, currentPath) {
-    const parts = currentPath ? currentPath.split('/') : [];
-    
-    let html = m('a', { href: `/project/${owner}/${repo}`, oncreate: m.route.link }, [
-        m('i.fas.fa-folder'),
-        ` ${repo}`
-    ]);
-    
-    if (parts.length === 0) return html;
-    
-    return [html, ...parts.map((part, index) => {
-        const path = parts.slice(0, index + 1).join('/');
-        return [
-            m('span', ' / '),
-            m('a', { href: '#', onclick: (e) => { e.preventDefault(); /* navigate to path */ } }, part)
-        ];
-    })];
+function formatSize(size) {
+    const s = parseInt(size);
+    if (isNaN(s) || s < 0) return '';
+    if (s < 1024) return s + ' B';
+    if (s < 1024 * 1024) return (s / 1024).toFixed(1) + ' KB';
+    return (s / 1024 / 1024).toFixed(1) + ' MB';
 }
 
-function getFileTree(repoName) {
-    const trees = {
-        'builder': {
-            '': [
-                { name: 'builder.go', type: 'file', message: 'Add core builder functions', time: '2 months ago' },
-                { name: 'cond.go', type: 'file', message: 'Add condition builders', time: '3 months ago' },
-                { name: 'select.go', type: 'file', message: 'Implement SELECT builder', time: '3 months ago' },
-                { name: 'insert.go', type: 'file', message: 'Implement INSERT builder', time: '3 months ago' },
-                { name: 'update.go', type: 'file', message: 'Implement UPDATE builder', time: '3 months ago' },
-                { name: 'delete.go', type: 'file', message: 'Implement DELETE builder', time: '3 months ago' },
-                { name: 'go.mod', type: 'file', message: 'Update dependencies', time: '1 month ago' },
-                { name: 'go.sum', type: 'file', message: 'Update dependencies', time: '1 month ago' },
-                { name: 'README.md', type: 'file', message: 'Update documentation', time: '2 weeks ago' },
-                { name: 'LICENSE', type: 'file', message: 'Add MIT license', time: '1 year ago' }
-            ]
-        },
-        'gx': {
-            '': [
-                { name: 'cmd', type: 'folder', message: 'Add CLI commands', time: '1 week ago' },
-                { name: 'find', type: 'folder', message: 'Implement find command', time: '2 weeks ago' },
-                { name: 'replace', type: 'folder', message: 'Implement replace command', time: '2 weeks ago' },
-                { name: 'rename', type: 'folder', message: 'Implement rename command', time: '2 weeks ago' },
-                { name: 'go.mod', type: 'file', message: 'Update dependencies', time: '3 days ago' },
-                { name: 'README.md', type: 'file', message: 'Update documentation', time: '1 week ago' }
-            ],
-            'cmd': [
-                { name: 'root.go', type: 'file', message: 'Add root command', time: '1 week ago' },
-                { name: 'find.go', type: 'file', message: 'Add find command', time: '1 week ago' },
-                { name: 'replace.go', type: 'file', message: 'Add replace command', time: '1 week ago' },
-                { name: 'rename.go', type: 'file', message: 'Add rename command', time: '1 week ago' }
-            ],
-            'find': [
-                { name: 'finder.go', type: 'file', message: 'Implement finder', time: '2 weeks ago' },
-                { name: 'search.go', type: 'file', message: 'Implement search', time: '2 weeks ago' }
-            ],
-            'replace': [
-                { name: 'replacer.go', type: 'file', message: 'Implement replacer', time: '2 weeks ago' }
-            ],
-            'rename': [
-                { name: 'renamer.go', type: 'file', message: 'Implement renamer', time: '2 weeks ago' }
-            ]
-        }
-    };
+function renderBreadcrumb(owner, repo, currentPath, onNavigate) {
+    const parts = currentPath ? currentPath.split('/').filter(p => p) : [];
     
-    return trees[repoName] || {};
+    let elements = [
+        m('a', { 
+            href: '#', 
+            onclick: (e) => { e.preventDefault(); onNavigate(''); } 
+        }, [
+            m('i.fas.fa-folder'),
+            ` ${repo}`
+        ])
+    ];
+    
+    parts.forEach((part, index) => {
+        const path = parts.slice(0, index + 1).join('/');
+        elements.push(m('span', ' / '));
+        elements.push(m('a', { 
+            href: '#', 
+            onclick: (e) => { e.preventDefault(); onNavigate(path); } 
+        }, part));
+    });
+    
+    return elements;
 }
 
 function copyToClipboard(text) {
@@ -1836,7 +2156,7 @@ const SettingsPage = {
         });
     },
 
-    handleSave(vnode) {
+    handleSave: function(vnode) {
         const { owner, repo } = vnode.attrs;
         const { formData, saving } = vnode.state;
 
@@ -1844,24 +2164,28 @@ const SettingsPage = {
         vnode.state.saving = true;
 
         RepositoryService.update(owner, repo, formData).then(result => {
-            vnode.state.repo = result.data || result;
+            const updatedRepo = result.data || result;
+            vnode.state.repo = updatedRepo;
             vnode.state.saving = false;
             alert('设置已保存！');
-            m.redraw();
+            if (formData.name && formData.name !== repo) {
+                m.route.set('/settings/' + owner + '/' + formData.name);
+            } else {
+                m.redraw();
+            }
         }).catch(error => {
             vnode.state.saving = false;
-            console.error('Failed to save settings:', error);
             alert('保存设置失败: ' + (error.message || '未知错误'));
             m.redraw();
         });
     },
 
-    handleDelete(vnode) {
+    handleDelete: function(vnode) {
         const { owner, repo } = vnode.attrs;
-        const { deleting } = vnode.state;
+        const { deleting, repo: repoData } = vnode.state;
 
         if (deleting) return;
-        if (!confirm(`确定要删除项目 "${repo.name}" 吗？此操作不可撤销！`)) {
+        if (!confirm(`确定要删除项目 "${repoData.name}" 吗？此操作不可撤销！`)) {
             return;
         }
 
@@ -1873,7 +2197,6 @@ const SettingsPage = {
             m.route.set('/projects');
         }).catch(error => {
             vnode.state.deleting = false;
-            console.error('Failed to delete repository:', error);
             alert('删除项目失败: ' + (error.message || '未知错误'));
             m.redraw();
         });
@@ -1935,6 +2258,13 @@ const SettingsPage = {
                                 m('span', '仓库设置')
                             ]),
                             m('a.settings-nav-item', {
+                                class: activeSection === 'sync' ? 'active' : '',
+                                onclick: () => { vnode.state.activeSection = 'sync'; }
+                            }, [
+                                m('i.fas.fa-sync'),
+                                m('span', '代码同步')
+                            ]),
+                            m('a.settings-nav-item', {
                                 class: activeSection === 'danger' ? 'active' : '',
                                 onclick: () => { vnode.state.activeSection = 'danger'; }
                             }, [
@@ -1945,12 +2275,13 @@ const SettingsPage = {
                     ]),
                     
                     m('div.settings-content', [
-                        activeSection === 'general' ? m(GeneralSettings, { formData, repo }) : null,
+                        activeSection === 'general' ? m(GeneralSettings, { formData, repo, parent: SettingsPage, parentVnode: vnode }) : null,
                         activeSection === 'members' ? m(MembersSettings, { repo }) : null,
                         activeSection === 'integrations' ? m(IntegrationsSettings, { repo }) : null,
                         activeSection === 'webhooks' ? m(WebhooksSettings, { repo }) : null,
                         activeSection === 'repository' ? m(RepositorySettings, { repo }) : null,
-                        activeSection === 'danger' ? m(DangerSettings, { repo }) : null
+                        activeSection === 'sync' ? m(SyncSettings, { repo, owner, parent: SettingsPage, parentVnode: vnode }) : null,
+                        activeSection === 'danger' ? m(DangerSettings, { repo: repo, parent: SettingsPage, parentVnode: vnode }) : null
                     ])
                 ])
             ])
@@ -2037,7 +2368,12 @@ const GeneralSettings = {
             
             m('div.form-group', [
                 m('button.btn.btn-primary', {
-                    onclick: () => { SettingsPage.handleSave(vnode); }
+                    onclick: function() {
+                        const pv = vnode && vnode.attrs && vnode.attrs.parentVnode;
+                        if (pv) {
+                            vnode.attrs.parent.handleSave(pv);
+                        }
+                    }
                 }, '保存更改')
             ])
         ]);
@@ -2219,65 +2555,1413 @@ const DangerSettings = {
                 m('h4', '删除项目'),
                 m('p', '永久删除此项目及其所有相关数据'),
                 m('button.btn.btn-danger', {
-                    onclick: () => { SettingsPage.handleDelete(vnode); }
+                    onclick: function() {
+                        const pv = vnode && vnode.attrs && vnode.attrs.parentVnode;
+                        if (pv) {
+                            vnode.attrs.parent.handleDelete(pv);
+                        }
+                    }
                 }, '删除项目')
             ])
         ]);
     }
 };
 
-const GroupsPage = {
-    view() {
-        return m(Layout, [
-            m('div.page-header', [
-                m('h1', '群组')
+const SyncSettings = {
+    oninit(vnode) {
+        vnode.state.syncing = false;
+        vnode.state.pushUrl = '';
+    },
+
+    handleSyncPull(vnode) {
+        const { owner, repo } = vnode.attrs;
+        if (vnode.state.syncing) return;
+
+        vnode.state.syncing = true;
+        RepositoryService.syncPull(owner, repo.name).then(result => {
+            vnode.state.syncing = false;
+            alert('同步成功！最后同步时间: ' + (result.last_sync || '未知'));
+            m.redraw();
+        }).catch(error => {
+            vnode.state.syncing = false;
+            alert('同步失败: ' + (error.message || '未知错误'));
+            m.redraw();
+        });
+    },
+
+    handleSyncPush(vnode) {
+        const { owner, repo } = vnode.attrs;
+        const { pushUrl, syncing } = vnode.state;
+
+        if (syncing) return;
+        if (!pushUrl || !pushUrl.trim()) {
+            alert('请输入推送目标 URL');
+            return;
+        }
+
+        vnode.state.syncing = true;
+        RepositoryService.syncPush(owner, repo.name, pushUrl).then(result => {
+            vnode.state.syncing = false;
+            alert('推送成功！');
+            m.redraw();
+        }).catch(error => {
+            vnode.state.syncing = false;
+            alert('推送失败: ' + (error.message || '未知错误'));
+            m.redraw();
+        });
+    },
+
+    view(vnode) {
+        const { repo } = vnode.attrs;
+        const { syncing, pushUrl } = vnode.state;
+        const isMirror = repo.is_mirror;
+
+        return m('div.settings-section', [
+            m('div.settings-section-header', [
+                m('h2.settings-section-title', '代码同步'),
+                m('p.settings-section-description', '管理代码的拉取和推送同步')
             ]),
-            m(EmptyState, { 
-                message: '暂无群组', 
-                icon: 'fa-users' 
-            })
+
+            isMirror ? [
+                m('div.form-group', [
+                    m('h4', '镜像同步'),
+                    m('p', '从远程仓库拉取最新代码更新'),
+                    m('p', [
+                        m('strong', '镜像地址: '),
+                        repo.mirror_url || '未设置'
+                    ]),
+                    repo.last_sync_at ? m('p', [
+                        m('strong', '最后同步: '),
+                        repo.last_sync_at
+                    ]) : null,
+                    m('button.btn.btn-primary', {
+                        onclick: () => SyncSettings.handleSyncPull(vnode),
+                        disabled: syncing
+                    }, syncing ? '同步中...' : '立即同步')
+                ])
+            ] : [
+                m('div.form-group', [
+                    m('h4', '推送到远程'),
+                    m('p', '将代码推送到远程仓库'),
+                    m('div.form-row', [
+                        m('input.form-input', {
+                            type: 'text',
+                            placeholder: '输入目标仓库 URL (例如: git@github.com:user/repo.git)',
+                            value: pushUrl,
+                            oninput: (e) => { vnode.state.pushUrl = e.target.value; },
+                            style: 'flex: 1; margin-right: 10px;'
+                        }),
+                        m('button.btn.btn-primary', {
+                            onclick: () => SyncSettings.handleSyncPush(vnode),
+                            disabled: syncing
+                        }, syncing ? '推送中...' : '推送')
+                    ])
+                ])
+            ]
         ]);
     }
 };
 
-const ActivityPage = {
-    view() {
+
+const CreateProjectPage = {
+    oninit(vnode) {
+        vnode.state.formData = {
+            name: '',
+            description: '',
+            is_private: false,
+            default_branch: 'main'
+        };
+        vnode.state.loading = false;
+        vnode.state.error = null;
+    },
+
+    handleSubmit(vnode) {
+        vnode.state.loading = true;
+        vnode.state.error = null;
+
+        RepositoryService.create('ryan', vnode.state.formData).then(result => {
+            vnode.state.loading = false;
+            m.route.set('/projects');
+        }).catch(err => {
+            vnode.state.loading = false;
+            vnode.state.error = err.message || '创建项目失败';
+            m.redraw();
+        });
+    },
+
+    view(vnode) {
+        const { formData, loading, error } = vnode.state;
+
         return m(Layout, [
-            m('div.page-header', [
-                m('h1', '活动')
-            ]),
-            m(EmptyState, { 
-                message: '暂无活动', 
-                icon: 'fa-chart-line' 
-            })
+            m('div.create-project-page', [
+                m('div.page-header', [
+                    m('h1', '创建项目'),
+                    m('a.btn', { href: '/projects' }, [
+                        m('i.fas.fa-arrow-left'),
+                        ' 返回'
+                    ])
+                ]),
+
+                m('div.create-project-form', [
+                    error ? m('div.alert.alert-error', error) : null,
+
+                    m('div.form-section', [
+                        m('h3', '项目信息'),
+                        m('div.form-group', [
+                            m('label.form-label', { for: 'name' }, '项目名称 *'),
+                            m('input#name.form-input', {
+                                type: 'text',
+                                placeholder: 'my-awesome-project',
+                                value: formData.name,
+                                oninput: (e) => {
+                                    formData.name = e.target.value.toLowerCase().replace(/[^a-z0-9-_]/g, '');
+                                }
+                            }),
+                            m('p.form-hint', '项目URL: /{username}/' + (formData.name || 'project-name'))
+                        ]),
+
+                        m('div.form-group', [
+                            m('label.form-label', { for: 'description' }, '描述'),
+                            m('textarea#description.form-input.form-textarea', {
+                                placeholder: '简短描述项目用途...',
+                                rows: 3,
+                                value: formData.description,
+                                oninput: (e) => { formData.description = e.target.value; }
+                            })
+                        ])
+                    ]),
+
+                    m('div.form-section', [
+                        m('h3', '设置'),
+                        m('div.form-group', [
+                            m('label.form-label', '可见性'),
+                            m('div.visibility-options', [
+                                m('label.visibility-option', {
+                                    class: !formData.is_private ? 'selected' : ''
+                                }, [
+                                    m('input', {
+                                        type: 'radio',
+                                        name: 'visibility',
+                                        checked: !formData.is_private,
+                                        onchange: () => { formData.is_private = false; }
+                                    }),
+                                    m('i.fas.fa-globe'),
+                                    m('div', [
+                                        m('strong', '公开'),
+                                        m('span', '所有人可见')
+                                    ])
+                                ]),
+                                m('label.visibility-option', {
+                                    class: formData.is_private ? 'selected' : ''
+                                }, [
+                                    m('input', {
+                                        type: 'radio',
+                                        name: 'visibility',
+                                        checked: formData.is_private,
+                                        onchange: () => { formData.is_private = true; }
+                                    }),
+                                    m('i.fas.fa-lock'),
+                                    m('div', [
+                                        m('strong', '私有'),
+                                        m('span', '仅自己可见')
+                                    ])
+                                ])
+                            ])
+                        ]),
+
+                        m('div.form-group', [
+                            m('label.form-label', '默认分支'),
+                            m('select.form-select', {
+                                value: formData.default_branch,
+                                onchange: (e) => { formData.default_branch = e.target.value; }
+                            }, [
+                                m('option', { value: 'main' }, 'main'),
+                                m('option', { value: 'master' }, 'master'),
+                                m('option', { value: 'develop' }, 'develop')
+                            ])
+                        ])
+                    ]),
+
+                    m('div.form-actions', [
+                        m('a.btn', { href: '/projects' }, '取消'),
+                        m('button.btn.btn-primary', {
+                            disabled: loading || !formData.name.trim(),
+                            onclick: () => { CreateProjectPage.handleSubmit(vnode); }
+                        }, loading ? '创建中...' : '创建项目')
+                    ])
+                ])
+            ])
         ]);
     }
 };
 
-const MilestonesPage = {
-    view() {
+
+const MigrateProjectPage = {
+    oninit(vnode) {
+        vnode.state.formData = {
+            clone_url: '',
+            name: '',
+            description: '',
+            is_private: false,
+            project_type: 'mirror'
+        };
+        vnode.state.loading = false;
+        vnode.state.error = null;
+        vnode.state.detected = null;
+    },
+
+    detectPlatform(url) {
+        if (!url) return null;
+        if (url.includes('github.com')) return 'github';
+        if (url.includes('gitea.com') || url.includes('gitea.')) return 'gitea';
+        if (url.includes('gitlab.com') || url.includes('gitlab.')) return 'gitlab';
+        return 'other';
+    },
+
+    extractRepoInfo(url) {
+        const patterns = [
+            /github\.com\/([^\/]+)\/([^\/\?#]+)/,
+            /gitea\.(com|org)\/([^\/]+)\/([^\/\?#]+)/,
+            /gitlab\.com\/([^\/]+)\/([^\/\?#]+)/
+        ];
+
+        for (const pattern of patterns) {
+            const match = url.match(pattern);
+            if (match) {
+                return {
+                    owner: match[1],
+                    repo: match[2].replace(/\.git$/, ''),
+                    platform: this.detectPlatform(url)
+                };
+            }
+        }
+        return null;
+    },
+
+    handleCloneUrlInput(vnode, e) {
+        vnode.state.formData.clone_url = e.target.value;
+        const detectedInfo = MigrateProjectPage.extractRepoInfo(e.target.value);
+        if (detectedInfo) {
+            vnode.state.detected = detectedInfo;
+            if (!vnode.state.formData.name) {
+                vnode.state.formData.name = detectedInfo.repo;
+            }
+            if (!vnode.state.formData.description) {
+                vnode.state.formData.description = '从 ' + detectedInfo.platform + ' 镜像的项目';
+            }
+        } else {
+            vnode.state.detected = null;
+        }
+    },
+
+    handleSubmit(vnode) {
+        vnode.state.loading = true;
+        vnode.state.error = null;
+
+        const submitData = { ...vnode.state.formData };
+        if (vnode.state.detected) {
+            submitData.mirror_url = submitData.clone_url;
+            submitData.platform = vnode.state.detected.platform;
+        }
+
+        RepositoryService.create('ryan', submitData).then(result => {
+            vnode.state.loading = false;
+            m.route.set('/projects');
+        }).catch(err => {
+            vnode.state.loading = false;
+            vnode.state.error = err.message || '迁移项目失败';
+            m.redraw();
+        });
+    },
+
+    view(vnode) {
+        const { formData, loading, error, detected } = vnode.state;
+
         return m(Layout, [
-            m('div.page-header', [
-                m('h1', '里程碑')
-            ]),
-            m(EmptyState, { 
-                message: '暂无里程碑', 
-                icon: 'fa-flag' 
-            })
+            m('div.migrate-project-page', [
+                m('div.page-header', [
+                    m('h1', '迁移项目'),
+                    m('a.btn', { href: '/projects' }, [
+                        m('i.fas.fa-arrow-left'),
+                        ' 返回'
+                    ])
+                ]),
+
+                m('div.migrate-project-form', [
+                    error ? m('div.alert.alert-error', error) : null,
+
+                    m('div.form-section', [
+                        m('h3', '源仓库'),
+                        m('div.form-group', [
+                            m('label.form-label', { for: 'clone-url' }, '仓库地址 *'),
+                            m('input#clone-url.form-input', {
+                                type: 'url',
+                                placeholder: 'https://github.com/user/repo',
+                                value: formData.clone_url,
+                                oninput: (e) => { MigrateProjectPage.handleCloneUrlInput(vnode, e); }
+                            }),
+                            m('p.form-hint', '支持 GitHub、Gitea、GitLab 等平台')
+                        ]),
+
+                        detected ? m('div.detected-info', [
+                            m('i.fas.fa-check-circle'),
+                            m('span', '检测到 ' + detected.platform + ' 仓库: ' + detected.owner + '/' + detected.repo)
+                        ]) : null
+                    ]),
+
+                    m('div.form-section', [
+                        m('h3', '项目信息'),
+                        m('div.form-group', [
+                            m('label.form-label', { for: 'name' }, '项目名称 *'),
+                            m('input#name.form-input', {
+                                type: 'text',
+                                placeholder: 'my-mirrored-project',
+                                value: formData.name,
+                                oninput: (e) => {
+                                    formData.name = e.target.value.toLowerCase().replace(/[^a-z0-9-_]/g, '');
+                                }
+                            }),
+                            m('p.form-hint', '项目URL: /{username}/' + (formData.name || 'project-name'))
+                        ]),
+
+                        m('div.form-group', [
+                            m('label.form-label', { for: 'description' }, '描述'),
+                            m('textarea#description.form-input.form-textarea', {
+                                placeholder: '简短描述项目...',
+                                rows: 3,
+                                value: formData.description,
+                                oninput: (e) => { formData.description = e.target.value; }
+                            })
+                        ])
+                    ]),
+
+                    m('div.form-section', [
+                        m('h3', '设置'),
+                        m('div.form-group', [
+                            m('label.form-label', '可见性'),
+                            m('div.visibility-options', [
+                                m('label.visibility-option', {
+                                    class: !formData.is_private ? 'selected' : ''
+                                }, [
+                                    m('input', {
+                                        type: 'radio',
+                                        name: 'visibility',
+                                        checked: !formData.is_private,
+                                        onchange: () => { formData.is_private = false; }
+                                    }),
+                                    m('i.fas.fa-globe'),
+                                    m('div', [
+                                        m('strong', '公开'),
+                                        m('span', '所有人可见')
+                                    ])
+                                ]),
+                                m('label.visibility-option', {
+                                    class: formData.is_private ? 'selected' : ''
+                                }, [
+                                    m('input', {
+                                        type: 'radio',
+                                        name: 'visibility',
+                                        checked: formData.is_private,
+                                        onchange: () => { formData.is_private = true; }
+                                    }),
+                                    m('i.fas.fa-lock'),
+                                    m('div', [
+                                        m('strong', '私有'),
+                                        m('span', '仅自己可见')
+                                    ])
+                                ])
+                            ])
+                        ])
+                    ]),
+
+                    m('div.form-actions', [
+                        m('a.btn', { href: '/projects' }, '取消'),
+                        m('button.btn.btn-primary', {
+                            disabled: loading || !formData.clone_url.trim() || !formData.name.trim(),
+                            onclick: () => { MigrateProjectPage.handleSubmit(vnode); }
+                        }, loading ? '迁移中...' : '迁移项目')
+                    ])
+                ])
+            ])
         ]);
     }
+};
+
+
+const LoginPage = {
+    oninit(vnode) {
+        vnode.state.username = '';
+        vnode.state.password = '';
+        vnode.state.error = null;
+        vnode.state.loading = false;
+    },
+
+    handleLogin(vnode) {
+        const { username, password } = vnode.state;
+
+        if (!username.trim() || !password.trim()) {
+            vnode.state.error = '请输入用户名和密码';
+            return;
+        }
+
+        vnode.state.loading = true;
+        vnode.state.error = null;
+
+        API.post('/auth/login', { username, password }).then(result => {
+            if (result.token) {
+                Auth.setToken(result.token);
+                localStorage.setItem('user', JSON.stringify(result.user));
+                window.location.href = '/projects';
+            } else {
+                vnode.state.error = '登录失败';
+                vnode.state.loading = false;
+                m.redraw();
+            }
+        }).catch(err => {
+            vnode.state.error = '用户名或密码错误';
+            vnode.state.loading = false;
+            m.redraw();
+        });
+    },
+
+    view(vnode) {
+        const { username, password, error, loading } = vnode.state;
+
+        return m('div.login-page', [
+            m('div.login-container', [
+                m('div.login-header', [
+                    m('h1', 'GitFolio'),
+                    m('p', '代码管理与同步平台')
+                ]),
+
+                m('form.login-form', {
+                    onsubmit: (e) => {
+                        e.preventDefault();
+                        LoginPage.handleLogin(vnode);
+                    }
+                }, [
+                    error ? m('div.alert.alert-error', error) : null,
+
+                    m('div.form-group', [
+                        m('label.form-label', { for: 'username' }, '用户名'),
+                        m('input#username.form-input', {
+                            type: 'text',
+                            placeholder: '输入用户名',
+                            value: username,
+                            oninput: (e) => { vnode.state.username = e.target.value; }
+                        })
+                    ]),
+
+                    m('div.form-group', [
+                        m('label.form-label', { for: 'password' }, '密码'),
+                        m('input#password.form-input', {
+                            type: 'password',
+                            placeholder: '输入密码',
+                            value: password,
+                            oninput: (e) => { vnode.state.password = e.target.value; }
+                        })
+                    ]),
+
+                    m('button.btn.btn-primary.btn-block', {
+                        type: 'submit',
+                        disabled: loading
+                    }, loading ? '登录中...' : '登录')
+                ]),
+
+                m('div.login-footer', [
+                    m('p', '默认账号: ryan / password123')
+                ])
+            ])
+        ]);
+    }
+};
+
+
+const Groups = {
+    oninit(vnode) {
+        vnode.state.groups = [];
+        vnode.state.loading = true;
+        vnode.state.page = 1;
+        vnode.state.perPage = 30;
+
+        GroupService.list(1, 30).then(result => {
+            vnode.state.groups = result.data || [];
+            vnode.state.loading = false;
+            m.redraw();
+        }).catch(() => {
+            vnode.state.loading = false;
+            m.redraw();
+        });
+    },
+
+    view(vnode) {
+        const { groups, loading } = vnode.state;
+
+        return m(Layout, [
+            m('div.page-header', [
+                m('h1', [m('i.fas.fa-users'), ' 群组']),
+                m('div.page-actions', [
+                    m('button.btn.btn-primary', {
+                        onclick: () => m.route.set('/groups/new')
+                    }, [m('i.fas.fa-plus'), ' 新建群组'])
+                ])
+            ]),
+
+            loading ? m(Loading) : [
+                groups.length === 0 
+                    ? m(EmptyState, { message: '暂无群组', icon: 'fa-users' })
+                    : m('div.groups-list', groups.map(group => 
+                        m('div.group-card', {
+                            onclick: () => m.route.set(`/groups/${group.name}`)
+                        }, [
+                            m('div.group-avatar', [
+                                group.avatar 
+                                    ? m('img', { src: group.avatar, alt: group.name })
+                                    : m('div.avatar-placeholder', group.display_name ? group.display_name[0].toUpperCase() : group.name[0].toUpperCase())
+                            ]),
+                            m('div.group-info', [
+                                m('h3.group-name', group.display_name || group.name),
+                                group.description ? m('p.group-description', group.description) : null,
+                                m('div.group-meta', [
+                                    m('span', [m('i.fas.fa-users'), ` ${group.members_count || 0} 成员`]),
+                                    group.location ? m('span', [m('i.fas.fa-map-marker-alt'), ` ${group.location}`]) : null,
+                                    group.website ? m('a', { href: group.website, target: '_blank', onclick: e => e.stopPropagation() }, [m('i.fas.fa-globe')]) : null
+                                ])
+                            ])
+                        ])
+                    ))
+            ]
+        ]);
+    }
+};
+
+const GroupDetail = {
+    oninit(vnode) {
+        const { name } = vnode.attrs;
+        vnode.state.group = null;
+        vnode.state.loading = true;
+
+        GroupService.get(name).then(result => {
+            vnode.state.group = result;
+            vnode.state.loading = false;
+            m.redraw();
+        }).catch(() => {
+            vnode.state.loading = false;
+            m.redraw();
+        });
+    },
+
+    view(vnode) {
+        const { group, loading } = vnode.state;
+
+        if (loading) {
+            return m(Layout, m(Loading));
+        }
+
+        if (!group) {
+            return m(Layout, m(EmptyState, { message: '群组不存在', icon: 'fa-users' }));
+        }
+
+        return m(Layout, [
+            m('div.group-detail-page', [
+                m('div.group-header', [
+                    m('div.group-avatar-large', [
+                        group.avatar 
+                            ? m('img', { src: group.avatar, alt: group.name })
+                            : m('div.avatar-placeholder', group.display_name ? group.display_name[0].toUpperCase() : group.name[0].toUpperCase())
+                    ]),
+                    m('div.group-info', [
+                        m('h1', group.display_name || group.name),
+                        group.description ? m('p.group-description', group.description) : null,
+                        m('div.group-meta', [
+                            m('span', [m('i.fas.fa-users'), ` ${group.members_count || 0} 成员`]),
+                            group.location ? m('span', [m('i.fas.fa-map-marker-alt'), ` ${group.location}`]) : null,
+                            group.website ? m('a', { href: group.website, target: '_blank' }, [m('i.fas.fa-globe'), ' 网站']) : null
+                        ])
+                    ])
+                ]),
+
+                m('div.group-tabs', [
+                    m('a.tab.active', { href: '#' }, '概览'),
+                    m('a.tab', { href: '#' }, '成员'),
+                    m('a.tab', { href: '#' }, '项目'),
+                    m('a.tab', { href: '#' }, '设置')
+                ]),
+
+                m('div.group-content', [
+                    m('div.info-section', [
+                        m('h3', '群组信息'),
+                        m('div.info-row', [m('strong', '名称: '), group.name]),
+                        m('div.info-row', [m('strong', '创建时间: '), group.created_at])
+                    ])
+                ])
+            ])
+        ]);
+    }
+};
+
+const NewGroup = {
+    oninit(vnode) {
+        vnode.state.form = {
+            name: '',
+            display_name: '',
+            description: '',
+            website: '',
+            location: ''
+        };
+        vnode.state.submitting = false;
+    },
+
+    submit(vnode) {
+        if (!vnode.state.form.name) {
+            alert('请输入群组名称');
+            return;
+        }
+
+        vnode.state.submitting = true;
+        GroupService.create(vnode.state.form).then(result => {
+            m.route.set(`/groups/${result.name}`);
+        }).catch(error => {
+            vnode.state.submitting = false;
+            alert('创建失败: ' + (error.message || '未知错误'));
+            m.redraw();
+        });
+    },
+
+    view(vnode) {
+        const { form, submitting } = vnode.state;
+
+        return m(Layout, [
+            m('div.page-header', [
+                m('h1', [m('i.fas.fa-users'), ' 新建群组'])
+            ]),
+
+            m('div.form-container', [
+                m('div.form-group', [
+                    m('label', '群组名称 *'),
+                    m('input.form-input', {
+                        type: 'text',
+                        value: form.name,
+                        oninput: e => { form.name = e.target.value; },
+                        placeholder: '例如: my-group'
+                    })
+                ]),
+
+                m('div.form-group', [
+                    m('label', '显示名称'),
+                    m('input.form-input', {
+                        type: 'text',
+                        value: form.display_name,
+                        oninput: e => { form.display_name = e.target.value; },
+                        placeholder: '例如: 我的群组'
+                    })
+                ]),
+
+                m('div.form-group', [
+                    m('label', '描述'),
+                    m('textarea.form-input', {
+                        value: form.description,
+                        oninput: e => { form.description = e.target.value; },
+                        placeholder: '群组描述',
+                        rows: 3
+                    })
+                ]),
+
+                m('div.form-group', [
+                    m('label', '网站'),
+                    m('input.form-input', {
+                        type: 'url',
+                        value: form.website,
+                        oninput: e => { form.website = e.target.value; },
+                        placeholder: 'https://example.com'
+                    })
+                ]),
+
+                m('div.form-group', [
+                    m('label', '位置'),
+                    m('input.form-input', {
+                        type: 'text',
+                        value: form.location,
+                        oninput: e => { form.location = e.target.value; },
+                        placeholder: '例如: 北京'
+                    })
+                ]),
+
+                m('div.form-actions', [
+                    m('button.btn.btn-primary', {
+                        onclick: () => NewGroup.submit(vnode),
+                        disabled: submitting
+                    }, submitting ? '创建中...' : '创建群组'),
+                    m('button.btn', {
+                        onclick: () => m.route.set('/groups')
+                    }, '取消')
+                ])
+            ])
+        ]);
+    }
+};
+
+
+const Activities = {
+    oninit(vnode) {
+        vnode.state.activities = [];
+        vnode.state.loading = true;
+        vnode.state.page = 1;
+
+        ActivityService.list(1, 30).then(result => {
+            vnode.state.activities = result.data || [];
+            vnode.state.loading = false;
+            m.redraw();
+        }).catch(() => {
+            vnode.state.loading = false;
+            m.redraw();
+        });
+    },
+
+    getActivityIcon(type) {
+        const icons = {
+            'create_repo': 'fa-plus-circle',
+            'push': 'fa-upload',
+            'star': 'fa-star',
+            'fork': 'fa-code-branch',
+            'issue': 'fa-exclamation-circle',
+            'pr': 'fa-code-pull-request',
+            'comment': 'fa-comment',
+            'release': 'fa-tag',
+            'default': 'fa-circle'
+        };
+        return icons[type] || icons['default'];
+    },
+
+    getActivityColor(type) {
+        const colors = {
+            'create_repo': '#28a745',
+            'push': '#0366d6',
+            'star': '#f1c40f',
+            'fork': '#8b5cf6',
+            'issue': '#e67e22',
+            'pr': '#9b59b6',
+            'comment': '#3498db',
+            'release': '#2ecc71',
+            'default': '#95a5a6'
+        };
+        return colors[type] || colors['default'];
+    },
+
+    formatTime(timeStr) {
+        const date = new Date(timeStr);
+        const now = new Date();
+        const diff = now - date;
+        const minutes = Math.floor(diff / 60000);
+        const hours = Math.floor(diff / 3600000);
+        const days = Math.floor(diff / 86400000);
+
+        if (minutes < 1) return '刚刚';
+        if (minutes < 60) return `${minutes} 分钟前`;
+        if (hours < 24) return `${hours} 小时前`;
+        if (days < 7) return `${days} 天前`;
+        return date.toLocaleDateString('zh-CN');
+    },
+
+    view(vnode) {
+        const { activities, loading } = vnode.state;
+        const self = vnode.state;
+
+        return m(Layout, [
+            m('div.page-header', [
+                m('h1', [m('i.fas.fa-bolt'), ' 活动']),
+                m('p.page-description', '查看所有用户的活动动态')
+            ]),
+
+            loading ? m(Loading) : [
+                activities.length === 0 
+                    ? m(EmptyState, { message: '暂无活动记录', icon: 'fa-bolt' })
+                    : m('div.activity-timeline', activities.map(activity => 
+                        m('div.activity-item', [
+                            m('div.activity-icon', {
+                                style: { backgroundColor: self.getActivityColor(activity.activity_type) }
+                            }, [
+                                m(`i.fas.${self.getActivityIcon(activity.activity_type)}`)
+                            ]),
+                            m('div.activity-content', [
+                                m('div.activity-header', [
+                                    activity.username 
+                                        ? m('a.username', { href: '#', onclick: e => { e.preventDefault(); m.route.set(`/${activity.username}`); } }, activity.username)
+                                        : m('span.username', '未知用户'),
+                                    m('span.activity-title', activity.title || '进行了操作')
+                                ]),
+                                activity.repository 
+                                    ? m('div.activity-repo', [
+                                        m('i.fas.fa-book'),
+                                        m('a', { 
+                                            href: '#', 
+                                            onclick: e => { e.preventDefault(); m.route.set(`/${activity.repository}`); } 
+                                        }, activity.repository)
+                                    ]) : null,
+                                activity.content 
+                                    ? m('div.activity-text', activity.content) : null,
+                                m('div.activity-time', self.formatTime(activity.created_at))
+                            ])
+                        ])
+                    ))
+            ]
+        ]);
+    }
+};
+
+
+const Milestones = {
+    oninit(vnode) {
+        const { owner, repo } = vnode.attrs;
+        vnode.state.milestones = [];
+        vnode.state.loading = true;
+
+        MilestoneService.list(owner, repo).then(result => {
+            vnode.state.milestones = result.data || [];
+            vnode.state.loading = false;
+            m.redraw();
+        }).catch(() => {
+            vnode.state.loading = false;
+            m.redraw();
+        });
+    },
+
+    formatDate(dateStr) {
+        if (!dateStr) return '无截止日期';
+        const date = new Date(dateStr);
+        return date.toLocaleDateString('zh-CN');
+    },
+
+    isOverdue(dateStr) {
+        if (!dateStr) return false;
+        return new Date(dateStr) < new Date();
+    },
+
+    view(vnode) {
+        const { milestones, loading } = vnode.state;
+        const { owner, repo } = vnode.attrs;
+        const self = vnode.state;
+
+        return m('div.milestones-section', [
+            m('div.milestones-header', [
+                m('h2', '里程碑'),
+                m('button.btn.btn-primary', {
+                    onclick: () => m.route.set(`/${owner}/${repo}/milestones/new`)
+                }, [m('i.fas.fa-plus'), ' 新建里程碑'])
+            ]),
+
+            loading ? m(Loading) : [
+                milestones.length === 0 
+                    ? m(EmptyState, { message: '暂无里程碑', icon: 'fa-flag' })
+                    : m('div.milestones-list', milestones.map(milestone => 
+                        m('div.milestone-item', { class: milestone.is_closed ? 'closed' : '' }, [
+                            m('div.milestone-icon', [
+                                m(`i.fas.${milestone.is_closed ? 'fa-check-circle' : 'fa-flag'}`)
+                            ]),
+                            m('div.milestone-content', [
+                                m('h3.milestone-title', [
+                                    milestone.title,
+                                    milestone.is_closed ? m('span.badge.closed', '已关闭') : null
+                                ]),
+                                milestone.description 
+                                    ? m('p.milestone-description', milestone.description) : null,
+                                m('div.milestone-meta', [
+                                    m('span.due-date', {
+                                        class: self.isOverdue(milestone.due_date) && !milestone.is_closed ? 'overdue' : ''
+                                    }, [
+                                        m('i.fas.fa-calendar'),
+                                        ' 截止: ' + self.formatDate(milestone.due_date)
+                                    ]),
+                                    m('span.created', `创建于 ${milestone.created_at}`)
+                                ])
+                            ])
+                        ])
+                    ))
+            ]
+        ]);
+    }
+};
+
+const NewMilestone = {
+    oninit(vnode) {
+        vnode.state.form = {
+            title: '',
+            description: '',
+            due_date: ''
+        };
+        vnode.state.submitting = false;
+    },
+
+    submit(vnode) {
+        const { owner, repo } = vnode.attrs;
+        
+        if (!vnode.state.form.title) {
+            alert('请输入里程碑标题');
+            return;
+        }
+
+        vnode.state.submitting = true;
+        MilestoneService.create(owner, repo, vnode.state.form).then(result => {
+            m.route.set(`/${owner}/${repo}/milestones`);
+        }).catch(error => {
+            vnode.state.submitting = false;
+            alert('创建失败: ' + (error.message || '未知错误'));
+            m.redraw();
+        });
+    },
+
+    view(vnode) {
+        const { form, submitting } = vnode.state;
+        const { owner, repo } = vnode.attrs;
+
+        return m('div.new-milestone-page', [
+            m('div.page-header', [
+                m('h2', '新建里程碑'),
+                m('p', `为 ${owner}/${repo} 创建新里程碑`)
+            ]),
+
+            m('div.form-container', [
+                m('div.form-group', [
+                    m('label', '标题 *'),
+                    m('input.form-input', {
+                        type: 'text',
+                        value: form.title,
+                        oninput: e => { form.title = e.target.value; },
+                        placeholder: '例如: v1.0.0'
+                    })
+                ]),
+
+                m('div.form-group', [
+                    m('label', '描述'),
+                    m('textarea.form-input', {
+                        value: form.description,
+                        oninput: e => { form.description = e.target.value; },
+                        placeholder: '里程碑描述',
+                        rows: 4
+                    })
+                ]),
+
+                m('div.form-group', [
+                    m('label', '截止日期'),
+                    m('input.form-input', {
+                        type: 'date',
+                        value: form.due_date,
+                        oninput: e => { form.due_date = e.target.value; }
+                    })
+                ]),
+
+                m('div.form-actions', [
+                    m('button.btn.btn-primary', {
+                        onclick: () => NewMilestone.submit(vnode),
+                        disabled: submitting
+                    }, submitting ? '创建中...' : '创建里程碑'),
+                    m('button.btn', {
+                        onclick: () => m.route.set(`/${owner}/${repo}/milestones`)
+                    }, '取消')
+                ])
+            ])
+        ]);
+    }
+};
+
+
+const highlightCode = (code, language) => {
+    if (typeof hljs !== 'undefined' && language) {
+        try {
+            const langClass = language.toLowerCase().replace(/[^a-z0-9]/g, '');
+            if (hljs.getLanguage(langClass)) {
+                return hljs.highlight(code, { language: langClass }).value;
+            }
+        } catch (e) {
+            console.error('Highlight error:', e);
+        }
+    }
+    return code;
 };
 
 const SnippetsPage = {
-    view() {
+    oninit(vnode) {
+        vnode.state.snippets = [];
+        vnode.state.loading = true;
+        vnode.state.page = 1;
+        vnode.state.perPage = 30;
+        vnode.state.language = '';
+
+        SnippetService.list(1, 30).then(result => {
+            vnode.state.snippets = result.data || [];
+            vnode.state.loading = false;
+            m.redraw();
+        }).catch(() => {
+            vnode.state.loading = false;
+            m.redraw();
+        });
+    },
+
+    view(vnode) {
+        const { snippets, loading } = vnode.state;
+
         return m(Layout, [
             m('div.page-header', [
-                m('h1', '代码片段')
+                m('h1', [m('i.fas.fa-code'), ' 代码片段']),
+                m('div.page-actions', [
+                    Auth.isAuthenticated() ? m('button.btn.btn-primary', {
+                        onclick: () => m.route.set('/snippets/new')
+                    }, [m('i.fas.fa-plus'), ' 新建片段']) : null
+                ])
             ]),
-            m(EmptyState, { 
-                message: '暂无代码片段', 
-                icon: 'fa-code' 
-            })
+
+            loading ? m(Loading) : [
+                snippets.length === 0 
+                    ? m(EmptyState, { message: '暂无代码片段', icon: 'fa-code' })
+                    : m('div.snippets-list', snippets.map(snippet => 
+                        m('div.snippet-card', {
+                            onclick: () => m.route.set(`/snippets/${snippet.id}`)
+                        }, [
+                            m('div.snippet-header', [
+                                m('h3.snippet-title', snippet.title),
+                                snippet.language ? m('span.language-badge', snippet.language) : null
+                            ]),
+                            snippet.description ? m('p.snippet-description', snippet.description) : null,
+                            m('div.snippet-meta', [
+                                snippet.username ? m('span', [m('i.fas.fa-user'), ` ${snippet.username}`]) : null,
+                                m('span', [m('i.fas.fa-clock'), ` ${snippet.created_at}`])
+                            ])
+                        ])
+                    ))
+            ]
+        ]);
+    }
+};
+
+const SnippetDetail = {
+    oninit(vnode) {
+        const { id } = vnode.attrs;
+        vnode.state.snippet = null;
+        vnode.state.loading = true;
+
+        SnippetService.get(id).then(result => {
+            vnode.state.snippet = result;
+            vnode.state.loading = false;
+            m.redraw();
+        }).catch(() => {
+            vnode.state.loading = false;
+            m.redraw();
+        });
+    },
+
+    view(vnode) {
+        const { snippet, loading } = vnode.state;
+        const { id } = vnode.attrs;
+
+        if (loading) {
+            return m(Layout, m(Loading));
+        }
+
+        if (!snippet) {
+            return m(Layout, m(EmptyState, { message: '代码片段不存在', icon: 'fa-exclamation-triangle' }));
+        }
+
+        return m(Layout, [
+            m('div.snippet-detail-page', [
+                m('div.snippet-detail-header', [
+                    m('h1', snippet.title),
+                    m('div.snippet-actions', [
+                        Auth.isAuthenticated() && snippet.user_id && Auth.token ? 
+                            m('button.btn', {
+                                onclick: () => m.route.set(`/snippets/${id}/edit`)
+                            }, [m('i.fas.fa-edit'), ' 编辑']) : null,
+                        Auth.isAuthenticated() && snippet.user_id && Auth.token ?
+                            m('button.btn.btn-danger', {
+                                onclick: () => {
+                                    if (confirm('确定要删除这个代码片段吗？')) {
+                                        SnippetService.delete(id).then(() => {
+                                            m.route.set('/snippets');
+                                        }).catch(error => {
+                                            alert('删除失败: ' + (error.message || '未知错误'));
+                                        });
+                                    }
+                                }
+                            }, [m('i.fas.fa-trash'), ' 删除']) : null
+                    ])
+                ]),
+
+                snippet.description ? m('p.snippet-description', snippet.description) : null,
+
+                m('div.snippet-meta', [
+                    snippet.language ? m('span', [m('i.fas.fa-code'), ` ${snippet.language}`]) : null,
+                    snippet.username ? m('span', [m('i.fas.fa-user'), ` ${snippet.username}`]) : null,
+                    m('span', [m('i.fas.fa-clock'), ` 创建于 ${snippet.created_at}`])
+                ]),
+
+                m('div.snippet-code', [
+                    m('div.code-header', [
+                        m('span', snippet.language || '代码'),
+                        m('button.btn.btn-sm', {
+                            onclick: () => {
+                                navigator.clipboard.writeText(snippet.code);
+                                alert('已复制到剪贴板');
+                            }
+                        }, [m('i.fas.fa-copy'), ' 复制'])
+                    ]),
+                    m('pre', [
+                        m('code', { 
+                            class: snippet.language ? `language-${snippet.language.toLowerCase().replace(/[^a-z0-9]/g, '')} hljs` : 'hljs',
+                            oncreate: (vnode) => {
+                                if (snippet.language && typeof hljs !== 'undefined') {
+                                    const langClass = snippet.language.toLowerCase().replace(/[^a-z0-9]/g, '');
+                                    if (hljs.getLanguage(langClass)) {
+                                        vnode.dom.innerHTML = hljs.highlight(snippet.code, { language: langClass }).value;
+                                    }
+                                }
+                            }
+                        }, snippet.code)
+                    ])
+                ])
+            ])
+        ]);
+    }
+};
+
+const NewSnippet = {
+    oninit(vnode) {
+        vnode.state.form = {
+            title: '',
+            description: '',
+            language: '',
+            code: '',
+            visibility: 'public'
+        };
+        vnode.state.submitting = false;
+    },
+
+    submit(vnode) {
+        if (!vnode.state.form.title) {
+            alert('请输入标题');
+            return;
+        }
+
+        if (!vnode.state.form.code) {
+            alert('请输入代码');
+            return;
+        }
+
+        vnode.state.submitting = true;
+        SnippetService.create(vnode.state.form).then(result => {
+            m.route.set(`/snippets/${result.id}`);
+        }).catch(error => {
+            vnode.state.submitting = false;
+            alert('创建失败: ' + (error.message || '未知错误'));
+            m.redraw();
+        });
+    },
+
+    view(vnode) {
+        const { form, submitting } = vnode.state;
+
+        return m(Layout, [
+            m('div.new-snippet-page', [
+                m('div.page-header', [
+                    m('h2', '新建代码片段')
+                ]),
+
+                m('div.form-container', [
+                    m('div.form-group', [
+                        m('label', '标题 *'),
+                        m('input.form-input', {
+                            type: 'text',
+                            value: form.title,
+                            oninput: e => { form.title = e.target.value; },
+                            placeholder: '代码片段标题'
+                        })
+                    ]),
+
+                    m('div.form-group', [
+                        m('label', '描述'),
+                        m('textarea.form-input', {
+                            value: form.description,
+                            oninput: e => { form.description = e.target.value; },
+                            placeholder: '描述这个代码片段的用途',
+                            rows: 3
+                        })
+                    ]),
+
+                    m('div.form-group', [
+                        m('label', '编程语言'),
+                        m('input.form-input', {
+                            type: 'text',
+                            value: form.language,
+                            oninput: e => { form.language = e.target.value; },
+                            placeholder: '例如: JavaScript, Python, Go'
+                        })
+                    ]),
+
+                    m('div.form-group', [
+                        m('label', '代码 *'),
+                        m('textarea.form-input.code-input', {
+                            value: form.code,
+                            oninput: e => { form.code = e.target.value; },
+                            placeholder: '粘贴你的代码...',
+                            rows: 10
+                        })
+                    ]),
+
+                    m('div.form-group', [
+                        m('label', '可见性'),
+                        m('select.form-input', {
+                            value: form.visibility,
+                            onchange: e => { form.visibility = e.target.value; }
+                        }, [
+                            m('option', { value: 'public' }, '公开'),
+                            m('option', { value: 'private' }, '私有')
+                        ])
+                    ]),
+
+                    m('div.form-actions', [
+                        m('button.btn.btn-primary', {
+                            onclick: () => NewSnippet.submit(vnode),
+                            disabled: submitting
+                        }, submitting ? '创建中...' : '创建片段'),
+                        m('button.btn', {
+                            onclick: () => m.route.set('/snippets')
+                        }, '取消')
+                    ])
+                ])
+            ])
+        ]);
+    }
+};
+
+const EditSnippet = {
+    oninit(vnode) {
+        const { id } = vnode.attrs;
+        vnode.state.snippet = null;
+        vnode.state.form = {
+            title: '',
+            description: '',
+            language: '',
+            code: '',
+            visibility: 'public'
+        };
+        vnode.state.loading = true;
+        vnode.state.submitting = false;
+
+        SnippetService.get(id).then(result => {
+            vnode.state.snippet = result;
+            vnode.state.form = {
+                title: result.title,
+                description: result.description || '',
+                language: result.language || '',
+                code: result.code,
+                visibility: result.visibility || 'public'
+            };
+            vnode.state.loading = false;
+            m.redraw();
+        }).catch(() => {
+            vnode.state.loading = false;
+            m.redraw();
+        });
+    },
+
+    submit(vnode) {
+        const { id } = vnode.attrs;
+        
+        if (!vnode.state.form.title) {
+            alert('请输入标题');
+            return;
+        }
+
+        if (!vnode.state.form.code) {
+            alert('请输入代码');
+            return;
+        }
+
+        vnode.state.submitting = true;
+        SnippetService.update(id, vnode.state.form).then(result => {
+            m.route.set(`/snippets/${id}`);
+        }).catch(error => {
+            vnode.state.submitting = false;
+            alert('更新失败: ' + (error.message || '未知错误'));
+            m.redraw();
+        });
+    },
+
+    view(vnode) {
+        const { form, loading, submitting } = vnode.state;
+        const { id } = vnode.attrs;
+
+        if (loading) {
+            return m(Layout, m(Loading));
+        }
+
+        return m(Layout, [
+            m('div.new-snippet-page', [
+                m('div.page-header', [
+                    m('h2', '编辑代码片段')
+                ]),
+
+                m('div.form-container', [
+                    m('div.form-group', [
+                        m('label', '标题 *'),
+                        m('input.form-input', {
+                            type: 'text',
+                            value: form.title,
+                            oninput: e => { form.title = e.target.value; },
+                            placeholder: '代码片段标题'
+                        })
+                    ]),
+
+                    m('div.form-group', [
+                        m('label', '描述'),
+                        m('textarea.form-input', {
+                            value: form.description,
+                            oninput: e => { form.description = e.target.value; },
+                            placeholder: '描述这个代码片段的用途',
+                            rows: 3
+                        })
+                    ]),
+
+                    m('div.form-group', [
+                        m('label', '编程语言'),
+                        m('input.form-input', {
+                            type: 'text',
+                            value: form.language,
+                            oninput: e => { form.language = e.target.value; },
+                            placeholder: '例如: JavaScript, Python, Go'
+                        })
+                    ]),
+
+                    m('div.form-group', [
+                        m('label', '代码 *'),
+                        m('textarea.form-input.code-input', {
+                            value: form.code,
+                            oninput: e => { form.code = e.target.value; },
+                            placeholder: '粘贴你的代码...',
+                            rows: 10
+                        })
+                    ]),
+
+                    m('div.form-group', [
+                        m('label', '可见性'),
+                        m('select.form-input', {
+                            value: form.visibility,
+                            onchange: e => { form.visibility = e.target.value; }
+                        }, [
+                            m('option', { value: 'public' }, '公开'),
+                            m('option', { value: 'private' }, '私有')
+                        ])
+                    ]),
+
+                    m('div.form-actions', [
+                        m('button.btn.btn-primary', {
+                            onclick: () => EditSnippet.submit(vnode),
+                            disabled: submitting
+                        }, submitting ? '保存中...' : '保存'),
+                        m('button.btn', {
+                            onclick: () => m.route.set(`/snippets/${id}`)
+                        }, '取消')
+                    ])
+                ])
+            ])
         ]);
     }
 };
@@ -2285,22 +3969,38 @@ const SnippetsPage = {
 
 Auth.init();
 
-// 使用 HTML5 History API，不使用 hash 路由
+const requireAuth = function(vnode) {
+    if (!Auth.isAuthenticated()) {
+        m.route.set('/login');
+        return false;
+    }
+    return true;
+};
+
 m.route.prefix = '';
 
 const routes = {
     '/': Dashboard,
+    '/login': LoginPage,
     '/projects': ProjectList,
+    '/projects/new': CreateProjectPage,
+    '/projects/migrate': MigrateProjectPage,
     '/project/:owner/:repo': ProjectDetail,
     '/issues/:owner/:repo': IssueList,
     '/merge-requests/:owner/:repo': MergeRequestList,
     '/releases/:owner/:repo': ReleasesPage,
     '/stats/:owner/:repo': StatsPage,
     '/settings/:owner/:repo': SettingsPage,
-    '/groups': GroupsPage,
-    '/activity': ActivityPage,
-    '/milestones': MilestonesPage,
-    '/snippets': SnippetsPage
+    '/groups': Groups,
+    '/groups/new': NewGroup,
+    '/groups/:name': GroupDetail,
+    '/activity': Activities,
+    '/milestones/:owner/:repo': Milestones,
+    '/milestones/:owner/:repo/new': NewMilestone,
+    '/snippets': SnippetsPage,
+    '/snippets/new': NewSnippet,
+    '/snippets/:id': SnippetDetail,
+    '/snippets/:id/edit': EditSnippet
 };
 
 m.route(document.getElementById('app'), '/', routes);

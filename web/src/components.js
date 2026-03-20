@@ -90,14 +90,6 @@ const Sidebar = {
                         m('span', '活动')
                     ]),
                     m('a.nav-item', { 
-                        href: '/milestones', 
-                        oncreate: m.route.link,
-                        class: currentRoute === '/milestones' ? 'active' : ''
-                    }, [
-                        m('i.fas.fa-flag'),
-                        m('span', '里程碑')
-                    ]),
-                    m('a.nav-item', { 
                         href: '/snippets', 
                         oncreate: m.route.link,
                         class: currentRoute === '/snippets' ? 'active' : ''
@@ -113,20 +105,27 @@ const Sidebar = {
 
 const ProjectHeader = {
     view(vnode) {
-        const { owner, repo: repoObj, description, stars, forks, visibility } = vnode.attrs;
+        const { owner, repo: repoObj, description, stars, forks, visibility, projectType } = vnode.attrs;
         
         const repo = typeof repoObj === 'string' ? repoObj : (repoObj?.name || '加载中...');
         const repoDesc = description || (repoObj?.description || '');
         const repoStars = stars !== undefined ? stars : (repoObj?.stars_count || 0);
         const repoForks = forks !== undefined ? forks : (repoObj?.forks_count || 0);
         const repoVisibility = visibility || (repoObj?.is_private ? 'private' : 'public');
+        const repoType = projectType || (repoObj?.project_type || 'owned');
         
         return m('div.project-header', [
             m('div.project-header-top', [
                 m('div.project-title-section', [
                     m('h1', repo),
-                    m('span.project-visibility', { class: repoVisibility === 'private' ? 'private' : '' }, 
-                        repoVisibility === 'private' ? '私有' : '公开')
+                    m('div.project-badges', [
+                        repoType === 'mirror' ? m('span.project-type-badge.mirror', [
+                            m('i.fas.fa-clone'),
+                            ' 镜像'
+                        ]) : null,
+                        m('span.project-visibility', { class: repoVisibility === 'private' ? 'private' : '' }, 
+                            repoVisibility === 'private' ? '私有' : '公开')
+                    ])
                 ]),
                 m('div.project-actions-bar', [
                     m('button.btn.btn-sm', [
@@ -164,6 +163,7 @@ const ProjectTabs = {
             { id: 'code', icon: 'fa-code', label: '代码', href: `/project/${owner}/${repo}` },
             { id: 'issues', icon: 'fa-exclamation-circle', label: 'Issue', href: `/issues/${owner}/${repo}`, count: issuesCount },
             { id: 'mrs', icon: 'fa-code-branch', label: '合并请求', href: `/merge-requests/${owner}/${repo}`, count: mrsCount },
+            { id: 'milestones', icon: 'fa-flag', label: '里程碑', href: `/milestones/${owner}/${repo}` },
             { id: 'releases', icon: 'fa-cube', label: '发布', href: `/releases/${owner}/${repo}` },
             { id: 'stats', icon: 'fa-chart-line', label: '统计', href: `/stats/${owner}/${repo}` },
             { id: 'settings', icon: 'fa-cog', label: '设置', href: `/settings/${owner}/${repo}` }
@@ -263,7 +263,13 @@ const ProjectCard = {
                     href: `/project/${project.owner}/${project.name}`,
                     oncreate: m.route.link
                 }, project.name)),
-                m('span.project-visibility', project.is_private ? '私有' : '公开')
+                m('div.project-badges', [
+                    project.project_type === 'mirror' ? m('span.project-type-badge.mirror', [
+                        m('i.fas.fa-clone'),
+                        ' 镜像'
+                    ]) : null,
+                    m('span.project-visibility', project.is_private ? '私有' : '公开')
+                ])
             ]),
             m('p.project-card-description', project.description || '暂无描述'),
             m('div.project-card-meta', [

@@ -53,9 +53,32 @@ func SetupRouter() *fiber.App {
 	app.Get("/api/v1/repos", middleware.OptionalAuth(), controllers.ListRepositories)
 	app.Post("/api/v1/repos", middleware.AuthMiddleware(), controllers.CreateRepository)
 
+	app.Get("/api/v1/groups", controllers.ListGroups)
+	app.Post("/api/v1/groups", middleware.AuthMiddleware(), controllers.CreateGroup)
+	app.Get("/api/v1/groups/:name", controllers.GetGroup)
+
+	app.Get("/api/v1/activities", controllers.ListActivities)
+	app.Post("/api/v1/activities", middleware.AuthMiddleware(), controllers.CreateActivity)
+
+	app.Get("/api/v1/snippets", controllers.ListSnippets)
+	app.Post("/api/v1/snippets", middleware.AuthMiddleware(), controllers.CreateSnippet)
+	app.Get("/api/v1/snippets/:id", controllers.GetSnippet)
+	app.Put("/api/v1/snippets/:id", middleware.AuthMiddleware(), controllers.UpdateSnippet)
+	app.Delete("/api/v1/snippets/:id", middleware.AuthMiddleware(), controllers.DeleteSnippet)
+
+	app.Get("/api/v1/:owner/:repo/milestones", controllers.ListMilestones)
+	app.Post("/api/v1/:owner/:repo/milestones", middleware.AuthMiddleware(), controllers.CreateMilestone)
+
 	app.Get("/api/v1/:owner/:repo", middleware.OptionalAuth(), controllers.GetRepository)
 	app.Put("/api/v1/:owner/:repo", middleware.AuthMiddleware(), controllers.UpdateRepository)
 	app.Delete("/api/v1/:owner/:repo", middleware.AuthMiddleware(), controllers.DeleteRepository)
+
+	app.Post("/api/v1/:owner/:repo/sync/pull", middleware.AuthMiddleware(), controllers.SyncPullRepository)
+	app.Post("/api/v1/:owner/:repo/sync/push", middleware.AuthMiddleware(), controllers.SyncPushRepository)
+
+	app.Get("/api/v1/:owner/:repo/tree", middleware.OptionalAuth(), controllers.GetRepositoryTree)
+	app.Get("/api/v1/:owner/:repo/file", middleware.OptionalAuth(), controllers.GetRepositoryFile)
+	app.Get("/api/v1/:owner/:repo/branches", middleware.OptionalAuth(), controllers.GetRepositoryBranches)
 
 	app.Post("/api/v1/:owner/:repo/star", middleware.AuthMiddleware(), controllers.StarRepository)
 	app.Delete("/api/v1/:owner/:repo/star", middleware.AuthMiddleware(), controllers.UnstarRepository)
