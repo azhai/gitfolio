@@ -7,6 +7,9 @@ cd "$SCRIPT_DIR/web"
 
 echo "// GitFolio Frontend Build - $(date)" > app-spa.js
 
+echo "Adding shared constants and utilities..."
+sed '/^import /d; /^export /d' src/shared.js >> app-spa.js
+
 echo "Adding API and Auth..."
 sed '/^import /d; /^export /d' src/api.js | sed 's/return request(/return m.request(/g' >> app-spa.js
 

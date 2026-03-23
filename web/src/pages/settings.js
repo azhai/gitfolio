@@ -1,11 +1,13 @@
 import { Layout, Loading, ProjectHeader, ProjectTabs, EmptyState } from '../components.js';
-import { RepositoryService } from '../api.js';
+import { RepositoryService, IssueService, MergeRequestService } from '../api.js';
 
 const SettingsPage = {
     oninit(vnode) {
         const { owner, repo } = vnode.attrs;
 
         vnode.state.repo = null;
+        vnode.state.issuesCount = 0;
+        vnode.state.mrsCount = 0;
         vnode.state.loading = true;
         vnode.state.activeSection = 'general';
         vnode.state.formData = {
@@ -17,8 +19,14 @@ const SettingsPage = {
         vnode.state.saving = false;
         vnode.state.deleting = false;
 
-        RepositoryService.get(owner, repo).then(result => {
-            vnode.state.repo = result.data || result;
+        Promise.all([
+            RepositoryService.get(owner, repo),
+            IssueService.list(owner, repo),
+            MergeRequestService.list(owner, repo)
+        ]).then(([repoResult, issuesResult, mrsResult]) => {
+            vnode.state.repo = repoResult.data || repoResult;
+            vnode.state.issuesCount = (issuesResult.data || issuesResult || []).filter(i => !i.is_closed).length;
+            vnode.state.mrsCount = (mrsResult.data || mrsResult || []).filter(m => !m.is_closed && !m.is_merged).length;
             vnode.state.formData = {
                 name: vnode.state.repo.name,
                 description: vnode.state.repo.description || '',
@@ -94,7 +102,13 @@ const SettingsPage = {
         
         return m(Layout, [
             m(ProjectHeader, { repo, owner }),
-            m(ProjectTabs, { owner, repo: repo.name, activeTab: 'settings' }),
+            m(ProjectTabs, { 
+                owner, 
+                repo: repo.name, 
+                issuesCount: vnode.state.issuesCount,
+                mrsCount: vnode.state.mrsCount,
+                activeTab: 'settings' 
+            }),
             
             m('div.settings-page', [
                 m('div.settings-container', [
@@ -263,8 +277,8 @@ const MembersSettings = {
         const { repo } = vnode.attrs;
         
         const members = [
-            { name: 'Ryan', email: 'ryan@example.com', role: 'owner', avatar: 'https://via.placeholder.com/40' },
-            { name: 'Alice', email: 'alice@example.com', role: 'developer', avatar: 'https://via.placeholder.com/40' }
+            { name: 'Ryan', email: 'ryan@example.com', role: 'owner', avatar: '/images/avatar-40.svg' },
+            { name: 'Alice', email: 'alice@example.com', role: 'developer', avatar: '/images/avatar-40.svg' }
         ];
         
         return m('div.settings-section', [

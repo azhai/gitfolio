@@ -1,0 +1,62 @@
+package helpers
+
+import (
+	"github.com/azhai/gitfolio/middleware"
+	"github.com/gofiber/fiber/v3"
+)
+
+func CheckOwnerPermission(c fiber.Ctx, ownerID uint) bool {
+	userID := middleware.GetCurrentUserID(c)
+	return userID != 0 && userID == ownerID
+}
+
+func RequireOwner(c fiber.Ctx, ownerID uint) error {
+	if !CheckOwnerPermission(c, ownerID) {
+		return JSONError(c, HTTPStatusForbidden, "Access denied")
+	}
+	return nil
+}
+
+func CheckUserPermission(c fiber.Ctx, userID *uint) bool {
+	if userID == nil {
+		return false
+	}
+	currentUserID := middleware.GetCurrentUserID(c)
+	return currentUserID != 0 && currentUserID == *userID
+}
+
+func RequireUser(c fiber.Ctx, userID *uint) error {
+	if !CheckUserPermission(c, userID) {
+		return JSONError(c, HTTPStatusForbidden, "Access denied")
+	}
+	return nil
+}
+
+func CheckPrivateAccess(c fiber.Ctx, isPrivate bool, ownerID uint) bool {
+	if !isPrivate {
+		return true
+	}
+	return CheckOwnerPermission(c, ownerID)
+}
+
+func RequirePrivateAccess(c fiber.Ctx, isPrivate bool, ownerID uint) error {
+	if !CheckPrivateAccess(c, isPrivate, ownerID) {
+		return JSONError(c, HTTPStatusForbidden, "Access denied")
+	}
+	return nil
+}
+
+func GetCurrentUserID(c fiber.Ctx) uint {
+	return middleware.GetCurrentUserID(c)
+}
+
+func IsAuthenticated(c fiber.Ctx) bool {
+	return middleware.GetCurrentUserID(c) != 0
+}
+
+func RequireAuth(c fiber.Ctx) error {
+	if !IsAuthenticated(c) {
+		return JSONError(c, HTTPStatusUnauthorized, "Authentication required")
+	}
+	return nil
+}

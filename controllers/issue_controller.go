@@ -4,6 +4,7 @@ import (
 	"strconv"
 
 	"github.com/azhai/gitfolio/database"
+	"github.com/azhai/gitfolio/helpers"
 	"github.com/azhai/gitfolio/middleware"
 	"github.com/azhai/gitfolio/models"
 	"github.com/gofiber/fiber/v3"
@@ -68,8 +69,6 @@ func ToIssueResponse(issue *models.Issue, author *models.User, assignee *models.
 }
 
 func CreateIssue(c fiber.Ctx) error {
-	owner := c.Params("owner")
-	repoName := c.Params("repo")
 	userID := middleware.GetCurrentUserID(c)
 
 	var req CreateIssueRequest
@@ -77,17 +76,12 @@ func CreateIssue(c fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
+	result, err := helpers.GetOwnerAndRepoFromParams(c)
+	if err != nil {
+		return err
+	}
+
 	db := database.GetDB()
-
-	ownerUser, err := db.User.Select().Where("username = ?", owner).One()
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Owner not found"})
-	}
-
-	repo, err := db.Repository.Select().Where("owner_id = ? AND name = ?", ownerUser.ID, repoName).One()
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Repository not found"})
-	}
 
 	authorUser, err := db.User.Select().Where("id = ?", userID).One()
 	if err != nil {
@@ -98,7 +92,7 @@ func CreateIssue(c fiber.Ctx) error {
 	issueModel := &models.Issue{
 		Title:        req.Title,
 		Body:         req.Body,
-		RepositoryID: repo.ID,
+		RepositoryID: result.Repo.ID,
 		AuthorID:     userID,
 	}
 
@@ -118,23 +112,16 @@ func CreateIssue(c fiber.Ctx) error {
 }
 
 func GetIssue(c fiber.Ctx) error {
-	owner := c.Params("owner")
-	repoName := c.Params("repo")
 	issueNumber, _ := strconv.Atoi(c.Params("number"))
+
+	result, err := helpers.GetOwnerAndRepoFromParams(c)
+	if err != nil {
+		return err
+	}
 
 	db := database.GetDB()
 
-	ownerUser, err := db.User.Select().Where("username = ?", owner).One()
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Owner not found"})
-	}
-
-	repo, err := db.Repository.Select().Where("owner_id = ? AND name = ?", ownerUser.ID, repoName).One()
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Repository not found"})
-	}
-
-	issueModel, err := db.Issue.Select().Where("repository_id = ? AND id = ?", repo.ID, uint(issueNumber)).One()
+	issueModel, err := db.Issue.Select().Where("repository_id = ? AND id = ?", result.Repo.ID, uint(issueNumber)).One()
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Issue not found"})
 	}
@@ -153,25 +140,18 @@ func GetIssue(c fiber.Ctx) error {
 }
 
 func ListIssues(c fiber.Ctx) error {
-	owner := c.Params("owner")
-	repoName := c.Params("repo")
 	page, _ := strconv.Atoi(c.Query("page", "1"))
 	perPage, _ := strconv.Atoi(c.Query("per_page", "30"))
 	state := c.Query("state", "open")
 
+	result, err := helpers.GetOwnerAndRepoFromParams(c)
+	if err != nil {
+		return err
+	}
+
 	db := database.GetDB()
 
-	ownerUser, err := db.User.Select().Where("username = ?", owner).One()
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Owner not found"})
-	}
-
-	repo, err := db.Repository.Select().Where("owner_id = ? AND name = ?", ownerUser.ID, repoName).One()
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Repository not found"})
-	}
-
-	query := db.Issue.Select().Where("repository_id = ?", repo.ID)
+	query := db.Issue.Select().Where("repository_id = ?", result.Repo.ID)
 
 	if state == "open" {
 		query = query.Where("is_closed = ?", false)
@@ -184,16 +164,34 @@ func ListIssues(c fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch issues"})
 	}
 
+	userIDs := make(map[uint]bool)
+	for _, issue := range issues {
+		if issue.AuthorID != 0 {
+			userIDs[issue.AuthorID] = true
+		}
+		if issue.AssigneeID != nil && *issue.AssigneeID != 0 {
+			userIDs[*issue.AssigneeID] = true
+		}
+	}
+
+	usersMap := make(map[uint]*models.User)
+	for userID := range userIDs {
+		user, err := db.User.Select().Where("id = ?", userID).One()
+		if err == nil {
+			usersMap[userID] = user
+		}
+	}
+
 	var response []*IssueResponse
 	for _, issue := range issues {
-		authorUser, err := db.User.Select().Where("id = ?", issue.AuthorID).One()
-		if err != nil {
+		authorUser := usersMap[issue.AuthorID]
+		if authorUser == nil {
 			continue
 		}
 
 		var assigneeUser *models.User
 		if issue.AssigneeID != nil {
-			assigneeUser, _ = db.User.Select().Where("id = ?", *issue.AssigneeID).One()
+			assigneeUser = usersMap[*issue.AssigneeID]
 		}
 
 		response = append(response, ToIssueResponse(issue, authorUser, assigneeUser))
@@ -207,8 +205,6 @@ func ListIssues(c fiber.Ctx) error {
 }
 
 func UpdateIssue(c fiber.Ctx) error {
-	owner := c.Params("owner")
-	repoName := c.Params("repo")
 	issueNumber, _ := strconv.Atoi(c.Params("number"))
 	userID := middleware.GetCurrentUserID(c)
 
@@ -217,19 +213,14 @@ func UpdateIssue(c fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
+	result, err := helpers.GetOwnerAndRepoFromParams(c)
+	if err != nil {
+		return err
+	}
+
 	db := database.GetDB()
 
-	ownerUser, err := db.User.Select().Where("username = ?", owner).One()
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Owner not found"})
-	}
-
-	repo, err := db.Repository.Select().Where("owner_id = ? AND name = ?", ownerUser.ID, repoName).One()
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Repository not found"})
-	}
-
-	issueModel, err := db.Issue.Select().Where("repository_id = ? AND id = ?", repo.ID, uint(issueNumber)).One()
+	issueModel, err := db.Issue.Select().Where("repository_id = ? AND id = ?", result.Repo.ID, uint(issueNumber)).One()
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Issue not found"})
 	}
@@ -263,8 +254,6 @@ func UpdateIssue(c fiber.Ctx) error {
 }
 
 func CreateComment(c fiber.Ctx) error {
-	owner := c.Params("owner")
-	repoName := c.Params("repo")
 	issueNumber, _ := strconv.Atoi(c.Params("number"))
 	userID := middleware.GetCurrentUserID(c)
 
@@ -273,19 +262,14 @@ func CreateComment(c fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
+	result, err := helpers.GetOwnerAndRepoFromParams(c)
+	if err != nil {
+		return err
+	}
+
 	db := database.GetDB()
 
-	ownerUser, err := db.User.Select().Where("username = ?", owner).One()
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Owner not found"})
-	}
-
-	repo, err := db.Repository.Select().Where("owner_id = ? AND name = ?", ownerUser.ID, repoName).One()
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Repository not found"})
-	}
-
-	issueModel, err := db.Issue.Select().Where("repository_id = ? AND id = ?", repo.ID, uint(issueNumber)).One()
+	issueModel, err := db.Issue.Select().Where("repository_id = ? AND id = ?", result.Repo.ID, uint(issueNumber)).One()
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Issue not found"})
 	}
@@ -306,23 +290,16 @@ func CreateComment(c fiber.Ctx) error {
 }
 
 func GetComments(c fiber.Ctx) error {
-	owner := c.Params("owner")
-	repoName := c.Params("repo")
 	issueNumber, _ := strconv.Atoi(c.Params("number"))
+
+	result, err := helpers.GetOwnerAndRepoFromParams(c)
+	if err != nil {
+		return err
+	}
 
 	db := database.GetDB()
 
-	ownerUser, err := db.User.Select().Where("username = ?", owner).One()
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Owner not found"})
-	}
-
-	repo, err := db.Repository.Select().Where("owner_id = ? AND name = ?", ownerUser.ID, repoName).One()
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Repository not found"})
-	}
-
-	issueModel, err := db.Issue.Select().Where("repository_id = ? AND id = ?", repo.ID, uint(issueNumber)).One()
+	issueModel, err := db.Issue.Select().Where("repository_id = ? AND id = ?", result.Repo.ID, uint(issueNumber)).One()
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Issue not found"})
 	}

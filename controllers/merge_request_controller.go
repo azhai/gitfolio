@@ -4,6 +4,7 @@ import (
 	"strconv"
 
 	"github.com/azhai/gitfolio/database"
+	"github.com/azhai/gitfolio/helpers"
 	"github.com/azhai/gitfolio/middleware"
 	"github.com/azhai/gitfolio/models"
 	"github.com/gofiber/fiber/v3"
@@ -27,8 +28,6 @@ type UpdateMergeRequestRequest struct {
 }
 
 func CreateMergeRequest(c fiber.Ctx) error {
-	owner := c.Params("owner")
-	repoName := c.Params("repo")
 	userID := middleware.GetCurrentUserID(c)
 
 	var req CreateMergeRequestRequest
@@ -36,27 +35,22 @@ func CreateMergeRequest(c fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
+	result, err := helpers.GetOwnerAndRepoFromParams(c)
+	if err != nil {
+		return err
+	}
+
 	db := database.GetDB()
-
-	ownerUser, err := db.User.Select().Where("username = ?", owner).One()
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Owner not found"})
-	}
-
-	repo, err := db.Repository.Select().Where("owner_id = ? AND name = ?", ownerUser.ID, repoName).One()
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Repository not found"})
-	}
 
 	targetBranch := req.TargetBranch
 	if targetBranch == "" {
-		targetBranch = repo.DefaultBranch
+		targetBranch = result.Repo.DefaultBranch
 	}
 
 	mr := &models.MergeRequest{
 		Title:        req.Title,
 		Body:         req.Body,
-		RepositoryID: repo.ID,
+		RepositoryID: result.Repo.ID,
 		AuthorID:     userID,
 		SourceBranch: req.SourceBranch,
 		TargetBranch: targetBranch,
@@ -79,23 +73,16 @@ func CreateMergeRequest(c fiber.Ctx) error {
 }
 
 func GetMergeRequest(c fiber.Ctx) error {
-	owner := c.Params("owner")
-	repoName := c.Params("repo")
 	mrNumber, _ := strconv.Atoi(c.Params("number"))
+
+	result, err := helpers.GetOwnerAndRepoFromParams(c)
+	if err != nil {
+		return err
+	}
 
 	db := database.GetDB()
 
-	ownerUser, err := db.User.Select().Where("username = ?", owner).One()
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Owner not found"})
-	}
-
-	repo, err := db.Repository.Select().Where("owner_id = ? AND name = ?", ownerUser.ID, repoName).One()
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Repository not found"})
-	}
-
-	mr, err := db.MergeRequest.Select().Where("repository_id = ? AND number = ?", repo.ID, mrNumber).One()
+	mr, err := db.MergeRequest.Select().Where("repository_id = ? AND number = ?", result.Repo.ID, mrNumber).One()
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Merge request not found"})
 	}
@@ -104,29 +91,22 @@ func GetMergeRequest(c fiber.Ctx) error {
 }
 
 func ListMergeRequests(c fiber.Ctx) error {
-	owner := c.Params("owner")
-	repoName := c.Params("repo")
 	page, _ := strconv.Atoi(c.Query("page", "1"))
 	perPage, _ := strconv.Atoi(c.Query("per_page", "30"))
 	state := c.Query("state", "open")
 
+	result, err := helpers.GetOwnerAndRepoFromParams(c)
+	if err != nil {
+		return err
+	}
+
 	db := database.GetDB()
-
-	ownerUser, err := db.User.Select().Where("username = ?", owner).One()
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Owner not found"})
-	}
-
-	repo, err := db.Repository.Select().Where("owner_id = ? AND name = ?", ownerUser.ID, repoName).One()
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Repository not found"})
-	}
 
 	query := db.MergeRequest.Select(
 		"id", "created_at", "updated_at", "title", "body", "number",
 		"repository_id", "author_id", "source_branch", "target_branch",
 		"assignee_id", "status", "is_merged", "is_closed", "is_locked",
-	).Where("repository_id = ?", repo.ID)
+	).Where("repository_id = ?", result.Repo.ID)
 
 	switch state {
 	case "open":
@@ -150,8 +130,6 @@ func ListMergeRequests(c fiber.Ctx) error {
 }
 
 func UpdateMergeRequest(c fiber.Ctx) error {
-	owner := c.Params("owner")
-	repoName := c.Params("repo")
 	mrNumber, _ := strconv.Atoi(c.Params("number"))
 	userID := middleware.GetCurrentUserID(c)
 
@@ -160,24 +138,19 @@ func UpdateMergeRequest(c fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
+	result, err := helpers.GetOwnerAndRepoFromParams(c)
+	if err != nil {
+		return err
+	}
+
 	db := database.GetDB()
 
-	ownerUser, err := db.User.Select().Where("username = ?", owner).One()
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Owner not found"})
-	}
-
-	repo, err := db.Repository.Select().Where("owner_id = ? AND name = ?", ownerUser.ID, repoName).One()
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Repository not found"})
-	}
-
-	mr, err := db.MergeRequest.Select().Where("repository_id = ? AND number = ?", repo.ID, mrNumber).One()
+	mr, err := db.MergeRequest.Select().Where("repository_id = ? AND number = ?", result.Repo.ID, mrNumber).One()
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Merge request not found"})
 	}
 
-	if mr.AuthorID != userID && repo.OwnerID != userID {
+	if mr.AuthorID != userID && result.Repo.OwnerID != userID {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Access denied"})
 	}
 
@@ -215,29 +188,22 @@ func UpdateMergeRequest(c fiber.Ctx) error {
 }
 
 func MergeMergeRequest(c fiber.Ctx) error {
-	owner := c.Params("owner")
-	repoName := c.Params("repo")
 	mrNumber, _ := strconv.Atoi(c.Params("number"))
 	userID := middleware.GetCurrentUserID(c)
 
+	result, err := helpers.GetOwnerAndRepoFromParams(c)
+	if err != nil {
+		return err
+	}
+
 	db := database.GetDB()
 
-	ownerUser, err := db.User.Select().Where("username = ?", owner).One()
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Owner not found"})
-	}
-
-	repo, err := db.Repository.Select().Where("owner_id = ? AND name = ?", ownerUser.ID, repoName).One()
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Repository not found"})
-	}
-
-	mr, err := db.MergeRequest.Select().Where("repository_id = ? AND number = ?", repo.ID, mrNumber).One()
+	mr, err := db.MergeRequest.Select().Where("repository_id = ? AND number = ?", result.Repo.ID, mrNumber).One()
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Merge request not found"})
 	}
 
-	if repo.OwnerID != userID {
+	if result.Repo.OwnerID != userID {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Only repository owner can merge"})
 	}
 
@@ -261,29 +227,22 @@ func MergeMergeRequest(c fiber.Ctx) error {
 }
 
 func CloseMergeRequest(c fiber.Ctx) error {
-	owner := c.Params("owner")
-	repoName := c.Params("repo")
 	mrNumber, _ := strconv.Atoi(c.Params("number"))
 	userID := middleware.GetCurrentUserID(c)
 
+	result, err := helpers.GetOwnerAndRepoFromParams(c)
+	if err != nil {
+		return err
+	}
+
 	db := database.GetDB()
 
-	ownerUser, err := db.User.Select().Where("username = ?", owner).One()
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Owner not found"})
-	}
-
-	repo, err := db.Repository.Select().Where("owner_id = ? AND name = ?", ownerUser.ID, repoName).One()
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Repository not found"})
-	}
-
-	mr, err := db.MergeRequest.Select().Where("repository_id = ? AND number = ?", repo.ID, mrNumber).One()
+	mr, err := db.MergeRequest.Select().Where("repository_id = ? AND number = ?", result.Repo.ID, mrNumber).One()
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Merge request not found"})
 	}
 
-	if mr.AuthorID != userID && repo.OwnerID != userID {
+	if mr.AuthorID != userID && result.Repo.OwnerID != userID {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Access denied"})
 	}
 
@@ -306,29 +265,22 @@ func CloseMergeRequest(c fiber.Ctx) error {
 }
 
 func ReopenMergeRequest(c fiber.Ctx) error {
-	owner := c.Params("owner")
-	repoName := c.Params("repo")
 	mrNumber, _ := strconv.Atoi(c.Params("number"))
 	userID := middleware.GetCurrentUserID(c)
 
+	result, err := helpers.GetOwnerAndRepoFromParams(c)
+	if err != nil {
+		return err
+	}
+
 	db := database.GetDB()
 
-	ownerUser, err := db.User.Select().Where("username = ?", owner).One()
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Owner not found"})
-	}
-
-	repo, err := db.Repository.Select().Where("owner_id = ? AND name = ?", ownerUser.ID, repoName).One()
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Repository not found"})
-	}
-
-	mr, err := db.MergeRequest.Select().Where("repository_id = ? AND number = ?", repo.ID, mrNumber).One()
+	mr, err := db.MergeRequest.Select().Where("repository_id = ? AND number = ?", result.Repo.ID, mrNumber).One()
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Merge request not found"})
 	}
 
-	if mr.AuthorID != userID && repo.OwnerID != userID {
+	if mr.AuthorID != userID && result.Repo.OwnerID != userID {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Access denied"})
 	}
 

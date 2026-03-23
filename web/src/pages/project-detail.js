@@ -102,7 +102,7 @@ const ProjectDetail = {
         
         vnode.state.loadTree = function() {
             vnode.state.fileContent = null;
-            RepositoryService.getTree(owner, repo, vnode.state.currentPath, vnode.state.currentBranch).then(result => {
+            RepositoryService.getTree(owner, repo, { path: vnode.state.currentPath, ref: vnode.state.currentBranch }).then(result => {
                 vnode.state.treeEntries = result.entries || [];
                 m.redraw();
             }).catch(() => {
@@ -112,8 +112,9 @@ const ProjectDetail = {
         };
         
         vnode.state.loadFile = function(path) {
-            RepositoryService.getFile(owner, repo, path, vnode.state.currentBranch).then(result => {
+            RepositoryService.getFile(owner, repo, { path: path, ref: vnode.state.currentBranch }).then(result => {
                 vnode.state.fileContent = result.content;
+                vnode.state.currentPath = path;
                 m.redraw();
             }).catch(() => {
                 vnode.state.fileContent = null;
@@ -221,7 +222,13 @@ const ProjectDetail = {
                             fileContent !== null ? [
                                 m('div.file-content-header', [
                                     m('span', currentPath.split('/').pop()),
-                                    m('button.btn.btn-sm', { onclick: () => { vnode.state.fileContent = null; } }, '返回')
+                                    m('button.btn.btn-sm', { onclick: () => {
+                                        const parts = currentPath.split('/');
+                                        parts.pop();
+                                        vnode.state.currentPath = parts.join('/');
+                                        vnode.state.fileContent = null;
+                                        vnode.state.loadTree();
+                                    } }, '返回')
                                 ]),
                                 m('pre.file-content', [
                                     m('code', {
@@ -294,11 +301,10 @@ const ProjectDetail = {
 const TreeEntry = {
     view(vnode) {
         const { entry, owner, repo, currentPath, onNavigate } = vnode.attrs;
-        const newPath = currentPath ? `${currentPath}/${entry.name}` : entry.name;
         const isTree = entry.type === 'tree';
         
         return m('div.file-item', {
-            onclick: () => onNavigate(newPath, !isTree),
+            onclick: () => onNavigate(entry.path, !isTree),
             style: { cursor: 'pointer' }
         }, [
             m('span.file-icon', { class: isTree ? 'folder' : '' }, [

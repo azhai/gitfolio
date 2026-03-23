@@ -1,7 +1,85 @@
-// GitFolio Frontend Build - 2026年 3月20日 星期五 14时47分03秒 CST
+// GitFolio Frontend Build - 2026年 3月23日 星期一 08时37分50秒 CST
+// Shared constants and configurations
+const Constants = {
+    API_BASE_URL: '/api/v1',
+    DEFAULT_PAGE: 1,
+    DEFAULT_PER_PAGE: 30,
+    DEFAULT_BRANCH: 'main',
+    
+    HTTP_STATUS: {
+        OK: 200,
+        CREATED: 201,
+        BAD_REQUEST: 400,
+        UNAUTHORIZED: 401,
+        FORBIDDEN: 403,
+        NOT_FOUND: 404,
+        INTERNAL_ERROR: 500
+    },
+    
+    VISIBILITY: {
+        PUBLIC: 'public',
+        PRIVATE: 'private'
+    },
+    
+    PROJECT_TYPE: {
+        MIRROR: 'mirror',
+        OWNED: 'owned',
+        FORK: 'fork'
+    },
+    
+    ISSUE_STATE: {
+        OPEN: 'open',
+        CLOSED: 'closed',
+        ALL: 'all'
+    },
+    
+    MR_STATUS: {
+        OPEN: 'open',
+        CLOSED: 'closed',
+        MERGED: 'merged'
+    }
+};
 
-const API_BASE_URL = '/api/v1';
-
+const Utils = {
+    buildQueryString(params) {
+        const parts = [];
+        Object.keys(params).forEach(key => {
+            if (params[key] !== undefined && params[key] !== null && params[key] !== '') {
+                parts.push(`${encodeURIComponent(key)}=${encodeURIComponent(params[key])}`);
+            }
+        });
+        return parts.length > 0 ? '?' + parts.join('&') : '';
+    },
+    
+    formatDate(dateString) {
+        if (!dateString) return '';
+        const date = new Date(dateString);
+        return date.toLocaleDateString('zh-CN', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    },
+    
+    truncate(text, maxLength = 100) {
+        if (!text || text.length <= maxLength) return text;
+        return text.substring(0, maxLength) + '...';
+    },
+    
+    debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
+                clearTimeout(timeout);
+                func(...args);
+            };
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+        };
+    }
+};
 const Auth = {
     token: null,
     
@@ -38,7 +116,7 @@ const API = {
         }
 
         const requestOptions = {
-            url: `${API_BASE_URL}${options.url}`,
+            url: `${Constants.API_BASE_URL}${options.url}`,
             method: options.method || 'GET',
             headers: headers
         };
@@ -48,7 +126,7 @@ const API = {
         }
 
         return m.request(requestOptions).catch(error => {
-            if (error.code === 401) {
+            if (error.code === Constants.HTTP_STATUS.UNAUTHORIZED) {
                 Auth.setToken(null);
                 m.route.set('/login');
             }
@@ -56,8 +134,9 @@ const API = {
         });
     },
     
-    get(url) {
-        return this.request({ url, method: 'GET' });
+    get(url, params = {}) {
+        const queryString = Utils.buildQueryString(params);
+        return this.request({ url: url + queryString, method: 'GET' });
     },
     
     post(url, body) {
@@ -74,8 +153,8 @@ const API = {
 };
 
 const UserService = {
-    list() {
-        return API.get('/users');
+    list(params = {}) {
+        return API.get('/users', params);
     },
     
     get(id) {
@@ -96,16 +175,16 @@ const UserService = {
 };
 
 const RepositoryService = {
-    list(owner) {
+    list(owner, params = {}) {
         const url = owner ? `/users/${owner}/repos` : '/repos';
-        return API.get(url);
+        return API.get(url, params);
     },
 
     get(owner, repo) {
         return API.get(`/${owner}/${repo}`);
     },
 
-    create(owner, data) {
+    create(data) {
         return API.post('/repos', data);
     },
 
@@ -125,16 +204,12 @@ const RepositoryService = {
         return API.post(`/${owner}/${repo}/sync/push`, { remote_url: remoteUrl });
     },
 
-    getTree(owner, repo, path, ref) {
-        let url = `/${owner}/${repo}/tree?path=${encodeURIComponent(path || '')}`;
-        if (ref) url += `&ref=${encodeURIComponent(ref)}`;
-        return API.get(url);
+    getTree(owner, repo, params = {}) {
+        return API.get(`/${owner}/${repo}/tree`, params);
     },
 
-    getFile(owner, repo, path, ref) {
-        let url = `/${owner}/${repo}/file?path=${encodeURIComponent(path || '')}`;
-        if (ref) url += `&ref=${encodeURIComponent(ref)}`;
-        return API.get(url);
+    getFile(owner, repo, params = {}) {
+        return API.get(`/${owner}/${repo}/file`, params);
     },
 
     getBranches(owner, repo) {
@@ -143,11 +218,11 @@ const RepositoryService = {
 };
 
 const IssueService = {
-    list(owner, repo) {
+    list(owner, repo, params = {}) {
         const url = owner && repo 
             ? `/${owner}/${repo}/issues`
             : '/issues';
-        return API.get(url);
+        return API.get(url, params);
     },
     
     get(owner, repo, number) {
@@ -164,11 +239,11 @@ const IssueService = {
 };
 
 const MergeRequestService = {
-    list(owner, repo) {
+    list(owner, repo, params = {}) {
         const url = owner && repo 
             ? `/${owner}/${repo}/merge_requests`
             : '/merge_requests';
-        return API.get(url);
+        return API.get(url, params);
     },
     
     get(owner, repo, number) {
@@ -185,13 +260,8 @@ const MergeRequestService = {
 };
 
 const GroupService = {
-    list(page, perPage) {
-        let url = '/groups';
-        const params = [];
-        if (page) params.push(`page=${page}`);
-        if (perPage) params.push(`per_page=${perPage}`);
-        if (params.length) url += '?' + params.join('&');
-        return API.get(url);
+    list(params = {}) {
+        return API.get('/groups', params);
     },
 
     get(name) {
@@ -204,14 +274,8 @@ const GroupService = {
 };
 
 const ActivityService = {
-    list(page, perPage, userId) {
-        let url = '/activities';
-        const params = [];
-        if (page) params.push(`page=${page}`);
-        if (perPage) params.push(`per_page=${perPage}`);
-        if (userId) params.push(`user_id=${userId}`);
-        if (params.length) url += '?' + params.join('&');
-        return API.get(url);
+    list(params = {}) {
+        return API.get('/activities', params);
     },
 
     create(data) {
@@ -230,14 +294,8 @@ const MilestoneService = {
 };
 
 const SnippetService = {
-    list(page, perPage, language) {
-        let url = '/snippets';
-        const params = [];
-        if (page) params.push(`page=${page}`);
-        if (perPage) params.push(`per_page=${perPage}`);
-        if (language) params.push(`language=${language}`);
-        if (params.length) url += '?' + params.join('&');
-        return API.get(url);
+    list(params = {}) {
+        return API.get('/snippets', params);
     },
 
     get(id) {
@@ -256,7 +314,6 @@ const SnippetService = {
         return API.delete(`/snippets/${id}`);
     }
 };
-
 
 const Layout = {
     view(vnode) {
@@ -299,7 +356,7 @@ const TopBar = {
                     m('span.badge', '3')
                 ]),
                 m('div.user-menu', [
-                    m('img.avatar', { src: 'https://via.placeholder.com/32', alt: '用户头像' }),
+                    m('img.avatar', { src: '/images/avatar-32.svg', alt: '用户头像' }),
                     m('span.username', 'ryan'),
                     m('i.fas.fa-chevron-down')
                 ])
@@ -1437,7 +1494,7 @@ const ProjectDetail = {
         
         vnode.state.loadTree = function() {
             vnode.state.fileContent = null;
-            RepositoryService.getTree(owner, repo, vnode.state.currentPath, vnode.state.currentBranch).then(result => {
+            RepositoryService.getTree(owner, repo, { path: vnode.state.currentPath, ref: vnode.state.currentBranch }).then(result => {
                 vnode.state.treeEntries = result.entries || [];
                 m.redraw();
             }).catch(() => {
@@ -1447,8 +1504,9 @@ const ProjectDetail = {
         };
         
         vnode.state.loadFile = function(path) {
-            RepositoryService.getFile(owner, repo, path, vnode.state.currentBranch).then(result => {
+            RepositoryService.getFile(owner, repo, { path: path, ref: vnode.state.currentBranch }).then(result => {
                 vnode.state.fileContent = result.content;
+                vnode.state.currentPath = path;
                 m.redraw();
             }).catch(() => {
                 vnode.state.fileContent = null;
@@ -1556,7 +1614,13 @@ const ProjectDetail = {
                             fileContent !== null ? [
                                 m('div.file-content-header', [
                                     m('span', currentPath.split('/').pop()),
-                                    m('button.btn.btn-sm', { onclick: () => { vnode.state.fileContent = null; } }, '返回')
+                                    m('button.btn.btn-sm', { onclick: () => {
+                                        const parts = currentPath.split('/');
+                                        parts.pop();
+                                        vnode.state.currentPath = parts.join('/');
+                                        vnode.state.fileContent = null;
+                                        vnode.state.loadTree();
+                                    } }, '返回')
                                 ]),
                                 m('pre.file-content', [
                                     m('code', {
@@ -1629,11 +1693,10 @@ const ProjectDetail = {
 const TreeEntry = {
     view(vnode) {
         const { entry, owner, repo, currentPath, onNavigate } = vnode.attrs;
-        const newPath = currentPath ? `${currentPath}/${entry.name}` : entry.name;
         const isTree = entry.type === 'tree';
         
         return m('div.file-item', {
-            onclick: () => onNavigate(newPath, !isTree),
+            onclick: () => onNavigate(entry.path, !isTree),
             style: { cursor: 'pointer' }
         }, [
             m('span.file-icon', { class: isTree ? 'folder' : '' }, [
@@ -1700,9 +1763,11 @@ const IssueList = {
         Promise.all([
             RepositoryService.get(owner, repo),
             IssueService.list(owner, repo),
-        ]).then(([repoResult, issuesResult]) => {
+            MergeRequestService.list(owner, repo)
+        ]).then(([repoResult, issuesResult, mrsResult]) => {
             vnode.state.repo = repoResult.data || repoResult;
             vnode.state.issues = issuesResult.data || issuesResult || [];
+            vnode.state.mrsCount = (mrsResult.data || mrsResult || []).filter(m => !m.is_closed && !m.is_merged).length;
             vnode.state.loading = false;
             m.redraw();
         }).catch(error => {
@@ -1735,7 +1800,7 @@ const IssueList = {
         
         return m(Layout, [
             m(ProjectHeader, { repo, owner }),
-            m(ProjectTabs, { owner, repo: repo.name, activeTab: 'issues', issuesCount: openCount }),
+            m(ProjectTabs, { owner, repo: repo.name, activeTab: 'issues', issuesCount: openCount, mrsCount: vnode.state.mrsCount }),
             
             m('div.issues-page', [
                 m('div.issues-header', [
@@ -1804,10 +1869,12 @@ const MergeRequestList = {
         
         Promise.all([
             RepositoryService.get(owner, repo),
-            MergeRequestService.list(owner, repo)
-        ]).then(([repoResult, mrsResult]) => {
+            MergeRequestService.list(owner, repo),
+            IssueService.list(owner, repo)
+        ]).then(([repoResult, mrsResult, issuesResult]) => {
             vnode.state.repo = repoResult.data || repoResult;
             vnode.state.mrs = mrsResult.data || mrsResult || [];
+            vnode.state.issuesCount = (issuesResult.data || issuesResult || []).filter(i => !i.is_closed).length;
             vnode.state.loading = false;
             m.redraw();
         }).catch(error => {
@@ -1852,7 +1919,7 @@ const MergeRequestList = {
                 m(ProjectTabs, {
                     owner: owner,
                     repo: repo.name,
-                    issuesCount: 0,
+                    issuesCount: vnode.state.issuesCount,
                     mrsCount: openMRs.length,
                     activeTab: 'mrs'
                 }),
@@ -1925,10 +1992,18 @@ const ReleasesPage = {
         const { owner, repo } = vnode.attrs;
         
         vnode.state.repo = null;
+        vnode.state.issuesCount = 0;
+        vnode.state.mrsCount = 0;
         vnode.state.loading = true;
         
-        RepositoryService.get(owner, repo).then(result => {
-            vnode.state.repo = result.data || result;
+        Promise.all([
+            RepositoryService.get(owner, repo),
+            IssueService.list(owner, repo),
+            MergeRequestService.list(owner, repo)
+        ]).then(([repoResult, issuesResult, mrsResult]) => {
+            vnode.state.repo = repoResult.data || repoResult;
+            vnode.state.issuesCount = (issuesResult.data || issuesResult || []).filter(i => !i.is_closed).length;
+            vnode.state.mrsCount = (mrsResult.data || mrsResult || []).filter(m => !m.is_closed && !m.is_merged).length;
             vnode.state.loading = false;
             m.redraw();
         }).catch(error => {
@@ -1939,7 +2014,7 @@ const ReleasesPage = {
     },
     
     view(vnode) {
-        const { repo, loading } = vnode.state;
+        const { repo, issuesCount, mrsCount, loading } = vnode.state;
         const { owner, repo: repoName } = vnode.attrs;
         
         if (loading) {
@@ -1964,6 +2039,8 @@ const ReleasesPage = {
                 m(ProjectTabs, {
                     owner: owner,
                     repo: repo.name,
+                    issuesCount: issuesCount,
+                    mrsCount: mrsCount,
                     activeTab: 'releases'
                 }),
                 
@@ -2028,10 +2105,18 @@ const StatsPage = {
         const { owner, repo } = vnode.attrs;
         
         vnode.state.repo = null;
+        vnode.state.issuesCount = 0;
+        vnode.state.mrsCount = 0;
         vnode.state.loading = true;
         
-        RepositoryService.get(owner, repo).then(result => {
-            vnode.state.repo = result.data || result;
+        Promise.all([
+            RepositoryService.get(owner, repo),
+            IssueService.list(owner, repo),
+            MergeRequestService.list(owner, repo)
+        ]).then(([repoResult, issuesResult, mrsResult]) => {
+            vnode.state.repo = repoResult.data || repoResult;
+            vnode.state.issuesCount = (issuesResult.data || issuesResult || []).filter(i => !i.is_closed).length;
+            vnode.state.mrsCount = (mrsResult.data || mrsResult || []).filter(m => !m.is_closed && !m.is_merged).length;
             vnode.state.loading = false;
             m.redraw();
         }).catch(error => {
@@ -2042,7 +2127,7 @@ const StatsPage = {
     },
     
     view(vnode) {
-        const { repo, loading } = vnode.state;
+        const { repo, issuesCount, mrsCount, loading } = vnode.state;
         const { owner, repo: repoName } = vnode.attrs;
         
         if (loading) {
@@ -2067,6 +2152,8 @@ const StatsPage = {
                 m(ProjectTabs, {
                     owner: owner,
                     repo: repo.name,
+                    issuesCount: issuesCount,
+                    mrsCount: mrsCount,
                     activeTab: 'stats'
                 }),
                 
@@ -2108,7 +2195,7 @@ const StatsPage = {
                         m('h2', '贡献者'),
                         m('div.contributors-list', [
                             m('div.contributor-item', [
-                                m('img.avatar', { src: 'https://via.placeholder.com/40', alt: '贡献者' }),
+                                m('img.avatar', { src: '/images/avatar-40.svg', alt: '贡献者' }),
                                 m('div.contributor-info', [
                                     m('div.contributor-name', 'ryan'),
                                     m('div.contributor-stats', '10 commits')
@@ -2128,6 +2215,8 @@ const SettingsPage = {
         const { owner, repo } = vnode.attrs;
 
         vnode.state.repo = null;
+        vnode.state.issuesCount = 0;
+        vnode.state.mrsCount = 0;
         vnode.state.loading = true;
         vnode.state.activeSection = 'general';
         vnode.state.formData = {
@@ -2139,8 +2228,14 @@ const SettingsPage = {
         vnode.state.saving = false;
         vnode.state.deleting = false;
 
-        RepositoryService.get(owner, repo).then(result => {
-            vnode.state.repo = result.data || result;
+        Promise.all([
+            RepositoryService.get(owner, repo),
+            IssueService.list(owner, repo),
+            MergeRequestService.list(owner, repo)
+        ]).then(([repoResult, issuesResult, mrsResult]) => {
+            vnode.state.repo = repoResult.data || repoResult;
+            vnode.state.issuesCount = (issuesResult.data || issuesResult || []).filter(i => !i.is_closed).length;
+            vnode.state.mrsCount = (mrsResult.data || mrsResult || []).filter(m => !m.is_closed && !m.is_merged).length;
             vnode.state.formData = {
                 name: vnode.state.repo.name,
                 description: vnode.state.repo.description || '',
@@ -2216,7 +2311,13 @@ const SettingsPage = {
         
         return m(Layout, [
             m(ProjectHeader, { repo, owner }),
-            m(ProjectTabs, { owner, repo: repo.name, activeTab: 'settings' }),
+            m(ProjectTabs, { 
+                owner, 
+                repo: repo.name, 
+                issuesCount: vnode.state.issuesCount,
+                mrsCount: vnode.state.mrsCount,
+                activeTab: 'settings' 
+            }),
             
             m('div.settings-page', [
                 m('div.settings-container', [
@@ -2385,8 +2486,8 @@ const MembersSettings = {
         const { repo } = vnode.attrs;
         
         const members = [
-            { name: 'Ryan', email: 'ryan@example.com', role: 'owner', avatar: 'https://via.placeholder.com/40' },
-            { name: 'Alice', email: 'alice@example.com', role: 'developer', avatar: 'https://via.placeholder.com/40' }
+            { name: 'Ryan', email: 'ryan@example.com', role: 'owner', avatar: '/images/avatar-40.svg' },
+            { name: 'Alice', email: 'alice@example.com', role: 'developer', avatar: '/images/avatar-40.svg' }
         ];
         
         return m('div.settings-section', [

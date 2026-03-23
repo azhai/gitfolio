@@ -3,10 +3,18 @@ const ReleasesPage = {
         const { owner, repo } = vnode.attrs;
         
         vnode.state.repo = null;
+        vnode.state.issuesCount = 0;
+        vnode.state.mrsCount = 0;
         vnode.state.loading = true;
         
-        RepositoryService.get(owner, repo).then(result => {
-            vnode.state.repo = result.data || result;
+        Promise.all([
+            RepositoryService.get(owner, repo),
+            IssueService.list(owner, repo),
+            MergeRequestService.list(owner, repo)
+        ]).then(([repoResult, issuesResult, mrsResult]) => {
+            vnode.state.repo = repoResult.data || repoResult;
+            vnode.state.issuesCount = (issuesResult.data || issuesResult || []).filter(i => !i.is_closed).length;
+            vnode.state.mrsCount = (mrsResult.data || mrsResult || []).filter(m => !m.is_closed && !m.is_merged).length;
             vnode.state.loading = false;
             m.redraw();
         }).catch(error => {
@@ -17,7 +25,7 @@ const ReleasesPage = {
     },
     
     view(vnode) {
-        const { repo, loading } = vnode.state;
+        const { repo, issuesCount, mrsCount, loading } = vnode.state;
         const { owner, repo: repoName } = vnode.attrs;
         
         if (loading) {
@@ -42,6 +50,8 @@ const ReleasesPage = {
                 m(ProjectTabs, {
                     owner: owner,
                     repo: repo.name,
+                    issuesCount: issuesCount,
+                    mrsCount: mrsCount,
                     activeTab: 'releases'
                 }),
                 
@@ -106,10 +116,18 @@ const StatsPage = {
         const { owner, repo } = vnode.attrs;
         
         vnode.state.repo = null;
+        vnode.state.issuesCount = 0;
+        vnode.state.mrsCount = 0;
         vnode.state.loading = true;
         
-        RepositoryService.get(owner, repo).then(result => {
-            vnode.state.repo = result.data || result;
+        Promise.all([
+            RepositoryService.get(owner, repo),
+            IssueService.list(owner, repo),
+            MergeRequestService.list(owner, repo)
+        ]).then(([repoResult, issuesResult, mrsResult]) => {
+            vnode.state.repo = repoResult.data || repoResult;
+            vnode.state.issuesCount = (issuesResult.data || issuesResult || []).filter(i => !i.is_closed).length;
+            vnode.state.mrsCount = (mrsResult.data || mrsResult || []).filter(m => !m.is_closed && !m.is_merged).length;
             vnode.state.loading = false;
             m.redraw();
         }).catch(error => {
@@ -120,7 +138,7 @@ const StatsPage = {
     },
     
     view(vnode) {
-        const { repo, loading } = vnode.state;
+        const { repo, issuesCount, mrsCount, loading } = vnode.state;
         const { owner, repo: repoName } = vnode.attrs;
         
         if (loading) {
@@ -145,6 +163,8 @@ const StatsPage = {
                 m(ProjectTabs, {
                     owner: owner,
                     repo: repo.name,
+                    issuesCount: issuesCount,
+                    mrsCount: mrsCount,
                     activeTab: 'stats'
                 }),
                 
@@ -186,7 +206,7 @@ const StatsPage = {
                         m('h2', '贡献者'),
                         m('div.contributors-list', [
                             m('div.contributor-item', [
-                                m('img.avatar', { src: 'https://via.placeholder.com/40', alt: '贡献者' }),
+                                m('img.avatar', { src: '/images/avatar-40.svg', alt: '贡献者' }),
                                 m('div.contributor-info', [
                                     m('div.contributor-name', 'ryan'),
                                     m('div.contributor-stats', '10 commits')

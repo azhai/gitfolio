@@ -32,7 +32,13 @@ func SetupRouter() *fiber.App {
 
 	app.Get("/static/vendor/*", func(c fiber.Ctx) error {
 		path := c.Params("*")
+		c.Set("Cache-Control", "public, max-age=31536000")
 		return c.SendFile("./web/vendor/" + path)
+	})
+
+	app.Get("/images/*", func(c fiber.Ctx) error {
+		path := c.Params("*")
+		return c.SendFile("./web/images/" + path)
 	})
 
 	app.Get("/api/v1/health", func(c fiber.Ctx) error {

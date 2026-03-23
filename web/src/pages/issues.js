@@ -1,5 +1,5 @@
 import { Layout, Loading, ProjectHeader, ProjectTabs, EmptyState, IssueItem } from '../components.js';
-import { RepositoryService, IssueService } from '../api.js';
+import { RepositoryService, IssueService, MergeRequestService } from '../api.js';
 import { CreateIssueModal } from '../modals.js';
 
 const IssueList = {
@@ -16,9 +16,11 @@ const IssueList = {
         Promise.all([
             RepositoryService.get(owner, repo),
             IssueService.list(owner, repo),
-        ]).then(([repoResult, issuesResult]) => {
+            MergeRequestService.list(owner, repo)
+        ]).then(([repoResult, issuesResult, mrsResult]) => {
             vnode.state.repo = repoResult.data || repoResult;
             vnode.state.issues = issuesResult.data || issuesResult || [];
+            vnode.state.mrsCount = (mrsResult.data || mrsResult || []).filter(m => !m.is_closed && !m.is_merged).length;
             vnode.state.loading = false;
             m.redraw();
         }).catch(error => {
@@ -51,7 +53,7 @@ const IssueList = {
         
         return m(Layout, [
             m(ProjectHeader, { repo, owner }),
-            m(ProjectTabs, { owner, repo: repo.name, activeTab: 'issues', issuesCount: openCount }),
+            m(ProjectTabs, { owner, repo: repo.name, activeTab: 'issues', issuesCount: openCount, mrsCount: vnode.state.mrsCount }),
             
             m('div.issues-page', [
                 m('div.issues-header', [

@@ -41,7 +41,7 @@ const TopBar = {
                     m('span.badge', '3')
                 ]),
                 m('div.user-menu', [
-                    m('img.avatar', { src: 'https://via.placeholder.com/32', alt: '用户头像' }),
+                    m('img.avatar', { src: '/images/avatar-32.svg', alt: '用户头像' }),
                     m('span.username', 'ryan'),
                     m('i.fas.fa-chevron-down')
                 ])

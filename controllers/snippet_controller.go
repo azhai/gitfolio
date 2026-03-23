@@ -1,10 +1,10 @@
 package controllers
 
 import (
-	"strconv"
 	"time"
 
 	"github.com/azhai/gitfolio/database"
+	"github.com/azhai/gitfolio/helpers"
 	"github.com/azhai/gitfolio/middleware"
 	"github.com/azhai/gitfolio/models"
 	"github.com/gofiber/fiber/v3"
@@ -39,8 +39,7 @@ func ToSnippetResponse(snippet *models.Snippet, username string) *SnippetRespons
 }
 
 func ListSnippets(c fiber.Ctx) error {
-	page, _ := strconv.Atoi(c.Query("page", "1"))
-	perPage, _ := strconv.Atoi(c.Query("per_page", "30"))
+	pagination := helpers.GetPagination(c)
 	language := c.Query("language")
 	visibility := c.Query("visibility", "public")
 
@@ -54,9 +53,9 @@ func ListSnippets(c fiber.Ctx) error {
 		query = query.Where("visibility = ?", visibility)
 	}
 
-	snippets, err := query.Skip((page - 1) * perPage).Take(perPage).All()
+	snippets, err := query.Skip(helpers.GetOffset(pagination.Page, pagination.PerPage)).Take(pagination.PerPage).All()
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch snippets"})
+		return helpers.JSONError(c, helpers.HTTPStatusInternalServerError, "Failed to fetch snippets")
 	}
 
 	response := make([]*SnippetResponse, 0)
@@ -71,24 +70,20 @@ func ListSnippets(c fiber.Ctx) error {
 		response = append(response, ToSnippetResponse(snippet, username))
 	}
 
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"data":     response,
-		"page":     page,
-		"per_page": perPage,
-	})
+	return helpers.JSONSuccess(c, helpers.NewPaginatedResponse(response, pagination.Page, pagination.PerPage, 0))
 }
 
 func GetSnippet(c fiber.Ctx) error {
-	id, err := strconv.ParseUint(c.Params("id"), 10, 64)
+	id, err := helpers.ParseUintParam(c, "id")
 	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid snippet ID"})
+		return helpers.JSONError(c, helpers.HTTPStatusBadRequest, "Invalid snippet ID")
 	}
 
 	db := database.GetDB()
 
 	snippet, err := db.Snippet.Select().Where("id = ?", id).One()
 	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Snippet not found"})
+		return helpers.JSONError(c, helpers.HTTPStatusNotFound, "Snippet not found")
 	}
 
 	var username string
@@ -99,7 +94,7 @@ func GetSnippet(c fiber.Ctx) error {
 		}
 	}
 
-	return c.Status(fiber.StatusOK).JSON(ToSnippetResponse(snippet, username))
+	return helpers.JSONSuccess(c, ToSnippetResponse(snippet, username))
 }
 
 func CreateSnippet(c fiber.Ctx) error {
@@ -114,15 +109,15 @@ func CreateSnippet(c fiber.Ctx) error {
 	}
 
 	if err := c.Bind().JSON(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+		return helpers.JSONError(c, helpers.HTTPStatusBadRequest, err.Error())
 	}
 
 	if req.Title == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Title is required"})
+		return helpers.JSONError(c, helpers.HTTPStatusBadRequest, "Title is required")
 	}
 
 	if req.Code == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Code is required"})
+		return helpers.JSONError(c, helpers.HTTPStatusBadRequest, "Code is required")
 	}
 
 	if req.Visibility == "" {
@@ -144,23 +139,16 @@ func CreateSnippet(c fiber.Ctx) error {
 
 	err := db.Snippet.Insert().One(snippet)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create snippet"})
+		return helpers.JSONError(c, helpers.HTTPStatusInternalServerError, "Failed to create snippet")
 	}
 
-	user, _ := db.User.Select().Where("id = ?", userID).One()
-	username := ""
-	if user != nil {
-		username = user.Username
-	}
-
-	return c.Status(fiber.StatusCreated).JSON(ToSnippetResponse(snippet, username))
+	return helpers.JSONCreated(c, ToSnippetResponse(snippet, ""))
 }
 
 func UpdateSnippet(c fiber.Ctx) error {
-	userID := middleware.GetCurrentUserID(c)
-	id, err := strconv.ParseUint(c.Params("id"), 10, 64)
+	id, err := helpers.ParseUintParam(c, "id")
 	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid snippet ID"})
+		return helpers.JSONError(c, helpers.HTTPStatusBadRequest, "Invalid snippet ID")
 	}
 
 	var req struct {
@@ -172,18 +160,18 @@ func UpdateSnippet(c fiber.Ctx) error {
 	}
 
 	if err := c.Bind().JSON(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+		return helpers.JSONError(c, helpers.HTTPStatusBadRequest, err.Error())
 	}
 
 	db := database.GetDB()
 
 	snippet, err := db.Snippet.Select().Where("id = ?", id).One()
 	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Snippet not found"})
+		return helpers.JSONError(c, helpers.HTTPStatusNotFound, "Snippet not found")
 	}
 
-	if snippet.UserID == nil || *snippet.UserID != userID {
-		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Access denied"})
+	if err := helpers.RequireUser(c, snippet.UserID); err != nil {
+		return err
 	}
 
 	if req.Title != "" {
@@ -205,40 +193,33 @@ func UpdateSnippet(c fiber.Ctx) error {
 
 	err = db.Snippet.Save().One(snippet)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update snippet"})
+		return helpers.JSONError(c, helpers.HTTPStatusInternalServerError, "Failed to update snippet")
 	}
 
-	user, _ := db.User.Select().Where("id = ?", userID).One()
-	username := ""
-	if user != nil {
-		username = user.Username
-	}
-
-	return c.Status(fiber.StatusOK).JSON(ToSnippetResponse(snippet, username))
+	return helpers.JSONSuccess(c, ToSnippetResponse(snippet, ""))
 }
 
 func DeleteSnippet(c fiber.Ctx) error {
-	userID := middleware.GetCurrentUserID(c)
-	id, err := strconv.ParseUint(c.Params("id"), 10, 64)
+	id, err := helpers.ParseUintParam(c, "id")
 	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid snippet ID"})
+		return helpers.JSONError(c, helpers.HTTPStatusBadRequest, "Invalid snippet ID")
 	}
 
 	db := database.GetDB()
 
 	snippet, err := db.Snippet.Select().Where("id = ?", id).One()
 	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Snippet not found"})
+		return helpers.JSONError(c, helpers.HTTPStatusNotFound, "Snippet not found")
 	}
 
-	if snippet.UserID == nil || *snippet.UserID != userID {
-		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Access denied"})
+	if err := helpers.RequireUser(c, snippet.UserID); err != nil {
+		return err
 	}
 
 	err = db.Snippet.Delete().Where("id = ?", id).Exec()
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to delete snippet"})
+		return helpers.JSONError(c, helpers.HTTPStatusInternalServerError, "Failed to delete snippet")
 	}
 
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Snippet deleted successfully"})
+	return helpers.JSONSuccess(c, fiber.Map{"message": "Snippet deleted successfully"})
 }

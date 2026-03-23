@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/azhai/gitfolio/database"
+	"github.com/azhai/gitfolio/helpers"
 	"github.com/azhai/gitfolio/middleware"
 	"github.com/azhai/gitfolio/models"
 	"github.com/gofiber/fiber/v3"
@@ -141,29 +142,12 @@ func CreateRepository(c fiber.Ctx) error {
 }
 
 func GetRepository(c fiber.Ctx) error {
-	owner := c.Params("owner")
-	repoName := c.Params("repo")
-
-	db := database.GetDB()
-
-	ownerUser, err := db.User.Select().Where("username = ?", owner).One()
+	result, err := helpers.GetOwnerAndRepoWithPrivateAccessFromParams(c)
 	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Owner not found"})
+		return err
 	}
 
-	repo, err := db.Repository.Select().Where("owner_id = ? AND name = ?", ownerUser.ID, repoName).One()
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Repository not found"})
-	}
-
-	if repo.IsPrivate {
-		userID := middleware.GetCurrentUserID(c)
-		if userID == 0 || userID != repo.OwnerID {
-			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Access denied"})
-		}
-	}
-
-	return c.Status(fiber.StatusOK).JSON(ToRepositoryResponse(repo, ownerUser))
+	return c.Status(fiber.StatusOK).JSON(ToRepositoryResponse(result.Repo, result.Owner))
 }
 
 func ListRepositories(c fiber.Ctx) error {
@@ -201,74 +185,48 @@ func ListRepositories(c fiber.Ctx) error {
 }
 
 func UpdateRepository(c fiber.Ctx) error {
-	owner := c.Params("owner")
-	repoName := c.Params("repo")
-	userID := middleware.GetCurrentUserID(c)
-
 	var req UpdateRepositoryRequest
 	if err := c.Bind().JSON(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
+	result, err := helpers.RequireOwnerAndRepoFromParams(c)
+	if err != nil {
+		return err
+	}
+
 	db := database.GetDB()
 
-	ownerUser, err := db.User.Select().Where("username = ?", owner).One()
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Owner not found"})
-	}
-
-	repo, err := db.Repository.Select().Where("owner_id = ? AND name = ?", ownerUser.ID, repoName).One()
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Repository not found"})
-	}
-
-	if repo.OwnerID != userID {
-		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Access denied"})
-	}
-
 	if req.Name != "" {
-		repo.Name = req.Name
+		result.Repo.Name = req.Name
 	}
 	if req.Description != "" {
-		repo.Description = req.Description
+		result.Repo.Description = req.Description
 	}
 	if req.IsPrivate != nil {
-		repo.IsPrivate = *req.IsPrivate
+		result.Repo.IsPrivate = *req.IsPrivate
 	}
 	if req.DefaultBranch != "" {
-		repo.DefaultBranch = req.DefaultBranch
+		result.Repo.DefaultBranch = req.DefaultBranch
 	}
 
-	err = db.Repository.Save().One(repo)
+	err = db.Repository.Save().One(result.Repo)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update repository"})
 	}
 
-	return c.Status(fiber.StatusOK).JSON(repo)
+	return c.Status(fiber.StatusOK).JSON(result.Repo)
 }
 
 func DeleteRepository(c fiber.Ctx) error {
-	owner := c.Params("owner")
-	repoName := c.Params("repo")
-	userID := middleware.GetCurrentUserID(c)
+	result, err := helpers.RequireOwnerAndRepoFromParams(c)
+	if err != nil {
+		return err
+	}
 
 	db := database.GetDB()
 
-	ownerUser, err := db.User.Select().Where("username = ?", owner).One()
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Owner not found"})
-	}
-
-	repo, err := db.Repository.Select().Where("owner_id = ? AND name = ?", ownerUser.ID, repoName).One()
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Repository not found"})
-	}
-
-	if repo.OwnerID != userID {
-		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Access denied"})
-	}
-
-	err = db.Repository.Delete().Where("id = ?", repo.ID).Exec()
+	err = db.Repository.Delete().Where("id = ?", result.Repo.ID).Exec()
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to delete repository"})
 	}
@@ -277,30 +235,23 @@ func DeleteRepository(c fiber.Ctx) error {
 }
 
 func StarRepository(c fiber.Ctx) error {
-	owner := c.Params("owner")
-	repoName := c.Params("repo")
 	userID := middleware.GetCurrentUserID(c)
+
+	result, err := helpers.GetOwnerAndRepoFromParams(c)
+	if err != nil {
+		return err
+	}
 
 	db := database.GetDB()
 
-	ownerUser, err := db.User.Select().Where("username = ?", owner).One()
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Owner not found"})
-	}
-
-	repo, err := db.Repository.Select().Where("owner_id = ? AND name = ?", ownerUser.ID, repoName).One()
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Repository not found"})
-	}
-
-	existingStar, _ := db.Star.Select().Where("user_id = ? AND repository_id = ?", userID, repo.ID).One()
+	existingStar, _ := db.Star.Select().Where("user_id = ? AND repository_id = ?", userID, result.Repo.ID).One()
 	if existingStar != nil {
 		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "Already starred"})
 	}
 
 	star := &models.Star{
 		UserID:       userID,
-		RepositoryID: repo.ID,
+		RepositoryID: result.Repo.ID,
 	}
 
 	err = db.Star.Insert().One(star)
@@ -308,8 +259,8 @@ func StarRepository(c fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to star repository"})
 	}
 
-	repo.StarsCount++
-	err = db.Repository.Save().One(repo)
+	result.Repo.StarsCount++
+	err = db.Repository.Save().One(result.Repo)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update stars count"})
 	}
@@ -318,29 +269,22 @@ func StarRepository(c fiber.Ctx) error {
 }
 
 func UnstarRepository(c fiber.Ctx) error {
-	owner := c.Params("owner")
-	repoName := c.Params("repo")
 	userID := middleware.GetCurrentUserID(c)
+
+	result, err := helpers.GetOwnerAndRepoFromParams(c)
+	if err != nil {
+		return err
+	}
 
 	db := database.GetDB()
 
-	ownerUser, err := db.User.Select().Where("username = ?", owner).One()
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Owner not found"})
-	}
-
-	repo, err := db.Repository.Select().Where("owner_id = ? AND name = ?", ownerUser.ID, repoName).One()
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Repository not found"})
-	}
-
-	err = db.Star.Delete().Where("user_id = ? AND repository_id = ?", userID, repo.ID).Exec()
+	err = db.Star.Delete().Where("user_id = ? AND repository_id = ?", userID, result.Repo.ID).Exec()
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to unstar repository"})
 	}
 
-	repo.StarsCount--
-	err = db.Repository.Save().One(repo)
+	result.Repo.StarsCount--
+	err = db.Repository.Save().One(result.Repo)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update stars count"})
 	}
@@ -349,30 +293,23 @@ func UnstarRepository(c fiber.Ctx) error {
 }
 
 func WatchRepository(c fiber.Ctx) error {
-	owner := c.Params("owner")
-	repoName := c.Params("repo")
 	userID := middleware.GetCurrentUserID(c)
+
+	result, err := helpers.GetOwnerAndRepoFromParams(c)
+	if err != nil {
+		return err
+	}
 
 	db := database.GetDB()
 
-	ownerUser, err := db.User.Select().Where("username = ?", owner).One()
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Owner not found"})
-	}
-
-	repo, err := db.Repository.Select().Where("owner_id = ? AND name = ?", ownerUser.ID, repoName).One()
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Repository not found"})
-	}
-
-	existingWatch, _ := db.Watch.Select().Where("user_id = ? AND repository_id = ?", userID, repo.ID).One()
+	existingWatch, _ := db.Watch.Select().Where("user_id = ? AND repository_id = ?", userID, result.Repo.ID).One()
 	if existingWatch != nil {
 		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "Already watching"})
 	}
 
 	watch := &models.Watch{
 		UserID:       userID,
-		RepositoryID: repo.ID,
+		RepositoryID: result.Repo.ID,
 	}
 
 	err = db.Watch.Insert().One(watch)
@@ -380,8 +317,8 @@ func WatchRepository(c fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to watch repository"})
 	}
 
-	repo.WatchCount++
-	err = db.Repository.Save().One(repo)
+	result.Repo.WatchCount++
+	err = db.Repository.Save().One(result.Repo)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update watch count"})
 	}
@@ -390,29 +327,22 @@ func WatchRepository(c fiber.Ctx) error {
 }
 
 func UnwatchRepository(c fiber.Ctx) error {
-	owner := c.Params("owner")
-	repoName := c.Params("repo")
 	userID := middleware.GetCurrentUserID(c)
+
+	result, err := helpers.GetOwnerAndRepoFromParams(c)
+	if err != nil {
+		return err
+	}
 
 	db := database.GetDB()
 
-	ownerUser, err := db.User.Select().Where("username = ?", owner).One()
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Owner not found"})
-	}
-
-	repo, err := db.Repository.Select().Where("owner_id = ? AND name = ?", ownerUser.ID, repoName).One()
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Repository not found"})
-	}
-
-	err = db.Watch.Delete().Where("user_id = ? AND repository_id = ?", userID, repo.ID).Exec()
+	err = db.Watch.Delete().Where("user_id = ? AND repository_id = ?", userID, result.Repo.ID).Exec()
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to unwatch repository"})
 	}
 
-	repo.WatchCount--
-	err = db.Repository.Save().One(repo)
+	result.Repo.WatchCount--
+	err = db.Repository.Save().One(result.Repo)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update watch count"})
 	}
@@ -421,31 +351,18 @@ func UnwatchRepository(c fiber.Ctx) error {
 }
 
 func SyncPullRepository(c fiber.Ctx) error {
-	owner := c.Params("owner")
-	repoName := c.Params("repo")
-	userID := middleware.GetCurrentUserID(c)
+	result, err := helpers.RequireOwnerAndRepoFromParams(c)
+	if err != nil {
+		return err
+	}
 
 	db := database.GetDB()
 
-	ownerUser, err := db.User.Select().Where("username = ?", owner).One()
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Owner not found"})
-	}
-
-	repo, err := db.Repository.Select().Where("owner_id = ? AND name = ?", ownerUser.ID, repoName).One()
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Repository not found"})
-	}
-
-	if repo.OwnerID != userID {
-		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Access denied"})
-	}
-
-	if !repo.IsMirror || repo.LocalPath == "" {
+	if !result.Repo.IsMirror || result.Repo.LocalPath == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Not a mirror repository or local path not set"})
 	}
 
-	cmd := exec.Command("git", "-C", repo.LocalPath, "remote", "update")
+	cmd := exec.Command("git", "-C", result.Repo.LocalPath, "remote", "update")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -455,8 +372,8 @@ func SyncPullRepository(c fiber.Ctx) error {
 	}
 
 	now := time.Now()
-	repo.LastSyncAt = &now
-	err = db.Repository.Save().One(repo)
+	result.Repo.LastSyncAt = &now
+	err = db.Repository.Save().One(result.Repo)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update sync time"})
 	}
@@ -468,10 +385,6 @@ func SyncPullRepository(c fiber.Ctx) error {
 }
 
 func SyncPushRepository(c fiber.Ctx) error {
-	owner := c.Params("owner")
-	repoName := c.Params("repo")
-	userID := middleware.GetCurrentUserID(c)
-
 	var req struct {
 		RemoteURL string `json:"remote_url"`
 	}
@@ -479,28 +392,19 @@ func SyncPushRepository(c fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
+	result, err := helpers.RequireOwnerAndRepoFromParams(c)
+	if err != nil {
+		return err
+	}
+
 	db := database.GetDB()
 
-	ownerUser, err := db.User.Select().Where("username = ?", owner).One()
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Owner not found"})
-	}
-
-	repo, err := db.Repository.Select().Where("owner_id = ? AND name = ?", ownerUser.ID, repoName).One()
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Repository not found"})
-	}
-
-	if repo.OwnerID != userID {
-		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Access denied"})
-	}
-
-	if repo.LocalPath == "" {
+	if result.Repo.LocalPath == "" {
 		reposDir := "repos"
 		if _, err := os.Stat(reposDir); os.IsNotExist(err) {
 			os.MkdirAll(reposDir, 0755)
 		}
-		localPath := filepath.Join(reposDir, ownerUser.Username, repoName)
+		localPath := filepath.Join(reposDir, result.Owner.Username, result.Repo.Name)
 		cmd := exec.Command("git", "init", "--bare", localPath)
 		if output, err := cmd.CombinedOutput(); err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -508,19 +412,19 @@ func SyncPushRepository(c fiber.Ctx) error {
 				"details": string(output),
 			})
 		}
-		repo.LocalPath = localPath
-		err = db.Repository.Save().One(repo)
+		result.Repo.LocalPath = localPath
+		err = db.Repository.Save().One(result.Repo)
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to save local path"})
 		}
 	}
 
 	if req.RemoteURL != "" {
-		cmd := exec.Command("git", "-C", repo.LocalPath, "remote", "add", "push_target", req.RemoteURL)
+		cmd := exec.Command("git", "-C", result.Repo.LocalPath, "remote", "add", "push_target", req.RemoteURL)
 		cmd.Run()
 	}
 
-	cmd := exec.Command("git", "-C", repo.LocalPath, "push", "push_target", "--all")
+	cmd := exec.Command("git", "-C", result.Repo.LocalPath, "push", "push_target", "--all")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -529,46 +433,30 @@ func SyncPushRepository(c fiber.Ctx) error {
 		})
 	}
 
-	cmd = exec.Command("git", "-C", repo.LocalPath, "push", "push_target", "--tags")
+	cmd = exec.Command("git", "-C", result.Repo.LocalPath, "push", "push_target", "--tags")
 	cmd.Run()
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Repository pushed successfully"})
 }
 
 func GetRepositoryTree(c fiber.Ctx) error {
-	owner := c.Params("owner")
-	repoName := c.Params("repo")
 	path := c.Query("path", "")
 	ref := c.Query("ref", "HEAD")
 
-	db := database.GetDB()
-
-	ownerUser, err := db.User.Select().Where("username = ?", owner).One()
+	result, err := helpers.GetOwnerAndRepoWithPrivateAccessFromParams(c)
 	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Owner not found"})
+		return err
 	}
 
-	repo, err := db.Repository.Select().Where("owner_id = ? AND name = ?", ownerUser.ID, repoName).One()
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Repository not found"})
-	}
-
-	if repo.IsPrivate {
-		userID := middleware.GetCurrentUserID(c)
-		if userID == 0 || userID != repo.OwnerID {
-			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Access denied"})
-		}
-	}
-
-	if repo.LocalPath == "" {
+	if result.Repo.LocalPath == "" {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Repository not initialized"})
 	}
 
 	var cmd *exec.Cmd
 	if path == "" {
-		cmd = exec.Command("git", "-C", repo.LocalPath, "ls-tree", "-l", ref)
+		cmd = exec.Command("git", "-C", result.Repo.LocalPath, "ls-tree", "-l", ref)
 	} else {
-		cmd = exec.Command("git", "-C", repo.LocalPath, "ls-tree", "-l", ref, "--", path)
+		cmd = exec.Command("git", "-C", result.Repo.LocalPath, "ls-tree", "-l", ref, path+"/")
 	}
 	output, err := cmd.Output()
 	if err != nil {
@@ -587,7 +475,10 @@ func GetRepositoryTree(c fiber.Ctx) error {
 			objType := parts[1]
 			objHash := parts[2]
 			size := parts[3]
-			name := strings.Join(parts[4:], " ")
+			fullName := strings.Join(parts[4:], " ")
+
+			nameParts := strings.Split(fullName, "/")
+			name := nameParts[len(nameParts)-1]
 
 			entry := map[string]interface{}{
 				"mode": mode,
@@ -595,7 +486,7 @@ func GetRepositoryTree(c fiber.Ctx) error {
 				"hash": objHash,
 				"size": size,
 				"name": name,
-				"path": path + name,
+				"path": fullName,
 			}
 			entries = append(entries, entry)
 		}
@@ -620,35 +511,19 @@ func GetRepositoryTree(c fiber.Ctx) error {
 }
 
 func GetRepositoryFile(c fiber.Ctx) error {
-	owner := c.Params("owner")
-	repoName := c.Params("repo")
 	path := c.Query("path", "")
 	ref := c.Query("ref", "HEAD")
 
-	db := database.GetDB()
-
-	ownerUser, err := db.User.Select().Where("username = ?", owner).One()
+	result, err := helpers.GetOwnerAndRepoWithPrivateAccessFromParams(c)
 	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Owner not found"})
+		return err
 	}
 
-	repo, err := db.Repository.Select().Where("owner_id = ? AND name = ?", ownerUser.ID, repoName).One()
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Repository not found"})
-	}
-
-	if repo.IsPrivate {
-		userID := middleware.GetCurrentUserID(c)
-		if userID == 0 || userID != repo.OwnerID {
-			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Access denied"})
-		}
-	}
-
-	if repo.LocalPath == "" {
+	if result.Repo.LocalPath == "" {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Repository not initialized"})
 	}
 
-	cmd := exec.Command("git", "-C", repo.LocalPath, "show", ref+":"+path)
+	cmd := exec.Command("git", "-C", result.Repo.LocalPath, "show", ref+":"+path)
 	output, err := cmd.Output()
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "File not found"})
@@ -662,33 +537,16 @@ func GetRepositoryFile(c fiber.Ctx) error {
 }
 
 func GetRepositoryBranches(c fiber.Ctx) error {
-	owner := c.Params("owner")
-	repoName := c.Params("repo")
-
-	db := database.GetDB()
-
-	ownerUser, err := db.User.Select().Where("username = ?", owner).One()
+	result, err := helpers.GetOwnerAndRepoWithPrivateAccessFromParams(c)
 	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Owner not found"})
+		return err
 	}
 
-	repo, err := db.Repository.Select().Where("owner_id = ? AND name = ?", ownerUser.ID, repoName).One()
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Repository not found"})
-	}
-
-	if repo.IsPrivate {
-		userID := middleware.GetCurrentUserID(c)
-		if userID == 0 || userID != repo.OwnerID {
-			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Access denied"})
-		}
-	}
-
-	if repo.LocalPath == "" {
+	if result.Repo.LocalPath == "" {
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{"branches": []string{}})
 	}
 
-	cmd := exec.Command("git", "-C", repo.LocalPath, "branch", "-a", "--format=%(refname:short)")
+	cmd := exec.Command("git", "-C", result.Repo.LocalPath, "branch", "-a", "--format=%(refname:short)")
 	output, err := cmd.Output()
 	if err != nil {
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{"branches": []string{}})

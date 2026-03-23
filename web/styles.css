@@ -19,6 +19,109 @@
     --transition: all 0.3s ease;
 }
 
+.create-project-page,
+.migrate-project-page {
+    padding: 20px;
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+.create-project-page .page-header,
+.migrate-project-page .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.create-project-page .page-header h1,
+.migrate-project-page .page-header h1 {
+    margin: 0;
+    font-size: 24px;
+}
+
+.create-project-form,
+.migrate-project-form {
+    background: var(--card-bg);
+    border-radius: 8px;
+    padding: 30px;
+    border: 1px solid var(--border-color);
+}
+
+.form-section {
+    margin-bottom: 30px;
+}
+
+.form-section h3 {
+    margin: 0 0 20px 0;
+    font-size: 18px;
+    color: var(--text-color);
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 500;
+    color: var(--text-color);
+}
+
+.form-input,
+.form-textarea,
+.form-select {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 14px;
+    background: var(--bg-color);
+    color: var(--text-color);
+    transition: border-color 0.2s;
+}
+
+.form-input:focus,
+.form-textarea:focus,
+.form-select:focus {
+    outline: none;
+    border-color: var(--primary-color);
+}
+
+.form-textarea {
+    min-height: 100px;
+    resize: vertical;
+}
+
+.form-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.form-checkbox input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+}
+
+.form-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-top: 30px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border-color);
+}
+
+.form-actions .btn {
+    min-width: 100px;
+}
+
 * {
     margin: 0;
     padding: 0;
@@ -2291,6 +2394,29 @@ body {
     margin: 0;
 }
 
+.stats-content h1 {
+    font-size: 20px;
+    font-weight: 600;
+    margin: 0 0 20px 0;
+}
+
+.stats-section h2 {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0 0 15px 0;
+}
+
+.settings-section h4 {
+    font-size: 14px;
+    font-weight: 600;
+    margin: 0 0 8px 0;
+}
+
+.settings-section p {
+    font-size: 13px;
+    margin: 0 0 10px 0;
+}
+
 .branch-selector .branch-dropdown {
     font-size: 14px;
 }
@@ -2748,6 +2874,9 @@ body {
     line-height: 1.5;
     overflow-x: auto;
     white-space: pre;
+    tab-size: 4;
+    -moz-tab-size: 4;
+    -o-tab-size: 4;
 }
 
 .file-content code.hljs {
@@ -2948,6 +3077,9 @@ body {
     font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
     font-size: 13px;
     line-height: 1.6;
+    tab-size: 4;
+    -moz-tab-size: 4;
+    -o-tab-size: 4;
 }
 
 .snippet-code code {

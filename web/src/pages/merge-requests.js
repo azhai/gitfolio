@@ -1,5 +1,5 @@
 import { Layout, Loading, ProjectHeader, ProjectTabs, EmptyState, MRItem } from '../components.js';
-import { RepositoryService, MergeRequestService } from '../api.js';
+import { RepositoryService, IssueService, MergeRequestService } from '../api.js';
 import { CreateMRModal } from '../modals.js';
 
 const MergeRequestList = {
@@ -15,10 +15,12 @@ const MergeRequestList = {
         
         Promise.all([
             RepositoryService.get(owner, repo),
-            MergeRequestService.list(owner, repo)
-        ]).then(([repoResult, mrsResult]) => {
+            MergeRequestService.list(owner, repo),
+            IssueService.list(owner, repo)
+        ]).then(([repoResult, mrsResult, issuesResult]) => {
             vnode.state.repo = repoResult.data || repoResult;
             vnode.state.mrs = mrsResult.data || mrsResult || [];
+            vnode.state.issuesCount = (issuesResult.data || issuesResult || []).filter(i => !i.is_closed).length;
             vnode.state.loading = false;
             m.redraw();
         }).catch(error => {
@@ -63,7 +65,7 @@ const MergeRequestList = {
                 m(ProjectTabs, {
                     owner: owner,
                     repo: repo.name,
-                    issuesCount: 0,
+                    issuesCount: vnode.state.issuesCount,
                     mrsCount: openMRs.length,
                     activeTab: 'mrs'
                 }),

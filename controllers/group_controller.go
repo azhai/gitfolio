@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/azhai/gitfolio/database"
+	"github.com/azhai/gitfolio/helpers"
 	"github.com/azhai/gitfolio/middleware"
 	"github.com/azhai/gitfolio/models"
 	"github.com/gofiber/fiber/v3"
@@ -286,22 +287,14 @@ func ToMilestoneResponse(milestone *models.Milestone) *MilestoneResponse {
 }
 
 func ListMilestones(c fiber.Ctx) error {
-	owner := c.Params("owner")
-	repoName := c.Params("repo")
+	result, err := helpers.GetOwnerAndRepoFromParams(c)
+	if err != nil {
+		return err
+	}
 
 	db := database.GetDB()
 
-	ownerUser, err := db.User.Select().Where("username = ?", owner).One()
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Owner not found"})
-	}
-
-	repo, err := db.Repository.Select().Where("owner_id = ? AND name = ?", ownerUser.ID, repoName).One()
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Repository not found"})
-	}
-
-	milestones, err := db.Milestone.Select().Where("repository_id = ?", repo.ID).All()
+	milestones, err := db.Milestone.Select().Where("repository_id = ?", result.Repo.ID).All()
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch milestones"})
 	}
@@ -315,9 +308,6 @@ func ListMilestones(c fiber.Ctx) error {
 }
 
 func CreateMilestone(c fiber.Ctx) error {
-	owner := c.Params("owner")
-	repoName := c.Params("repo")
-
 	var req struct {
 		Title       string  `json:"title"`
 		Description string  `json:"description"`
@@ -328,22 +318,17 @@ func CreateMilestone(c fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
+	result, err := helpers.GetOwnerAndRepoFromParams(c)
+	if err != nil {
+		return err
+	}
+
 	db := database.GetDB()
-
-	ownerUser, err := db.User.Select().Where("username = ?", owner).One()
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Owner not found"})
-	}
-
-	repo, err := db.Repository.Select().Where("owner_id = ? AND name = ?", ownerUser.ID, repoName).One()
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Repository not found"})
-	}
 
 	milestone := &models.Milestone{
 		Title:        req.Title,
 		Description:  req.Description,
-		RepositoryID: repo.ID,
+		RepositoryID: result.Repo.ID,
 	}
 
 	if req.DueDate != nil {

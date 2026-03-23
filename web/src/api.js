@@ -1,7 +1,3 @@
-import { request } from 'mithril';
-
-const API_BASE_URL = '/api/v1';
-
 const Auth = {
     token: null,
     
@@ -38,7 +34,7 @@ const API = {
         }
 
         const requestOptions = {
-            url: `${API_BASE_URL}${options.url}`,
+            url: `${Constants.API_BASE_URL}${options.url}`,
             method: options.method || 'GET',
             headers: headers
         };
@@ -48,7 +44,7 @@ const API = {
         }
 
         return m.request(requestOptions).catch(error => {
-            if (error.code === 401) {
+            if (error.code === Constants.HTTP_STATUS.UNAUTHORIZED) {
                 Auth.setToken(null);
                 m.route.set('/login');
             }
@@ -56,8 +52,9 @@ const API = {
         });
     },
     
-    get(url) {
-        return this.request({ url, method: 'GET' });
+    get(url, params = {}) {
+        const queryString = Utils.buildQueryString(params);
+        return this.request({ url: url + queryString, method: 'GET' });
     },
     
     post(url, body) {
@@ -74,8 +71,8 @@ const API = {
 };
 
 const UserService = {
-    list() {
-        return API.get('/users');
+    list(params = {}) {
+        return API.get('/users', params);
     },
     
     get(id) {
@@ -96,16 +93,16 @@ const UserService = {
 };
 
 const RepositoryService = {
-    list(owner) {
+    list(owner, params = {}) {
         const url = owner ? `/users/${owner}/repos` : '/repos';
-        return API.get(url);
+        return API.get(url, params);
     },
 
     get(owner, repo) {
         return API.get(`/${owner}/${repo}`);
     },
 
-    create(owner, data) {
+    create(data) {
         return API.post('/repos', data);
     },
 
@@ -125,16 +122,12 @@ const RepositoryService = {
         return API.post(`/${owner}/${repo}/sync/push`, { remote_url: remoteUrl });
     },
 
-    getTree(owner, repo, path, ref) {
-        let url = `/${owner}/${repo}/tree?path=${encodeURIComponent(path || '')}`;
-        if (ref) url += `&ref=${encodeURIComponent(ref)}`;
-        return API.get(url);
+    getTree(owner, repo, params = {}) {
+        return API.get(`/${owner}/${repo}/tree`, params);
     },
 
-    getFile(owner, repo, path, ref) {
-        let url = `/${owner}/${repo}/file?path=${encodeURIComponent(path || '')}`;
-        if (ref) url += `&ref=${encodeURIComponent(ref)}`;
-        return API.get(url);
+    getFile(owner, repo, params = {}) {
+        return API.get(`/${owner}/${repo}/file`, params);
     },
 
     getBranches(owner, repo) {
@@ -143,11 +136,11 @@ const RepositoryService = {
 };
 
 const IssueService = {
-    list(owner, repo) {
+    list(owner, repo, params = {}) {
         const url = owner && repo 
             ? `/${owner}/${repo}/issues`
             : '/issues';
-        return API.get(url);
+        return API.get(url, params);
     },
     
     get(owner, repo, number) {
@@ -164,11 +157,11 @@ const IssueService = {
 };
 
 const MergeRequestService = {
-    list(owner, repo) {
+    list(owner, repo, params = {}) {
         const url = owner && repo 
             ? `/${owner}/${repo}/merge_requests`
             : '/merge_requests';
-        return API.get(url);
+        return API.get(url, params);
     },
     
     get(owner, repo, number) {
@@ -185,13 +178,8 @@ const MergeRequestService = {
 };
 
 const GroupService = {
-    list(page, perPage) {
-        let url = '/groups';
-        const params = [];
-        if (page) params.push(`page=${page}`);
-        if (perPage) params.push(`per_page=${perPage}`);
-        if (params.length) url += '?' + params.join('&');
-        return API.get(url);
+    list(params = {}) {
+        return API.get('/groups', params);
     },
 
     get(name) {
@@ -204,14 +192,8 @@ const GroupService = {
 };
 
 const ActivityService = {
-    list(page, perPage, userId) {
-        let url = '/activities';
-        const params = [];
-        if (page) params.push(`page=${page}`);
-        if (perPage) params.push(`per_page=${perPage}`);
-        if (userId) params.push(`user_id=${userId}`);
-        if (params.length) url += '?' + params.join('&');
-        return API.get(url);
+    list(params = {}) {
+        return API.get('/activities', params);
     },
 
     create(data) {
@@ -230,14 +212,8 @@ const MilestoneService = {
 };
 
 const SnippetService = {
-    list(page, perPage, language) {
-        let url = '/snippets';
-        const params = [];
-        if (page) params.push(`page=${page}`);
-        if (perPage) params.push(`per_page=${perPage}`);
-        if (language) params.push(`language=${language}`);
-        if (params.length) url += '?' + params.join('&');
-        return API.get(url);
+    list(params = {}) {
+        return API.get('/snippets', params);
     },
 
     get(id) {
@@ -256,5 +232,3 @@ const SnippetService = {
         return API.delete(`/snippets/${id}`);
     }
 };
-
-export { Auth, API, UserService, RepositoryService, IssueService, MergeRequestService, GroupService, ActivityService, MilestoneService, SnippetService };
