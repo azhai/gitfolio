@@ -4,17 +4,17 @@ const ReleasesPage = {
         
         vnode.state.repo = null;
         vnode.state.issuesCount = 0;
-        vnode.state.mrsCount = 0;
+        vnode.state.prsCount = 0;
         vnode.state.loading = true;
         
         Promise.all([
             RepositoryService.get(owner, repo),
             IssueService.list(owner, repo),
-            MergeRequestService.list(owner, repo)
-        ]).then(([repoResult, issuesResult, mrsResult]) => {
+            PullRequestService.list(owner, repo)
+        ]).then(([repoResult, issuesResult, prsResult]) => {
             vnode.state.repo = repoResult.data || repoResult;
             vnode.state.issuesCount = (issuesResult.data || issuesResult || []).filter(i => !i.is_closed).length;
-            vnode.state.mrsCount = (mrsResult.data || mrsResult || []).filter(m => !m.is_closed && !m.is_merged).length;
+            vnode.state.prsCount = (prsResult.data || prsResult || []).filter(p => !p.is_closed && !p.is_merged).length;
             vnode.state.loading = false;
             m.redraw();
         }).catch(error => {
@@ -25,7 +25,7 @@ const ReleasesPage = {
     },
     
     view(vnode) {
-        const { repo, issuesCount, mrsCount, loading } = vnode.state;
+        const { repo, issuesCount, prsCount, loading } = vnode.state;
         const { owner, repo: repoName } = vnode.attrs;
         
         if (loading) {
@@ -51,7 +51,7 @@ const ReleasesPage = {
                     owner: owner,
                     repo: repo.name,
                     issuesCount: issuesCount,
-                    mrsCount: mrsCount,
+                    prsCount: prsCount,
                     activeTab: 'releases'
                 }),
                 
@@ -117,17 +117,17 @@ const StatsPage = {
         
         vnode.state.repo = null;
         vnode.state.issuesCount = 0;
-        vnode.state.mrsCount = 0;
+        vnode.state.prsCount = 0;
         vnode.state.loading = true;
         
         Promise.all([
             RepositoryService.get(owner, repo),
             IssueService.list(owner, repo),
-            MergeRequestService.list(owner, repo)
-        ]).then(([repoResult, issuesResult, mrsResult]) => {
+            PullRequestService.list(owner, repo)
+        ]).then(([repoResult, issuesResult, prsResult]) => {
             vnode.state.repo = repoResult.data || repoResult;
             vnode.state.issuesCount = (issuesResult.data || issuesResult || []).filter(i => !i.is_closed).length;
-            vnode.state.mrsCount = (mrsResult.data || mrsResult || []).filter(m => !m.is_closed && !m.is_merged).length;
+            vnode.state.prsCount = (prsResult.data || prsResult || []).filter(p => !p.is_closed && !p.is_merged).length;
             vnode.state.loading = false;
             m.redraw();
         }).catch(error => {
@@ -138,7 +138,7 @@ const StatsPage = {
     },
     
     view(vnode) {
-        const { repo, issuesCount, mrsCount, loading } = vnode.state;
+        const { repo, issuesCount, prsCount, loading } = vnode.state;
         const { owner, repo: repoName } = vnode.attrs;
         
         if (loading) {
@@ -164,7 +164,7 @@ const StatsPage = {
                     owner: owner,
                     repo: repo.name,
                     issuesCount: issuesCount,
-                    mrsCount: mrsCount,
+                    prsCount: prsCount,
                     activeTab: 'stats'
                 }),
                 

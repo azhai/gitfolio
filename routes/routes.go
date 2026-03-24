@@ -72,8 +72,15 @@ func SetupRouter() *fiber.App {
 	app.Put("/api/v1/snippets/:id", middleware.AuthMiddleware(), controllers.UpdateSnippet)
 	app.Delete("/api/v1/snippets/:id", middleware.AuthMiddleware(), controllers.DeleteSnippet)
 
-	app.Get("/api/v1/:owner/:repo/milestones", controllers.ListMilestones)
-	app.Post("/api/v1/:owner/:repo/milestones", middleware.AuthMiddleware(), controllers.CreateMilestone)
+	app.Get("/api/v1/:owner/:repo/tasks", controllers.ListTasks)
+	app.Post("/api/v1/:owner/:repo/tasks", middleware.AuthMiddleware(), controllers.CreateTask)
+	app.Get("/api/v1/:owner/:repo/tasks/:id", controllers.GetTask)
+	app.Put("/api/v1/:owner/:repo/tasks/:id", middleware.AuthMiddleware(), controllers.UpdateTask)
+	app.Delete("/api/v1/:owner/:repo/tasks/:id", middleware.AuthMiddleware(), controllers.DeleteTask)
+	app.Post("/api/v1/:owner/:repo/tasks/:id/attachments", middleware.AuthMiddleware(), controllers.UploadTaskAttachment)
+	app.Delete("/api/v1/:owner/:repo/tasks/:id/attachments/:attachment_id", middleware.AuthMiddleware(), controllers.DeleteTaskAttachment)
+	app.Post("/api/v1/:owner/:repo/tasks/:id/issues", middleware.AuthMiddleware(), controllers.AddIssueToTask)
+	app.Delete("/api/v1/:owner/:repo/tasks/:id/issues/:issue_id", middleware.AuthMiddleware(), controllers.RemoveIssueFromTask)
 
 	app.Get("/api/v1/:owner/:repo", middleware.OptionalAuth(), controllers.GetRepository)
 	app.Put("/api/v1/:owner/:repo", middleware.AuthMiddleware(), controllers.UpdateRepository)
@@ -98,6 +105,8 @@ func SetupRouter() *fiber.App {
 	app.Put("/api/v1/:owner/:repo/issues/:number", middleware.AuthMiddleware(), controllers.UpdateIssue)
 	app.Get("/api/v1/:owner/:repo/issues/:number/comments", controllers.GetComments)
 	app.Post("/api/v1/:owner/:repo/issues/:number/comments", middleware.AuthMiddleware(), controllers.CreateComment)
+
+	app.Get("/api/v1/:owner/:repo/labels", controllers.ListLabels)
 
 	app.Get("/api/v1/:owner/:repo/merge_requests", controllers.ListMergeRequests)
 	app.Post("/api/v1/:owner/:repo/merge_requests", middleware.AuthMiddleware(), controllers.CreateMergeRequest)

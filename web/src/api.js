@@ -156,7 +156,51 @@ const IssueService = {
     }
 };
 
-const MergeRequestService = {
+const LabelService = {
+    list(owner, repo) {
+        return API.get(`/${owner}/${repo}/labels`);
+    }
+};
+
+const TaskService = {
+    list(owner, repo, params = {}) {
+        return API.get(`/${owner}/${repo}/tasks`, params);
+    },
+    
+    get(owner, repo, id) {
+        return API.get(`/${owner}/${repo}/tasks/${id}`);
+    },
+    
+    create(owner, repo, data) {
+        return API.post(`/${owner}/${repo}/tasks`, data);
+    },
+    
+    update(owner, repo, id, data) {
+        return API.put(`/${owner}/${repo}/tasks/${id}`, data);
+    },
+    
+    delete(owner, repo, id) {
+        return API.delete(`/${owner}/${repo}/tasks/${id}`);
+    },
+    
+    uploadAttachment(owner, repo, id, formData) {
+        return API.post(`/${owner}/${repo}/tasks/${id}/attachments`, formData);
+    },
+    
+    deleteAttachment(owner, repo, id, attachmentId) {
+        return API.delete(`/${owner}/${repo}/tasks/${id}/attachments/${attachmentId}`);
+    },
+    
+    addIssue(owner, repo, id, issueId) {
+        return API.post(`/${owner}/${repo}/tasks/${id}/issues`, { issue_id: issueId });
+    },
+    
+    removeIssue(owner, repo, id, issueId) {
+        return API.delete(`/${owner}/${repo}/tasks/${id}/issues/${issueId}`);
+    }
+};
+
+const PullRequestService = {
     list(owner, repo, params = {}) {
         const url = owner && repo 
             ? `/${owner}/${repo}/merge_requests`
@@ -174,6 +218,18 @@ const MergeRequestService = {
     
     update(owner, repo, number, data) {
         return API.put(`/${owner}/${repo}/merge_requests/${number}`, data);
+    },
+    
+    merge(owner, repo, number) {
+        return API.post(`/${owner}/${repo}/merge_requests/${number}/merge`);
+    },
+    
+    close(owner, repo, number) {
+        return API.post(`/${owner}/${repo}/merge_requests/${number}/close`);
+    },
+    
+    reopen(owner, repo, number) {
+        return API.post(`/${owner}/${repo}/merge_requests/${number}/reopen`);
     }
 };
 

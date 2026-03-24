@@ -23,17 +23,17 @@ const Groups = {
 
         return m(Layout, [
             m('div.page-header', [
-                m('h1', [m('i.fas.fa-users'), ' 群组']),
+                m('h1', [m('i.fas.fa-users'), ' 团队']),
                 m('div.page-actions', [
                     m('button.btn.btn-primary', {
                         onclick: () => m.route.set('/groups/new')
-                    }, [m('i.fas.fa-plus'), ' 新建群组'])
+                    }, [m('i.fas.fa-plus'), ' 新建团队'])
                 ])
             ]),
 
             loading ? m(Loading) : [
                 groups.length === 0 
-                    ? m(EmptyState, { message: '暂无群组', icon: 'fa-users' })
+                    ? m(EmptyState, { message: '暂无团队', icon: 'fa-users' })
                     : m('div.groups-list', groups.map(group => 
                         m('div.group-card', {
                             onclick: () => m.route.set(`/groups/${group.name}`)
@@ -83,7 +83,7 @@ const GroupDetail = {
         }
 
         if (!group) {
-            return m(Layout, m(EmptyState, { message: '群组不存在', icon: 'fa-users' }));
+            return m(Layout, m(EmptyState, { message: '团队不存在', icon: 'fa-users' }));
         }
 
         return m(Layout, [
@@ -114,7 +114,7 @@ const GroupDetail = {
 
                 m('div.group-content', [
                     m('div.info-section', [
-                        m('h3', '群组信息'),
+                        m('h3', '团队信息'),
                         m('div.info-row', [m('strong', '名称: '), group.name]),
                         m('div.info-row', [m('strong', '创建时间: '), group.created_at])
                     ])
@@ -138,7 +138,7 @@ const NewGroup = {
 
     submit(vnode) {
         if (!vnode.state.form.name) {
-            alert('请输入群组名称');
+            alert('请输入团队名称');
             return;
         }
 
@@ -157,12 +157,12 @@ const NewGroup = {
 
         return m(Layout, [
             m('div.page-header', [
-                m('h1', [m('i.fas.fa-users'), ' 新建群组'])
+                m('h1', [m('i.fas.fa-users'), ' 新建团队'])
             ]),
 
             m('div.form-container', [
                 m('div.form-group', [
-                    m('label', '群组名称 *'),
+                    m('label', '团队名称 *'),
                     m('input.form-input', {
                         type: 'text',
                         value: form.name,
@@ -177,7 +177,7 @@ const NewGroup = {
                         type: 'text',
                         value: form.display_name,
                         oninput: e => { form.display_name = e.target.value; },
-                        placeholder: '例如: 我的群组'
+                        placeholder: '例如: 我的团队'
                     })
                 ]),
 
@@ -186,7 +186,7 @@ const NewGroup = {
                     m('textarea.form-input', {
                         value: form.description,
                         oninput: e => { form.description = e.target.value; },
-                        placeholder: '群组描述',
+                        placeholder: '团队描述',
                         rows: 3
                     })
                 ]),
@@ -215,7 +215,7 @@ const NewGroup = {
                     m('button.btn.btn-primary', {
                         onclick: () => NewGroup.submit(vnode),
                         disabled: submitting
-                    }, submitting ? '创建中...' : '创建群组'),
+                    }, submitting ? '创建中...' : '创建团队'),
                     m('button.btn', {
                         onclick: () => m.route.set('/groups')
                     }, '取消')

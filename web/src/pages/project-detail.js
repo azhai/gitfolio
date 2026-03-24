@@ -1,5 +1,5 @@
 import { Layout, Loading, ProjectHeader, ProjectTabs, EmptyState } from '../components.js';
-import { RepositoryService, IssueService, MergeRequestService } from '../api.js';
+import { RepositoryService, IssueService, PullRequestService } from '../api.js';
 
 const getLanguageFromPath = (path) => {
     const ext = path.split('.').pop().toLowerCase();
@@ -84,7 +84,7 @@ const ProjectDetail = {
         
         vnode.state.repo = null;
         vnode.state.issuesCount = 0;
-        vnode.state.mrsCount = 0;
+        vnode.state.prsCount = 0;
         vnode.state.loading = true;
         vnode.state.currentPath = '';
         vnode.state.currentBranch = 'HEAD';
@@ -125,11 +125,11 @@ const ProjectDetail = {
         Promise.all([
             RepositoryService.get(owner, repo),
             IssueService.list(owner, repo),
-            MergeRequestService.list(owner, repo)
-        ]).then(([repoResult, issuesResult, mrsResult]) => {
+            PullRequestService.list(owner, repo)
+        ]).then(([repoResult, issuesResult, prsResult]) => {
             vnode.state.repo = repoResult.data || repoResult;
             vnode.state.issuesCount = (issuesResult.data || issuesResult || []).filter(i => !i.is_closed).length;
-            vnode.state.mrsCount = (mrsResult.data || mrsResult || []).filter(m => !m.is_closed && !m.is_merged).length;
+            vnode.state.prsCount = (prsResult.data || prsResult || []).filter(p => !p.is_closed && !p.is_merged).length;
             vnode.state.loading = false;
             vnode.state.loadBranches();
             vnode.state.loadTree();
@@ -141,7 +141,7 @@ const ProjectDetail = {
     },
     
     view(vnode) {
-        const { repo, issuesCount, mrsCount, loading, currentPath, currentBranch, branches, treeEntries, fileContent, showBranchMenu } = vnode.state;
+        const { repo, issuesCount, prsCount, loading, currentPath, currentBranch, branches, treeEntries, fileContent, showBranchMenu } = vnode.state;
         const { owner, repo: repoName } = vnode.attrs;
         
         if (loading) {
@@ -167,7 +167,7 @@ const ProjectDetail = {
                     owner: owner,
                     repo: repo.name,
                     issuesCount: issuesCount,
-                    mrsCount: mrsCount,
+                    prsCount: prsCount,
                     activeTab: 'code'
                 }),
                 

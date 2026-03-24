@@ -2,10 +2,10 @@ const GroupsPage = {
     view() {
         return m(Layout, [
             m('div.page-header', [
-                m('h1', '群组')
+                m('h1', '团队')
             ]),
             m(EmptyState, { 
-                message: '暂无群组', 
+                message: '暂无团队', 
                 icon: 'fa-users' 
             })
         ]);
@@ -44,10 +44,10 @@ const SnippetsPage = {
     view() {
         return m(Layout, [
             m('div.page-header', [
-                m('h1', '代码片段')
+                m('h1', '片段')
             ]),
             m(EmptyState, { 
-                message: '暂无代码片段', 
+                message: '暂无片段', 
                 icon: 'fa-code' 
             })
         ]);

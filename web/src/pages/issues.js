@@ -1,5 +1,5 @@
 import { Layout, Loading, ProjectHeader, ProjectTabs, EmptyState, IssueItem } from '../components.js';
-import { RepositoryService, IssueService, MergeRequestService } from '../api.js';
+import { RepositoryService, IssueService, PullRequestService, LabelService } from '../api.js';
 import { CreateIssueModal } from '../modals.js';
 
 const IssueList = {
@@ -8,19 +8,23 @@ const IssueList = {
         
         vnode.state.repo = null;
         vnode.state.issues = [];
+        vnode.state.labels = [];
         vnode.state.loading = true;
         vnode.state.filter = 'open';
-        vnode.state.mrsCount = 0;
+        vnode.state.labelFilter = '';
+        vnode.state.prsCount = 0;
         vnode.state.showCreateModal = false;
         
         Promise.all([
             RepositoryService.get(owner, repo),
             IssueService.list(owner, repo),
-            MergeRequestService.list(owner, repo)
-        ]).then(([repoResult, issuesResult, mrsResult]) => {
+            PullRequestService.list(owner, repo),
+            LabelService.list(owner, repo)
+        ]).then(([repoResult, issuesResult, prsResult, labelsResult]) => {
             vnode.state.repo = repoResult.data || repoResult;
             vnode.state.issues = issuesResult.data || issuesResult || [];
-            vnode.state.mrsCount = (mrsResult.data || mrsResult || []).filter(m => !m.is_closed && !m.is_merged).length;
+            vnode.state.labels = labelsResult || [];
+            vnode.state.prsCount = (prsResult.data || prsResult || []).filter(p => !p.is_closed && !p.is_merged).length;
             vnode.state.loading = false;
             m.redraw();
         }).catch(error => {
@@ -31,7 +35,7 @@ const IssueList = {
     },
     
     view(vnode) {
-        const { repo, issues, loading, filter, showCreateModal } = vnode.state;
+        const { repo, issues, labels, loading, filter, labelFilter, showCreateModal } = vnode.state;
         const { owner, repo: repoName } = vnode.attrs;
         
         if (loading) {
@@ -42,18 +46,25 @@ const IssueList = {
             return m(Layout, m(EmptyState, { message: '项目不存在', icon: 'fa-exclamation-triangle' }));
         }
         
-        const filteredIssues = issues.filter(issue => {
+        let filteredIssues = issues.filter(issue => {
             if (filter === 'open') return !issue.is_closed;
             if (filter === 'closed') return issue.is_closed;
             return true;
         });
+        
+        if (labelFilter) {
+            filteredIssues = filteredIssues.filter(issue => {
+                if (!issue.labels || !issue.labels.length) return false;
+                return issue.labels.some(l => l.name === labelFilter);
+            });
+        }
         
         const openCount = issues.filter(i => !i.is_closed).length;
         const closedCount = issues.filter(i => i.is_closed).length;
         
         return m(Layout, [
             m(ProjectHeader, { repo, owner }),
-            m(ProjectTabs, { owner, repo: repo.name, activeTab: 'issues', issuesCount: openCount, mrsCount: vnode.state.mrsCount }),
+            m(ProjectTabs, { owner, repo: repo.name, activeTab: 'issues', issuesCount: openCount, prsCount: vnode.state.prsCount }),
             
             m('div.issues-page', [
                 m('div.issues-header', [
@@ -81,6 +92,21 @@ const IssueList = {
                     ])
                 ]),
                 
+                labels.length > 0 ? m('div.label-filters', [
+                    m('span.label-filter-title', '标签过滤:'),
+                    m('button.label-filter-btn', {
+                        class: labelFilter === '' ? 'active' : '',
+                        onclick: () => { vnode.state.labelFilter = ''; }
+                    }, '全部'),
+                    ...labels.map(label => 
+                        m('button.label-filter-btn', {
+                            class: labelFilter === label.name ? 'active' : '',
+                            style: labelFilter === label.name ? `background-color: ${label.color}; color: white;` : `border-color: ${label.color};`,
+                            onclick: () => { vnode.state.labelFilter = label.name; }
+                        }, label.name)
+                    )
+                ]) : null,
+                
                 filteredIssues.length === 0 ? 
                     m(EmptyState, { 
                         message: filter === 'open' ? '没有开启的Issue' : '没有已关闭的Issue', 
@@ -102,7 +128,8 @@ const IssueList = {
                     });
                 },
                 owner,
-                repo: repo.name
+                repo: repo.name,
+                labels: labels
             })
         ]);
     }

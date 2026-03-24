@@ -1,21 +1,21 @@
-import { Layout, Loading, EmptyState, ProjectCard, IssueItem, MRItem } from '../components.js';
-import { RepositoryService, IssueService, MergeRequestService } from '../api.js';
+import { Layout, Loading, EmptyState, ProjectCard, IssueItem, PRItem } from '../components.js';
+import { RepositoryService, IssueService, PullRequestService } from '../api.js';
 
 const Dashboard = {
     oninit(vnode) {
         vnode.state.projects = [];
         vnode.state.issues = [];
-        vnode.state.mrs = [];
+        vnode.state.prs = [];
         vnode.state.loading = true;
         
         Promise.all([
             RepositoryService.list(),
             IssueService.list(),
-            MergeRequestService.list()
-        ]).then(([projects, issues, mrs]) => {
+            PullRequestService.list()
+        ]).then(([projects, issues, prs]) => {
             vnode.state.projects = projects.data || [];
             vnode.state.issues = issues.data || [];
-            vnode.state.mrs = mrs.data || [];
+            vnode.state.prs = prs.data || [];
             vnode.state.loading = false;
             m.redraw();
         }).catch(error => {
@@ -26,7 +26,7 @@ const Dashboard = {
     },
     
     view(vnode) {
-        const { projects, issues, mrs, loading } = vnode.state;
+        const { projects, issues, prs, loading } = vnode.state;
         
         if (loading) {
             return m(Layout, m(Loading));
@@ -35,7 +35,7 @@ const Dashboard = {
         return m(Layout, [
             m('div.dashboard', [
                 m('div.dashboard-header', [
-                    m('h1', '仪表盘'),
+                    m('h1', '总览'),
                     m('p', '欢迎回来，ryan！')
                 ]),
                 
@@ -67,12 +67,12 @@ const Dashboard = {
                     m('div.dashboard-section', [
                         m('h2', [
                             m('i.fas.fa-code-branch'),
-                            ' 最近合并请求'
+                            ' 最近 PR'
                         ]),
-                        mrs.length === 0 
-                            ? m(EmptyState, { message: '暂无合并请求' })
-                            : m('div.mr-list', mrs.slice(0, 5).map(mr => 
-                                m(MRItem, { mr })
+                        prs.length === 0 
+                            ? m(EmptyState, { message: '暂无 PR' })
+                            : m('div.pr-list', prs.slice(0, 5).map(pr => 
+                                m(PRItem, { pr })
                             ))
                     ])
                 ])

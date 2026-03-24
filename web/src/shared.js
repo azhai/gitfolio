@@ -32,7 +32,7 @@ const Constants = {
         ALL: 'all'
     },
     
-    MR_STATUS: {
+    PR_STATUS: {
         OPEN: 'open',
         CLOSED: 'closed',
         MERGED: 'merged'

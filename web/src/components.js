@@ -31,7 +31,7 @@ const TopBar = {
                 ]),
                 m('div.search-box', [
                     m('i.fas.fa-search'),
-                    m('input[type=text][placeholder=搜索项目、Issue、合并请求...]')
+                    m('input[type=text][placeholder=搜索项目、Issue、PR...]')
                 ])
             ]),
             m('div.top-bar-right', [
@@ -63,7 +63,7 @@ const Sidebar = {
                         class: currentRoute === '/' ? 'active' : ''
                     }, [
                         m('i.fas.fa-home'),
-                        m('span', '仪表盘')
+                        m('span', '总览')
                     ]),
                     m('a.nav-item', { 
                         href: '/projects', 
@@ -79,7 +79,7 @@ const Sidebar = {
                         class: currentRoute === '/groups' ? 'active' : ''
                     }, [
                         m('i.fas.fa-users'),
-                        m('span', '群组')
+                        m('span', '团队')
                     ]),
                     m('a.nav-item', { 
                         href: '/activity', 
@@ -95,7 +95,7 @@ const Sidebar = {
                         class: currentRoute === '/snippets' ? 'active' : ''
                     }, [
                         m('i.fas.fa-code'),
-                        m('span', '代码片段')
+                        m('span', '片段')
                     ])
                 ])
             ])
@@ -156,14 +156,14 @@ const ProjectHeader = {
 
 const ProjectTabs = {
     view(vnode) {
-        const { owner, repo, issuesCount, mrsCount, activeTab } = vnode.attrs;
+        const { owner, repo, issuesCount, prsCount, activeTab } = vnode.attrs;
         const currentRoute = m.route.get();
         
         const tabs = [
             { id: 'code', icon: 'fa-code', label: '代码', href: `/project/${owner}/${repo}` },
             { id: 'issues', icon: 'fa-exclamation-circle', label: 'Issue', href: `/issues/${owner}/${repo}`, count: issuesCount },
-            { id: 'mrs', icon: 'fa-code-branch', label: '合并请求', href: `/merge-requests/${owner}/${repo}`, count: mrsCount },
-            { id: 'milestones', icon: 'fa-flag', label: '里程碑', href: `/milestones/${owner}/${repo}` },
+            { id: 'prs', icon: 'fa-code-branch', label: 'PR', href: `/pull-requests/${owner}/${repo}`, count: prsCount },
+            { id: 'tasks', icon: 'fa-tasks', label: '任务', href: `/tasks/${owner}/${repo}` },
             { id: 'releases', icon: 'fa-cube', label: '发布', href: `/releases/${owner}/${repo}` },
             { id: 'stats', icon: 'fa-chart-line', label: '统计', href: `/stats/${owner}/${repo}` },
             { id: 'settings', icon: 'fa-cog', label: '设置', href: `/settings/${owner}/${repo}` }
@@ -303,53 +303,232 @@ const IssueItem = {
                 })
             ]),
             m('div.issue-item-content', [
-                m('h4', m('a', { 
-                    href: `/issues/${owner}/${repo}/${issue.number}`,
-                    oncreate: m.route.link
-                }, issue.title)),
+                m('h4', [
+                    issue.labels && issue.labels.length > 0 ? 
+                        m('span.issue-labels-inline', issue.labels.map(label => 
+                            m('span.issue-label', { style: { backgroundColor: label.color } }, label.name)
+                        )) : null,
+                    m('a', { 
+                        href: `/issues/${owner}/${repo}/${issue.number}`,
+                        oncreate: m.route.link
+                    }, issue.title)
+                ]),
                 m('div.issue-item-meta', [
                     m('span', `#${issue.number}`),
-                    m('span', `由 ${issue.author} 创建于 ${formatTime(issue.created_at)}`),
-                    issue.labels ? m('div.issue-labels', issue.labels.map(label => 
-                        m('span.issue-label', { style: { backgroundColor: label.color } }, label.name)
-                    )) : null
+                    m('span', `由 ${issue.author} 创建于 ${formatTime(issue.created_at)}`)
                 ])
             ])
         ]);
     }
 };
 
-const MRItem = {
+const PRItem = {
     view(vnode) {
-        const { mr, owner: propOwner, repo: propRepo } = vnode.attrs;
-        const owner = propOwner || mr.owner;
-        const repo = propRepo || mr.repo;
+        const { pr, owner: propOwner, repo: propRepo } = vnode.attrs;
+        const owner = propOwner || pr.owner;
+        const repo = propRepo || pr.repo;
         
         let statusClass = 'open';
         let statusIcon = 'fa-code-branch';
-        if (mr.is_merged) {
+        if (pr.is_merged) {
             statusClass = 'merged';
-        } else if (mr.is_closed) {
+        } else if (pr.is_closed) {
             statusClass = 'closed';
         }
         
-        return m('div.mr-item', [
-            m('div.mr-item-icon', [
+        return m('div.pr-item', [
+            m('div.pr-item-icon', [
                 m(`i.fas.${statusIcon}`, { class: statusClass })
             ]),
-            m('div.mr-item-content', [
+            m('div.pr-item-content', [
                 m('h4', m('a', { 
-                    href: `/merge-requests/${owner}/${repo}/${mr.number}`,
+                    href: `/pull-requests/${owner}/${repo}/${pr.number}`,
                     oncreate: m.route.link
-                }, mr.title)),
-                m('div.mr-item-meta', [
-                    m('span', `!${mr.number}`),
-                    m('span', `${mr.source_branch} → ${mr.target_branch}`),
-                    m('span', `由 ${mr.author} 创建于 ${formatTime(mr.created_at)}`)
+                }, pr.title)),
+                m('div.pr-item-meta', [
+                    m('span', `#${pr.number}`),
+                    m('span', `${pr.source_branch} → ${pr.target_branch}`),
+                    m('span', `由 ${pr.author} 创建于 ${formatTime(pr.created_at)}`)
                 ])
             ])
         ]);
     }
 };
 
-export { Layout, TopBar, Sidebar, ProjectHeader, ProjectTabs, Loading, EmptyState, Modal, formatTime, ProjectCard, IssueItem, MRItem };
+const MarkdownEditor = {
+    oninit(vnode) {
+        vnode.state.preview = false;
+        vnode.state.showCodeRef = false;
+        vnode.state.codeRef = {
+            branch: 'main',
+            commit: '',
+            path: '',
+            startLine: '',
+            endLine: ''
+        };
+    },
+    
+    view(vnode) {
+        const { value, oninput, placeholder, rows, owner, repo } = vnode.attrs;
+        const { preview, showCodeRef, codeRef } = vnode.state;
+        
+        return m('div.markdown-editor', [
+            m('div.editor-toolbar', [
+                m('button.toolbar-btn', {
+                    class: !preview ? 'active' : '',
+                    onclick: () => { vnode.state.preview = false; }
+                }, [m('i.fas.fa-edit'), ' 编辑']),
+                m('button.toolbar-btn', {
+                    class: preview ? 'active' : '',
+                    onclick: () => { vnode.state.preview = true; }
+                }, [m('i.fas.fa-eye', ' 预览')]),
+                m('div.toolbar-separator'),
+                m('button.toolbar-btn', {
+                    title: '插入代码引用',
+                    onclick: () => { vnode.state.showCodeRef = !showCodeRef; }
+                }, [m('i.fas.fa-code'), ' 代码引用'])
+            ]),
+            
+            showCodeRef ? m('div.code-ref-panel', [
+                m('div.code-ref-row', [
+                    m('input.form-input.code-ref-input', {
+                        type: 'text',
+                        placeholder: '分支 (如: main)',
+                        value: codeRef.branch,
+                        oninput: (e) => { vnode.state.codeRef.branch = e.target.value; }
+                    }),
+                    m('input.form-input.code-ref-input', {
+                        type: 'text',
+                        placeholder: 'Commit (可选)',
+                        value: codeRef.commit,
+                        oninput: (e) => { vnode.state.codeRef.commit = e.target.value; }
+                    })
+                ]),
+                m('div.code-ref-row', [
+                    m('input.form-input.code-ref-input.code-ref-path', {
+                        type: 'text',
+                        placeholder: '文件路径 (如: src/main.go)',
+                        value: codeRef.path,
+                        oninput: (e) => { vnode.state.codeRef.path = e.target.value; }
+                    })
+                ]),
+                m('div.code-ref-row', [
+                    m('input.form-input.code-ref-input', {
+                        type: 'number',
+                        placeholder: '起始行',
+                        value: codeRef.startLine,
+                        oninput: (e) => { vnode.state.codeRef.startLine = e.target.value; }
+                    }),
+                    m('input.form-input.code-ref-input', {
+                        type: 'number',
+                        placeholder: '结束行',
+                        value: codeRef.endLine,
+                        oninput: (e) => { vnode.state.codeRef.endLine = e.target.value; }
+                    }),
+                    m('button.btn.btn-sm.btn-primary', {
+                        onclick: () => {
+                            const ref = codeRef;
+                            let codeRefStr = '';
+                            if (ref.commit) {
+                                codeRefStr = `\`\`\`coderef:${ref.branch}:${ref.commit}:${ref.path}`;
+                            } else {
+                                codeRefStr = `\`\`\`coderef:${ref.branch}:${ref.path}`;
+                            }
+                            if (ref.startLine && ref.endLine) {
+                                codeRefStr += `:${ref.startLine}-${ref.endLine}`;
+                            } else if (ref.startLine) {
+                                codeRefStr += `:${ref.startLine}`;
+                            }
+                            codeRefStr += '\n```';
+                            
+                            const newValue = value ? value + '\n\n' + codeRefStr : codeRefStr;
+                            oninput({ target: { value: newValue } });
+                            vnode.state.showCodeRef = false;
+                            vnode.state.codeRef = { branch: 'main', commit: '', path: '', startLine: '', endLine: '' };
+                        }
+                    }, '插入')
+                ])
+            ]) : null,
+            
+            preview ? 
+                m('div.markdown-preview', [
+                    m(MarkdownRenderer, { content: value || '' })
+                ]) :
+                m('textarea.form-input.form-textarea.markdown-textarea', {
+                    placeholder: placeholder || '支持 Markdown 格式...',
+                    rows: rows || 10,
+                    value: value,
+                    oninput: oninput
+                })
+        ]);
+    }
+};
+
+const MarkdownRenderer = {
+    view(vnode) {
+        const { content } = vnode.attrs;
+        
+        const html = MarkdownRenderer.render(content);
+        
+        return m('div.markdown-body', {
+            innerHTML: html
+        });
+    },
+    
+    render(content) {
+        if (!content) return '';
+        
+        let html = content
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+        
+        html = html.replace(/```coderef:([^:\n]+):([^:\n]+):([^:\n]+):(\d+)-(\d+)\n```/g, (match, branch, commit, path, start, end) => {
+            return `<div class="code-ref-block" data-branch="${branch}" data-commit="${commit}" data-path="${path}" data-start="${start}" data-end="${end}">
+                <div class="code-ref-header">
+                    <span class="code-ref-branch"><i class="fas fa-code-branch"></i> ${branch}</span>
+                    <span class="code-ref-path">${path}</span>
+                    <span class="code-ref-lines">L${start}-L${end}</span>
+                </div>
+                <div class="code-ref-content">加载中...</div>
+            </div>`;
+        });
+        
+        html = html.replace(/```coderef:([^:\n]+):([^:\n]+):(\d+)-(\d+)\n```/g, (match, branch, path, start, end) => {
+            return `<div class="code-ref-block" data-branch="${branch}" data-path="${path}" data-start="${start}" data-end="${end}">
+                <div class="code-ref-header">
+                    <span class="code-ref-branch"><i class="fas fa-code-branch"></i> ${branch}</span>
+                    <span class="code-ref-path">${path}</span>
+                    <span class="code-ref-lines">L${start}-L${end}</span>
+                </div>
+                <div class="code-ref-content">加载中...</div>
+            </div>`;
+        });
+        
+        html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (match, lang, code) => {
+            return `<pre class="code-block"><code class="language-${lang}">${code}</code></pre>`;
+        });
+        
+        html = html.replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>');
+        
+        html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+        html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+        
+        html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+        html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+        html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+        
+        html = html.replace(/^\- (.+)$/gm, '<li>$1</li>');
+        html = html.replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>');
+        
+        html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
+        
+        html = html.replace(/\n\n/g, '</p><p>');
+        html = html.replace(/\n/g, '<br>');
+        html = '<p>' + html + '</p>';
+        
+        return html;
+    }
+};
+
+export { Layout, TopBar, Sidebar, ProjectHeader, ProjectTabs, Loading, EmptyState, Modal, formatTime, ProjectCard, IssueItem, PRItem, MarkdownEditor, MarkdownRenderer };

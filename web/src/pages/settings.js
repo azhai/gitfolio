@@ -1,5 +1,5 @@
 import { Layout, Loading, ProjectHeader, ProjectTabs, EmptyState } from '../components.js';
-import { RepositoryService, IssueService, MergeRequestService } from '../api.js';
+import { RepositoryService, IssueService, PullRequestService } from '../api.js';
 
 const SettingsPage = {
     oninit(vnode) {
@@ -7,7 +7,7 @@ const SettingsPage = {
 
         vnode.state.repo = null;
         vnode.state.issuesCount = 0;
-        vnode.state.mrsCount = 0;
+        vnode.state.prsCount = 0;
         vnode.state.loading = true;
         vnode.state.activeSection = 'general';
         vnode.state.formData = {
@@ -22,11 +22,11 @@ const SettingsPage = {
         Promise.all([
             RepositoryService.get(owner, repo),
             IssueService.list(owner, repo),
-            MergeRequestService.list(owner, repo)
-        ]).then(([repoResult, issuesResult, mrsResult]) => {
+            PullRequestService.list(owner, repo)
+        ]).then(([repoResult, issuesResult, prsResult]) => {
             vnode.state.repo = repoResult.data || repoResult;
             vnode.state.issuesCount = (issuesResult.data || issuesResult || []).filter(i => !i.is_closed).length;
-            vnode.state.mrsCount = (mrsResult.data || mrsResult || []).filter(m => !m.is_closed && !m.is_merged).length;
+            vnode.state.prsCount = (prsResult.data || prsResult || []).filter(p => !p.is_closed && !p.is_merged).length;
             vnode.state.formData = {
                 name: vnode.state.repo.name,
                 description: vnode.state.repo.description || '',
@@ -106,7 +106,7 @@ const SettingsPage = {
                 owner, 
                 repo: repo.name, 
                 issuesCount: vnode.state.issuesCount,
-                mrsCount: vnode.state.mrsCount,
+                prsCount: vnode.state.prsCount,
                 activeTab: 'settings' 
             }),
             

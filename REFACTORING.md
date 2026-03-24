@@ -128,7 +128,7 @@ if repo.ProjectType == constants.ProjectTypeMirror {
 }
 
 if snippet.Visibility == constants.VisibilityPublic {
-    // 公开代码片段
+    // 公开片段
 }
 ```
 

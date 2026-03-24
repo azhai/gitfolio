@@ -204,7 +204,6 @@ type Webhook struct {
 	Secret   string
 	IsActive bool `goe:"default:true"`
 	Events   string
-
 }
 
 type ProjectType string
@@ -236,7 +235,6 @@ type PlatformAccount struct {
 	APIURL    string
 	IsActive  bool `goe:"default:true"`
 	UserID    uint `goe:"index"`
-
 }
 
 type SyncToken struct {
@@ -254,7 +252,6 @@ type SyncToken struct {
 	AccountID    uint  `goe:"index"`
 	RepositoryID *uint `goe:"index"`
 	IsActive     bool  `goe:"default:true"`
-
 }
 
 type RemoteRepository struct {
@@ -275,7 +272,6 @@ type RemoteRepository struct {
 	Direction    string `goe:"default:'pull'"`
 	LastSyncAt   *time.Time
 	SyncEnabled  bool `goe:"default:true"`
-
 }
 
 type SyncPoint struct {
@@ -299,7 +295,6 @@ type SyncPoint struct {
 	SyncInterval    int `goe:"default:3600"`
 	LastError       string
 	IsPaused        bool `goe:"default:false"`
-
 }
 
 type SyncLog struct {
@@ -314,7 +309,6 @@ type SyncLog struct {
 	ItemsSynced int
 	ItemsFailed int
 	Details     string
-
 }
 
 type Group struct {
@@ -330,7 +324,6 @@ type Group struct {
 	Location    string
 
 	OwnerID uint `goe:"index"`
-
 }
 
 type GroupMember struct {
@@ -340,7 +333,6 @@ type GroupMember struct {
 	GroupID uint `goe:"uniqueIndex:idx_group_user"`
 	UserID  uint `goe:"uniqueIndex:idx_group_user"`
 	Role    string
-
 }
 
 type Activity struct {
@@ -356,7 +348,6 @@ type Activity struct {
 	Content      string
 	TargetID     *uint
 	TargetType   string
-
 }
 
 type Milestone struct {
@@ -371,7 +362,6 @@ type Milestone struct {
 	RepositoryID uint `goe:"index"`
 
 	IsClosed bool `goe:"default:false;index"`
-
 }
 
 type Snippet struct {
@@ -398,5 +388,71 @@ type Contributor struct {
 	Email        string `goe:"index"`
 	RepositoryID uint   `goe:"index"`
 	CommitsCount int    `goe:"default:0"`
+}
 
+type Task struct {
+	ID        uint `goe:"primaryKey"`
+	CreatedAt time.Time
+	UpdatedAt time.Time
+
+	Title        string
+	Draft        string
+	Goal         string
+	PreviewImage string
+
+	Status    string `goe:"default:'draft';index"`
+	Priority  int    `goe:"default:3;index"`
+	SortOrder int    `goe:"default:0;index"`
+
+	RepositoryID uint `goe:"index"`
+
+	InitiatorID uint  `goe:"index"`
+	VerifierID  *uint `goe:"index"`
+	HandlerID   *uint `goe:"index"`
+
+	LastHandledAt *time.Time
+}
+
+type TaskAttachment struct {
+	ID        uint `goe:"primaryKey"`
+	CreatedAt time.Time
+
+	TaskID uint `goe:"index"`
+
+	FileName string
+	FilePath string
+	FileSize int64
+	FileType string
+}
+
+type TaskSchedule struct {
+	ID        uint `goe:"primaryKey"`
+	CreatedAt time.Time
+	UpdatedAt time.Time
+
+	TaskID uint `goe:"index"`
+
+	ScheduleType string `goe:"index"`
+
+	PlanStartDate *time.Time
+	PlanEndDate   *time.Time
+	PlanStartNoon string
+	PlanEndNoon   string
+
+	ActualStartDate *time.Time
+	ActualEndDate   *time.Time
+	ActualStartNoon string
+	ActualEndNoon   string
+
+	User1ID *uint `goe:"index"`
+	User2ID *uint `goe:"index"`
+	User3ID *uint `goe:"index"`
+}
+
+type TaskIssue struct {
+	ID        uint `goe:"primaryKey"`
+	CreatedAt time.Time
+
+	TaskID  uint `goe:"index"`
+	IssueID uint `goe:"index"`
 }

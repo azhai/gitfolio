@@ -38,7 +38,7 @@ const SnippetsPage = {
 
         return m(Layout, [
             m('div.page-header', [
-                m('h1', [m('i.fas.fa-code'), ' 代码片段']),
+                m('h1', [m('i.fas.fa-code'), ' 片段']),
                 m('div.page-actions', [
                     Auth.isAuthenticated() ? m('button.btn.btn-primary', {
                         onclick: () => m.route.set('/snippets/new')
@@ -48,7 +48,7 @@ const SnippetsPage = {
 
             loading ? m(Loading) : [
                 snippets.length === 0 
-                    ? m(EmptyState, { message: '暂无代码片段', icon: 'fa-code' })
+                    ? m(EmptyState, { message: '暂无片段', icon: 'fa-code' })
                     : m('div.snippets-list', snippets.map(snippet => 
                         m('div.snippet-card', {
                             onclick: () => m.route.set(`/snippets/${snippet.id}`)
@@ -94,7 +94,7 @@ const SnippetDetail = {
         }
 
         if (!snippet) {
-            return m(Layout, m(EmptyState, { message: '代码片段不存在', icon: 'fa-exclamation-triangle' }));
+            return m(Layout, m(EmptyState, { message: '片段不存在', icon: 'fa-exclamation-triangle' }));
         }
 
         return m(Layout, [
@@ -109,7 +109,7 @@ const SnippetDetail = {
                         Auth.isAuthenticated() && snippet.user_id && Auth.token ?
                             m('button.btn.btn-danger', {
                                 onclick: () => {
-                                    if (confirm('确定要删除这个代码片段吗？')) {
+                                    if (confirm('确定要删除这个片段吗？')) {
                                         SnippetService.delete(id).then(() => {
                                             m.route.set('/snippets');
                                         }).catch(error => {
@@ -197,7 +197,7 @@ const NewSnippet = {
         return m(Layout, [
             m('div.new-snippet-page', [
                 m('div.page-header', [
-                    m('h2', '新建代码片段')
+                    m('h2', '新建片段')
                 ]),
 
                 m('div.form-container', [
@@ -207,7 +207,7 @@ const NewSnippet = {
                             type: 'text',
                             value: form.title,
                             oninput: e => { form.title = e.target.value; },
-                            placeholder: '代码片段标题'
+                            placeholder: '片段标题'
                         })
                     ]),
 
@@ -216,7 +216,7 @@ const NewSnippet = {
                         m('textarea.form-input', {
                             value: form.description,
                             oninput: e => { form.description = e.target.value; },
-                            placeholder: '描述这个代码片段的用途',
+                            placeholder: '描述这个片段的用途',
                             rows: 3
                         })
                     ]),
@@ -332,7 +332,7 @@ const EditSnippet = {
         return m(Layout, [
             m('div.new-snippet-page', [
                 m('div.page-header', [
-                    m('h2', '编辑代码片段')
+                    m('h2', '编辑片段')
                 ]),
 
                 m('div.form-container', [
@@ -342,7 +342,7 @@ const EditSnippet = {
                             type: 'text',
                             value: form.title,
                             oninput: e => { form.title = e.target.value; },
-                            placeholder: '代码片段标题'
+                            placeholder: '片段标题'
                         })
                     ]),
 
@@ -351,7 +351,7 @@ const EditSnippet = {
                         m('textarea.form-input', {
                             value: form.description,
                             oninput: e => { form.description = e.target.value; },
-                            placeholder: '描述这个代码片段的用途',
+                            placeholder: '描述这个片段的用途',
                             rows: 3
                         })
                     ]),

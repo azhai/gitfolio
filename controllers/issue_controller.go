@@ -29,23 +29,50 @@ type CreateCommentRequest struct {
 	Body string `json:"body" validate:"required"`
 }
 
-type IssueResponse struct {
-	ID           uint   `json:"id"`
-	Number       int    `json:"number"`
-	Title        string `json:"title"`
-	Body         string `json:"body"`
-	RepositoryID uint   `json:"repository_id"`
-	Author       string `json:"author"`
-	AuthorID     uint   `json:"author_id"`
-	Assignee     string `json:"assignee,omitempty"`
-	AssigneeID   *uint  `json:"assignee_id,omitempty"`
-	IsClosed     bool   `json:"is_closed"`
-	IsLocked     bool   `json:"is_locked"`
-	CreatedAt    string `json:"created_at"`
-	UpdatedAt    string `json:"updated_at"`
+type CommentResponse struct {
+	ID        uint   `json:"id"`
+	Body      string `json:"body"`
+	Author    string `json:"author"`
+	AuthorID  uint   `json:"author_id"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
 }
 
-func ToIssueResponse(issue *models.Issue, author *models.User, assignee *models.User) *IssueResponse {
+type IssueResponse struct {
+	ID           uint    `json:"id"`
+	Number       int     `json:"number"`
+	Title        string  `json:"title"`
+	Body         string  `json:"body"`
+	RepositoryID uint    `json:"repository_id"`
+	Author       string  `json:"author"`
+	AuthorID     uint    `json:"author_id"`
+	Assignee     string  `json:"assignee,omitempty"`
+	AssigneeID   *uint   `json:"assignee_id,omitempty"`
+	Labels       []Label `json:"labels"`
+	IsClosed     bool    `json:"is_closed"`
+	IsLocked     bool    `json:"is_locked"`
+	CreatedAt    string  `json:"created_at"`
+	UpdatedAt    string  `json:"updated_at"`
+}
+
+type Label struct {
+	ID          uint   `json:"id"`
+	Name        string `json:"name"`
+	Color       string `json:"color"`
+	Description string `json:"description,omitempty"`
+}
+
+var DefaultLabels = []struct {
+	Name        string
+	Color       string
+	Description string
+}{
+	{"Bug", "#d73a4a", "Something isn't working"},
+	{"Feat", "#a2eeef", "New feature or request"},
+	{"WIP", "#fbca04", "Work in progress"},
+}
+
+func ToIssueResponse(issue *models.Issue, author *models.User, assignee *models.User, labels []Label) *IssueResponse {
 	response := &IssueResponse{
 		ID:           issue.ID,
 		Number:       issue.Number,
@@ -55,6 +82,7 @@ func ToIssueResponse(issue *models.Issue, author *models.User, assignee *models.
 		Author:       author.Username,
 		AuthorID:     issue.AuthorID,
 		AssigneeID:   issue.AssigneeID,
+		Labels:       labels,
 		IsClosed:     issue.IsClosed,
 		IsLocked:     issue.IsLocked,
 		CreatedAt:    issue.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
@@ -68,6 +96,57 @@ func ToIssueResponse(issue *models.Issue, author *models.User, assignee *models.
 	return response
 }
 
+func getIssueLabels(db *database.Database, issueID uint) []Label {
+	issueLabels, err := db.IssueLabel.Select().Where("issue_id = ?", issueID).All()
+	if err != nil {
+		return []Label{}
+	}
+
+	var labelIDs []uint
+	for _, il := range issueLabels {
+		labelIDs = append(labelIDs, il.LabelID)
+	}
+
+	if len(labelIDs) == 0 {
+		return []Label{}
+	}
+
+	labels, err := db.Label.Select().Where("id IN (?)", labelIDs).All()
+	if err != nil {
+		return []Label{}
+	}
+
+	var result []Label
+	for _, l := range labels {
+		result = append(result, Label{
+			ID:          l.ID,
+			Name:        l.Name,
+			Color:       l.Color,
+			Description: l.Description,
+		})
+	}
+
+	return result
+}
+
+func ensureDefaultLabels(db *database.Database, repoID uint) error {
+	for _, dl := range DefaultLabels {
+		count, _ := db.Label.Select().Where("repository_id = ? AND name = ?", repoID, dl.Name).Count("*")
+		if count == 0 {
+			newLabel := &models.Label{
+				Name:         dl.Name,
+				Color:        dl.Color,
+				Description:  dl.Description,
+				RepositoryID: repoID,
+			}
+			if err := db.Label.Insert().One(newLabel); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 func CreateIssue(c fiber.Ctx) error {
 	userID := middleware.GetCurrentUserID(c)
 
@@ -76,12 +155,16 @@ func CreateIssue(c fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	result, err := helpers.GetOwnerAndRepoFromParams(c)
+	result, err := helpers.GetOwnerAndRepoWithPrivateAccessFromParams(c)
 	if err != nil {
 		return err
 	}
 
 	db := database.GetDB()
+
+	if err := ensureDefaultLabels(db, result.Repo.ID); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to ensure default labels"})
+	}
 
 	authorUser, err := db.User.Select().Where("id = ?", userID).One()
 	if err != nil {
@@ -108,20 +191,40 @@ func CreateIssue(c fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create issue"})
 	}
 
-	return c.Status(fiber.StatusCreated).JSON(ToIssueResponse(issueModel, authorUser, assigneeUser))
+	var labels []Label
+	if len(req.Labels) > 0 {
+		dbLabels, err := db.Label.Select().Where("repository_id = ? AND name IN (?)", result.Repo.ID, req.Labels).All()
+		if err == nil {
+			for _, l := range dbLabels {
+				issueLabel := &models.IssueLabel{
+					IssueID: issueModel.ID,
+					LabelID: l.ID,
+				}
+				db.IssueLabel.Insert().One(issueLabel)
+				labels = append(labels, Label{
+					ID:          l.ID,
+					Name:        l.Name,
+					Color:       l.Color,
+					Description: l.Description,
+				})
+			}
+		}
+	}
+
+	return c.Status(fiber.StatusCreated).JSON(ToIssueResponse(issueModel, authorUser, assigneeUser, labels))
 }
 
 func GetIssue(c fiber.Ctx) error {
 	issueNumber, _ := strconv.Atoi(c.Params("number"))
 
-	result, err := helpers.GetOwnerAndRepoFromParams(c)
+	result, err := helpers.GetOwnerAndRepoWithPrivateAccessFromParams(c)
 	if err != nil {
 		return err
 	}
 
 	db := database.GetDB()
 
-	issueModel, err := db.Issue.Select().Where("repository_id = ? AND id = ?", result.Repo.ID, uint(issueNumber)).One()
+	issueModel, err := db.Issue.Select().Where("repository_id = ? AND number = ?", result.Repo.ID, issueNumber).One()
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Issue not found"})
 	}
@@ -136,20 +239,26 @@ func GetIssue(c fiber.Ctx) error {
 		assigneeUser, _ = db.User.Select().Where("id = ?", *issueModel.AssigneeID).One()
 	}
 
-	return c.Status(fiber.StatusOK).JSON(ToIssueResponse(issueModel, authorUser, assigneeUser))
+	labels := getIssueLabels(db, issueModel.ID)
+
+	return c.Status(fiber.StatusOK).JSON(ToIssueResponse(issueModel, authorUser, assigneeUser, labels))
 }
 
 func ListIssues(c fiber.Ctx) error {
 	page, _ := strconv.Atoi(c.Query("page", "1"))
 	perPage, _ := strconv.Atoi(c.Query("per_page", "30"))
 	state := c.Query("state", "open")
+	labelFilter := c.Query("label", "")
 
-	result, err := helpers.GetOwnerAndRepoFromParams(c)
+	result, err := helpers.GetOwnerAndRepoWithPrivateAccessFromParams(c)
 	if err != nil {
 		return err
 	}
 
 	db := database.GetDB()
+
+	if err := ensureDefaultLabels(db, result.Repo.ID); err != nil {
+	}
 
 	query := db.Issue.Select().Where("repository_id = ?", result.Repo.ID)
 
@@ -194,7 +303,22 @@ func ListIssues(c fiber.Ctx) error {
 			assigneeUser = usersMap[*issue.AssigneeID]
 		}
 
-		response = append(response, ToIssueResponse(issue, authorUser, assigneeUser))
+		labels := getIssueLabels(db, issue.ID)
+
+		if labelFilter != "" {
+			hasLabel := false
+			for _, l := range labels {
+				if l.Name == labelFilter {
+					hasLabel = true
+					break
+				}
+			}
+			if !hasLabel {
+				continue
+			}
+		}
+
+		response = append(response, ToIssueResponse(issue, authorUser, assigneeUser, labels))
 	}
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
@@ -213,14 +337,17 @@ func UpdateIssue(c fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	result, err := helpers.GetOwnerAndRepoFromParams(c)
+	result, err := helpers.GetOwnerAndRepoWithPrivateAccessFromParams(c)
 	if err != nil {
 		return err
 	}
 
 	db := database.GetDB()
 
-	issueModel, err := db.Issue.Select().Where("repository_id = ? AND id = ?", result.Repo.ID, uint(issueNumber)).One()
+	if err := ensureDefaultLabels(db, result.Repo.ID); err != nil {
+	}
+
+	issueModel, err := db.Issue.Select().Where("repository_id = ? AND number = ?", result.Repo.ID, issueNumber).One()
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Issue not found"})
 	}
@@ -250,7 +377,31 @@ func UpdateIssue(c fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update issue"})
 	}
 
-	return c.Status(fiber.StatusOK).JSON(issueModel)
+	if req.Labels != nil {
+		db.IssueLabel.Delete().Where("issue_id = ?", issueModel.ID).Exec()
+
+		if len(req.Labels) > 0 {
+			dbLabels, err := db.Label.Select().Where("repository_id = ? AND name IN (?)", result.Repo.ID, req.Labels).All()
+			if err == nil {
+				for _, l := range dbLabels {
+					issueLabel := &models.IssueLabel{
+						IssueID: issueModel.ID,
+						LabelID: l.ID,
+					}
+					db.IssueLabel.Insert().One(issueLabel)
+				}
+			}
+		}
+	}
+
+	authorUser, _ := db.User.Select().Where("id = ?", issueModel.AuthorID).One()
+	var assigneeUser *models.User
+	if issueModel.AssigneeID != nil {
+		assigneeUser, _ = db.User.Select().Where("id = ?", *issueModel.AssigneeID).One()
+	}
+	labels := getIssueLabels(db, issueModel.ID)
+
+	return c.Status(fiber.StatusOK).JSON(ToIssueResponse(issueModel, authorUser, assigneeUser, labels))
 }
 
 func CreateComment(c fiber.Ctx) error {
@@ -262,14 +413,14 @@ func CreateComment(c fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	result, err := helpers.GetOwnerAndRepoFromParams(c)
+	result, err := helpers.GetOwnerAndRepoWithPrivateAccessFromParams(c)
 	if err != nil {
 		return err
 	}
 
 	db := database.GetDB()
 
-	issueModel, err := db.Issue.Select().Where("repository_id = ? AND id = ?", result.Repo.ID, uint(issueNumber)).One()
+	issueModel, err := db.Issue.Select().Where("repository_id = ? AND number = ?", result.Repo.ID, issueNumber).One()
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Issue not found"})
 	}
@@ -286,20 +437,29 @@ func CreateComment(c fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create comment"})
 	}
 
-	return c.Status(fiber.StatusCreated).JSON(commentModel)
+	authorUser, _ := db.User.Select().Where("id = ?", userID).One()
+
+	return c.Status(fiber.StatusCreated).JSON(&CommentResponse{
+		ID:        commentModel.ID,
+		Body:      commentModel.Body,
+		Author:    authorUser.Username,
+		AuthorID:  commentModel.AuthorID,
+		CreatedAt: commentModel.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		UpdatedAt: commentModel.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+	})
 }
 
 func GetComments(c fiber.Ctx) error {
 	issueNumber, _ := strconv.Atoi(c.Params("number"))
 
-	result, err := helpers.GetOwnerAndRepoFromParams(c)
+	result, err := helpers.GetOwnerAndRepoWithPrivateAccessFromParams(c)
 	if err != nil {
 		return err
 	}
 
 	db := database.GetDB()
 
-	issueModel, err := db.Issue.Select().Where("repository_id = ? AND id = ?", result.Repo.ID, uint(issueNumber)).One()
+	issueModel, err := db.Issue.Select().Where("repository_id = ? AND number = ?", result.Repo.ID, issueNumber).One()
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Issue not found"})
 	}
@@ -309,5 +469,66 @@ func GetComments(c fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch comments"})
 	}
 
-	return c.Status(fiber.StatusOK).JSON(comments)
+	userIDs := make(map[uint]bool)
+	for _, comment := range comments {
+		if comment.AuthorID != 0 {
+			userIDs[comment.AuthorID] = true
+		}
+	}
+
+	usersMap := make(map[uint]*models.User)
+	for userID := range userIDs {
+		user, err := db.User.Select().Where("id = ?", userID).One()
+		if err == nil {
+			usersMap[userID] = user
+		}
+	}
+
+	var response []*CommentResponse
+	for _, comment := range comments {
+		authorUser := usersMap[comment.AuthorID]
+		authorName := ""
+		if authorUser != nil {
+			authorName = authorUser.Username
+		}
+		response = append(response, &CommentResponse{
+			ID:        comment.ID,
+			Body:      comment.Body,
+			Author:    authorName,
+			AuthorID:  comment.AuthorID,
+			CreatedAt: comment.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+			UpdatedAt: comment.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(response)
+}
+
+func ListLabels(c fiber.Ctx) error {
+	result, err := helpers.GetOwnerAndRepoWithPrivateAccessFromParams(c)
+	if err != nil {
+		return err
+	}
+
+	db := database.GetDB()
+
+	if err := ensureDefaultLabels(db, result.Repo.ID); err != nil {
+	}
+
+	labels, err := db.Label.Select().Where("repository_id = ?", result.Repo.ID).All()
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch labels"})
+	}
+
+	var response []Label
+	for _, l := range labels {
+		response = append(response, Label{
+			ID:          l.ID,
+			Name:        l.Name,
+			Color:       l.Color,
+			Description: l.Description,
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(response)
 }
