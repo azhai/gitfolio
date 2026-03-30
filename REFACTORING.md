@@ -106,7 +106,7 @@ return helpers.JSONCreated(c, newItem)
 
 #### Parameter Parsing（参数解析）
 ```go
-// 解析 uint 参数
+// 解析 int64 参数
 id, err := helpers.ParseUintParam(c, "id")
 if err != nil {
     return helpers.JSONError(c, helpers.HTTPStatusBadRequest, "Invalid ID")
@@ -214,10 +214,10 @@ if repo.IsPrivate {
 ##### 所有者权限检查
 ```go
 // 检查用户是否是资源所有者
-func CheckOwnerPermission(c fiber.Ctx, ownerID uint) bool
+func CheckOwnerPermission(c fiber.Ctx, ownerID int64) bool
 
 // 要求用户必须是资源所有者，否则返回 403 错误
-func RequireOwner(c fiber.Ctx, ownerID uint) error
+func RequireOwner(c fiber.Ctx, ownerID int64) error
 ```
 
 **使用示例**：
@@ -236,10 +236,10 @@ if err := helpers.RequireOwner(c, repo.OwnerID); err != nil {
 ##### 用户权限检查
 ```go
 // 检查当前用户是否匹配指定用户ID
-func CheckUserPermission(c fiber.Ctx, userID *uint) bool
+func CheckUserPermission(c fiber.Ctx, userID *int64) bool
 
 // 要求当前用户必须匹配指定用户ID，否则返回 403 错误
-func RequireUser(c fiber.Ctx, userID *uint) error
+func RequireUser(c fiber.Ctx, userID *int64) error
 ```
 
 **使用示例**：
@@ -258,10 +258,10 @@ if err := helpers.RequireUser(c, snippet.UserID); err != nil {
 ##### 私有资源访问检查
 ```go
 // 检查私有资源的访问权限
-func CheckPrivateAccess(c fiber.Ctx, isPrivate bool, ownerID uint) bool
+func CheckPrivateAccess(c fiber.Ctx, isPrivate bool, ownerID int64) bool
 
 // 要求私有资源访问权限，否则返回 403 错误
-func RequirePrivateAccess(c fiber.Ctx, isPrivate bool, ownerID uint) error
+func RequirePrivateAccess(c fiber.Ctx, isPrivate bool, ownerID int64) error
 ```
 
 **使用示例**：
@@ -283,7 +283,7 @@ if err := helpers.RequirePrivateAccess(c, repo.IsPrivate, repo.OwnerID); err != 
 ##### 认证检查
 ```go
 // 获取当前用户ID
-func GetCurrentUserID(c fiber.Ctx) uint
+func GetCurrentUserID(c fiber.Ctx) int64
 
 // 检查用户是否已认证
 func IsAuthenticated(c fiber.Ctx) bool
@@ -370,7 +370,7 @@ func UpdateResource(c fiber.Ctx) error {
 owner := c.Params("owner")
 repoName := c.Params("repo")
 
-db := database.GetDB()
+db := models.GetDB()
 
 ownerUser, err := db.User.Select().Where("username = ?", owner).One()
 if err != nil {
@@ -405,7 +405,7 @@ func GetOwnerAndRepoFromParams(c fiber.Ctx) (*ResourceResult, error)
 owner := c.Params("owner")
 repoName := c.Params("repo")
 
-db := database.GetDB()
+db := models.GetDB()
 
 ownerUser, err := db.User.Select().Where("username = ?", owner).One()
 if err != nil {
@@ -537,7 +537,7 @@ func GetRepository(c fiber.Ctx) error {
     owner := c.Params("owner")
     repoName := c.Params("repo")
 
-    db := database.GetDB()
+    db := models.GetDB()
 
     ownerUser, err := db.User.Select().Where("username = ?", owner).One()
     if err != nil {

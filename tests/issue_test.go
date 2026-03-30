@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/azhai/gitfolio/database"
 	"github.com/azhai/gitfolio/middleware"
 	"github.com/azhai/gitfolio/models"
 )
@@ -19,7 +18,7 @@ func TestCreateIssue(t *testing.T) {
 		IsActive: true,
 	}
 	user.SetPassword("password123")
-	db := database.GetDB()
+	db := models.GetDB()
 	db.User.Insert().One(&user)
 
 	repo := models.Repository{
@@ -87,7 +86,7 @@ func TestListIssues(t *testing.T) {
 		IsActive: true,
 	}
 	user.SetPassword("password123")
-	db := database.GetDB()
+	db := models.GetDB()
 	db.User.Insert().One(&user)
 
 	repo := models.Repository{
@@ -134,7 +133,7 @@ func TestGetIssue(t *testing.T) {
 		IsActive: true,
 	}
 	user.SetPassword("password123")
-	db := database.GetDB()
+	db := models.GetDB()
 	db.User.Insert().One(&user)
 
 	repo := models.Repository{
@@ -167,7 +166,7 @@ func TestUpdateIssue(t *testing.T) {
 		IsActive: true,
 	}
 	user.SetPassword("password123")
-	db := database.GetDB()
+	db := models.GetDB()
 	db.User.Insert().One(&user)
 
 	repo := models.Repository{
@@ -208,7 +207,7 @@ func TestCloseIssue(t *testing.T) {
 		IsActive: true,
 	}
 	user.SetPassword("password123")
-	db := database.GetDB()
+	db := models.GetDB()
 	db.User.Insert().One(&user)
 
 	repo := models.Repository{
@@ -249,7 +248,7 @@ func TestCreateComment(t *testing.T) {
 		IsActive: true,
 	}
 	user.SetPassword("password123")
-	db := database.GetDB()
+	db := models.GetDB()
 	db.User.Insert().One(&user)
 
 	repo := models.Repository{

@@ -1,24 +1,25 @@
-package controllers
+package handlers
 
 import (
-	"os"
-	"os/exec"
-	"path/filepath"
+	"context"
+	"fmt"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/azhai/gitfolio/database"
+	"github.com/azhai/gitfolio/config"
 	"github.com/azhai/gitfolio/helpers"
 	"github.com/azhai/gitfolio/middleware"
 	"github.com/azhai/gitfolio/models"
+	"github.com/azhai/gitfolio/services"
 	"github.com/gofiber/fiber/v3"
 )
 
 type CreateRepositoryRequest struct {
 	Name        string `json:"name" validate:"required,min=1,max=255"`
 	Description string `json:"description"`
+	Homepage    string `json:"homepage"`
 	IsPrivate   bool   `json:"is_private"`
 	CloneURL    string `json:"clone_url"`
 }
@@ -26,17 +27,19 @@ type CreateRepositoryRequest struct {
 type UpdateRepositoryRequest struct {
 	Name          string `json:"name"`
 	Description   string `json:"description"`
+	Homepage      string `json:"homepage"`
 	IsPrivate     *bool  `json:"is_private"`
 	DefaultBranch string `json:"default_branch"`
 }
 
 type RepositoryResponse struct {
-	ID            uint   `json:"id"`
+	ID            int64  `json:"id"`
 	Name          string `json:"name"`
 	Description   string `json:"description"`
+	Homepage      string `json:"homepage"`
 	Readme        string `json:"readme"`
 	Owner         string `json:"owner"`
-	OwnerID       uint   `json:"owner_id"`
+	OwnerID       int64  `json:"owner_id"`
 	ProjectType   string `json:"project_type"`
 	IsPrivate     bool   `json:"is_private"`
 	IsFork        bool   `json:"is_fork"`
@@ -50,6 +53,16 @@ type RepositoryResponse struct {
 	DefaultBranch string `json:"default_branch"`
 	CreatedAt     string `json:"created_at"`
 	UpdatedAt     string `json:"updated_at"`
+
+	CommitsCount      int    `json:"commits_count"`
+	TagsCount         int    `json:"tags_count"`
+	ContributorsCount int    `json:"contributors_count"`
+	LastCommitAt      string `json:"last_commit_at"`
+	OpenIssuesCount   int    `json:"open_issues_count"`
+	ClosedIssuesCount int    `json:"closed_issues_count"`
+	OpenPRsCount      int    `json:"open_prs_count"`
+	ClosedPRsCount    int    `json:"closed_prs_count"`
+	MergedPRsCount    int    `json:"merged_prs_count"`
 }
 
 func ToRepositoryResponse(repo *models.Repository, owner *models.User) *RepositoryResponse {
@@ -58,10 +71,11 @@ func ToRepositoryResponse(repo *models.Repository, owner *models.User) *Reposito
 		lastSyncAt = repo.LastSyncAt.Format("2006-01-02T15:04:05Z07:00")
 	}
 
-	return &RepositoryResponse{
+	response := &RepositoryResponse{
 		ID:            repo.ID,
 		Name:          repo.Name,
 		Description:   repo.Description,
+		Homepage:      repo.Homepage,
 		Readme:        repo.Readme,
 		Owner:         owner.Username,
 		OwnerID:       repo.OwnerID,
@@ -72,13 +86,31 @@ func ToRepositoryResponse(repo *models.Repository, owner *models.User) *Reposito
 		MirrorURL:     repo.MirrorURL,
 		LocalPath:     repo.LocalPath,
 		LastSyncAt:    lastSyncAt,
-		StarsCount:    repo.StarsCount,
-		ForksCount:    repo.ForksCount,
-		WatchCount:    repo.WatchCount,
 		DefaultBranch: repo.DefaultBranch,
 		CreatedAt:     repo.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		UpdatedAt:     repo.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 	}
+
+	db := models.GetDB()
+	stats, err := db.RepositoryStats.Select().Where("repository_id = ?", repo.ID).One()
+	if err == nil && stats != nil {
+		response.StarsCount = stats.StarsCount
+		response.ForksCount = stats.ForksCount
+		response.WatchCount = stats.WatchCount
+		response.CommitsCount = stats.CommitsCount
+		response.TagsCount = stats.TagsCount
+		response.ContributorsCount = stats.ContributorsCount
+		response.OpenIssuesCount = stats.OpenIssuesCount
+		response.ClosedIssuesCount = stats.ClosedIssuesCount
+		response.OpenPRsCount = stats.OpenPRsCount
+		response.ClosedPRsCount = stats.ClosedPRsCount
+		response.MergedPRsCount = stats.MergedPRsCount
+		if stats.LastCommitAt != nil {
+			response.LastCommitAt = stats.LastCommitAt.Format("2006-01-02T15:04:05Z07:00")
+		}
+	}
+
+	return response
 }
 
 func CreateRepository(c fiber.Ctx) error {
@@ -89,7 +121,7 @@ func CreateRepository(c fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	db := database.GetDB()
+	db := models.GetDB()
 
 	ownerUser, err := db.User.Select().Where("id = ?", userID).One()
 	if err != nil {
@@ -104,6 +136,7 @@ func CreateRepository(c fiber.Ctx) error {
 	repo := &models.Repository{
 		Name:          req.Name,
 		Description:   req.Description,
+		Homepage:      req.Homepage,
 		OwnerID:       userID,
 		IsPrivate:     req.IsPrivate,
 		DefaultBranch: "main",
@@ -114,19 +147,23 @@ func CreateRepository(c fiber.Ctx) error {
 		repo.MirrorURL = req.CloneURL
 		repo.ProjectType = "mirror"
 
-		reposDir := "repos"
-		if _, err := os.Stat(reposDir); os.IsNotExist(err) {
-			os.MkdirAll(reposDir, 0755)
+		if strings.Contains(req.CloneURL, "github.com") {
+			syncSvc := services.NewSyncService(db)
+			if ghRepo, err := syncSvc.FetchGitHubRepoInfo(req.CloneURL); err == nil {
+				if repo.Description == "" && ghRepo.Description != "" {
+					repo.Description = ghRepo.Description
+				}
+				if repo.Homepage == "" && ghRepo.Homepage != "" {
+					repo.Homepage = ghRepo.Homepage
+				}
+			}
 		}
 
-		localPath := filepath.Join(reposDir, ownerUser.Username, req.Name+".git")
-
-		cmd := exec.Command("git", "clone", "--bare", req.CloneURL, localPath)
-		output, err := cmd.CombinedOutput()
+		gitSvc := services.NewGitService()
+		localPath, err := gitSvc.CloneRepository(ownerUser.Username, req.Name, req.CloneURL, true)
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"error":   "Failed to clone repository",
-				"details": string(output),
+				"error": err.Error(),
 			})
 		}
 
@@ -138,7 +175,38 @@ func CreateRepository(c fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create repository"})
 	}
 
+	stats := &models.RepositoryStats{
+		RepositoryID: repo.ID,
+	}
+	if err := db.RepositoryStats.Insert().One(stats); err != nil {
+		fmt.Printf("Warning: failed to create repository stats: %v\n", err)
+	}
+
 	return c.Status(fiber.StatusCreated).JSON(ToRepositoryResponse(repo, ownerUser))
+}
+
+func GetGitHubRepoInfo(c fiber.Ctx) error {
+	cloneURL := c.Query("url")
+	if cloneURL == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "URL parameter is required"})
+	}
+
+	if !strings.Contains(cloneURL, "github.com") {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Only GitHub URLs are supported"})
+	}
+
+	db := models.GetDB()
+	syncSvc := services.NewSyncService(db)
+	ghRepo, err := syncSvc.FetchGitHubRepoInfo(cloneURL)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"name":        ghRepo.Name,
+		"description": ghRepo.Description,
+		"homepage":    ghRepo.Homepage,
+	})
 }
 
 func GetRepository(c fiber.Ctx) error {
@@ -151,10 +219,13 @@ func GetRepository(c fiber.Ctx) error {
 }
 
 func ListRepositories(c fiber.Ctx) error {
-	page, _ := strconv.Atoi(c.Query("page", "1"))
-	perPage, _ := strconv.Atoi(c.Query("per_page", "30"))
+	page, _ := strconv.Atoi(c.Query("page", strconv.Itoa(config.DefaultPage)))
+	perPage, _ := strconv.Atoi(c.Query("per_page", strconv.Itoa(config.DefaultPerPage)))
+	if perPage > config.MaxPerPage {
+		perPage = config.MaxPerPage
+	}
 
-	db := database.GetDB()
+	db := models.GetDB()
 
 	query := db.Repository.Select()
 
@@ -169,6 +240,7 @@ func ListRepositories(c fiber.Ctx) error {
 	}
 
 	var response []*RepositoryResponse
+	response = make([]*RepositoryResponse, 0)
 	for _, repo := range repos {
 		ownerUser, err := db.User.Select().Where("id = ?", repo.OwnerID).One()
 		if err != nil {
@@ -195,13 +267,16 @@ func UpdateRepository(c fiber.Ctx) error {
 		return err
 	}
 
-	db := database.GetDB()
+	db := models.GetDB()
 
 	if req.Name != "" {
 		result.Repo.Name = req.Name
 	}
 	if req.Description != "" {
 		result.Repo.Description = req.Description
+	}
+	if req.Homepage != "" {
+		result.Repo.Homepage = req.Homepage
 	}
 	if req.IsPrivate != nil {
 		result.Repo.IsPrivate = *req.IsPrivate
@@ -224,7 +299,7 @@ func DeleteRepository(c fiber.Ctx) error {
 		return err
 	}
 
-	db := database.GetDB()
+	db := models.GetDB()
 
 	err = db.Repository.Delete().Where("id = ?", result.Repo.ID).Exec()
 	if err != nil {
@@ -242,7 +317,7 @@ func StarRepository(c fiber.Ctx) error {
 		return err
 	}
 
-	db := database.GetDB()
+	db := models.GetDB()
 
 	existingStar, _ := db.Star.Select().Where("user_id = ? AND repository_id = ?", userID, result.Repo.ID).One()
 	if existingStar != nil {
@@ -259,10 +334,11 @@ func StarRepository(c fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to star repository"})
 	}
 
-	result.Repo.StarsCount++
-	err = db.Repository.Save().One(result.Repo)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update stars count"})
+	statsSvc := services.NewStatsService(db)
+	stats, _ := statsSvc.GetRepositoryStats(result.Repo.ID)
+	if stats != nil {
+		stats.StarsCount++
+		db.RepositoryStats.Save().One(stats)
 	}
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Repository starred successfully"})
@@ -276,17 +352,18 @@ func UnstarRepository(c fiber.Ctx) error {
 		return err
 	}
 
-	db := database.GetDB()
+	db := models.GetDB()
 
 	err = db.Star.Delete().Where("user_id = ? AND repository_id = ?", userID, result.Repo.ID).Exec()
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to unstar repository"})
 	}
 
-	result.Repo.StarsCount--
-	err = db.Repository.Save().One(result.Repo)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update stars count"})
+	statsSvc := services.NewStatsService(db)
+	stats, _ := statsSvc.GetRepositoryStats(result.Repo.ID)
+	if stats != nil && stats.StarsCount > 0 {
+		stats.StarsCount--
+		db.RepositoryStats.Save().One(stats)
 	}
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Repository unstarred successfully"})
@@ -300,7 +377,7 @@ func WatchRepository(c fiber.Ctx) error {
 		return err
 	}
 
-	db := database.GetDB()
+	db := models.GetDB()
 
 	existingWatch, _ := db.Watch.Select().Where("user_id = ? AND repository_id = ?", userID, result.Repo.ID).One()
 	if existingWatch != nil {
@@ -317,10 +394,11 @@ func WatchRepository(c fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to watch repository"})
 	}
 
-	result.Repo.WatchCount++
-	err = db.Repository.Save().One(result.Repo)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update watch count"})
+	statsSvc := services.NewStatsService(db)
+	stats, _ := statsSvc.GetRepositoryStats(result.Repo.ID)
+	if stats != nil {
+		stats.WatchCount++
+		db.RepositoryStats.Save().One(stats)
 	}
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Watching repository successfully"})
@@ -334,17 +412,18 @@ func UnwatchRepository(c fiber.Ctx) error {
 		return err
 	}
 
-	db := database.GetDB()
+	db := models.GetDB()
 
 	err = db.Watch.Delete().Where("user_id = ? AND repository_id = ?", userID, result.Repo.ID).Exec()
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to unwatch repository"})
 	}
 
-	result.Repo.WatchCount--
-	err = db.Repository.Save().One(result.Repo)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update watch count"})
+	statsSvc := services.NewStatsService(db)
+	stats, _ := statsSvc.GetRepositoryStats(result.Repo.ID)
+	if stats != nil && stats.WatchCount > 0 {
+		stats.WatchCount--
+		db.RepositoryStats.Save().One(stats)
 	}
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Unwatched repository successfully"})
@@ -356,18 +435,16 @@ func SyncPullRepository(c fiber.Ctx) error {
 		return err
 	}
 
-	db := database.GetDB()
+	db := models.GetDB()
 
 	if !result.Repo.IsMirror || result.Repo.LocalPath == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Not a mirror repository or local path not set"})
 	}
 
-	cmd := exec.Command("git", "-C", result.Repo.LocalPath, "remote", "update")
-	output, err := cmd.CombinedOutput()
-	if err != nil {
+	syncSvc := services.NewSyncService(db)
+	if err := syncSvc.SyncPullRepository(result.Repo.LocalPath); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error":   "Failed to sync repository",
-			"details": string(output),
+			"error": err.Error(),
 		})
 	}
 
@@ -378,9 +455,41 @@ func SyncPullRepository(c fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update sync time"})
 	}
 
+	syncedIssues := 0
+	syncedPRs := 0
+
+	remoteRepo, err := syncSvc.GetRemoteRepoInfo(result.Repo.ID)
+	if err != nil || remoteRepo == nil {
+		if result.Repo.MirrorURL != "" {
+			remoteRepo = syncSvc.CreateRemoteRepoFromMirrorURL(result.Repo.ID, result.Repo.MirrorURL)
+		}
+	}
+
+	if remoteRepo != nil {
+		token := ""
+		if remoteRepo.AccountID != nil {
+			t, err := syncSvc.GetSyncToken(*remoteRepo.AccountID)
+			if err == nil && t != nil {
+				token = t.AccessToken
+			}
+		}
+
+		ctx := context.Background()
+		if err := syncSvc.SyncRepositoryData(ctx, result.Repo.ID, remoteRepo.Platform, remoteRepo.Owner, remoteRepo.RepoName, token); err != nil {
+			fmt.Printf("Sync data error: %v\n", err)
+		} else {
+			syncedIssues = 1
+			syncedPRs = 1
+		}
+	} else {
+		fmt.Printf("No remote repo found for repository ID %d\n", result.Repo.ID)
+	}
+
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"message":   "Repository synced successfully",
-		"last_sync": now.Format("2006-01-02T15:04:05Z07:00"),
+		"message":       "Repository synced successfully",
+		"last_sync":     now.Format("2006-01-02T15:04:05Z07:00"),
+		"synced_issues": syncedIssues,
+		"synced_prs":    syncedPRs,
 	})
 }
 
@@ -397,19 +506,14 @@ func SyncPushRepository(c fiber.Ctx) error {
 		return err
 	}
 
-	db := database.GetDB()
+	db := models.GetDB()
 
 	if result.Repo.LocalPath == "" {
-		reposDir := "repos"
-		if _, err := os.Stat(reposDir); os.IsNotExist(err) {
-			os.MkdirAll(reposDir, 0755)
-		}
-		localPath := filepath.Join(reposDir, result.Owner.Username, result.Repo.Name)
-		cmd := exec.Command("git", "init", "--bare", localPath)
-		if output, err := cmd.CombinedOutput(); err != nil {
+		syncSvc := services.NewSyncService(db)
+		localPath, err := syncSvc.InitBareRepository(result.Owner.Username, result.Repo.Name)
+		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"error":   "Failed to init repository",
-				"details": string(output),
+				"error": err.Error(),
 			})
 		}
 		result.Repo.LocalPath = localPath
@@ -419,22 +523,12 @@ func SyncPushRepository(c fiber.Ctx) error {
 		}
 	}
 
-	if req.RemoteURL != "" {
-		cmd := exec.Command("git", "-C", result.Repo.LocalPath, "remote", "add", "push_target", req.RemoteURL)
-		cmd.Run()
-	}
-
-	cmd := exec.Command("git", "-C", result.Repo.LocalPath, "push", "push_target", "--all")
-	output, err := cmd.CombinedOutput()
-	if err != nil {
+	syncSvc := services.NewSyncService(db)
+	if err := syncSvc.PushRepository(result.Repo.LocalPath, req.RemoteURL); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error":   "Failed to push repository",
-			"details": string(output),
+			"error": err.Error(),
 		})
 	}
-
-	cmd = exec.Command("git", "-C", result.Repo.LocalPath, "push", "push_target", "--tags")
-	cmd.Run()
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Repository pushed successfully"})
 }
@@ -452,55 +546,17 @@ func GetRepositoryTree(c fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Repository not initialized"})
 	}
 
-	var cmd *exec.Cmd
-	if path == "" {
-		cmd = exec.Command("git", "-C", result.Repo.LocalPath, "ls-tree", "-l", ref)
-	} else {
-		cmd = exec.Command("git", "-C", result.Repo.LocalPath, "ls-tree", "-l", ref, path+"/")
-	}
-	output, err := cmd.Output()
+	gitSvc := services.NewGitService()
+	entries, err := gitSvc.GetTreeWithSize(result.Owner.Username, result.Repo.Name, ref, path)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to list tree"})
-	}
-
-	var entries []map[string]interface{}
-	lines := strings.Split(string(output), "\n")
-	for _, line := range lines {
-		if line == "" {
-			continue
-		}
-		parts := strings.Fields(line)
-		if len(parts) >= 4 {
-			mode := parts[0]
-			objType := parts[1]
-			objHash := parts[2]
-			size := parts[3]
-			fullName := strings.Join(parts[4:], " ")
-
-			nameParts := strings.Split(fullName, "/")
-			name := nameParts[len(nameParts)-1]
-
-			entry := map[string]interface{}{
-				"mode": mode,
-				"type": objType,
-				"hash": objHash,
-				"size": size,
-				"name": name,
-				"path": fullName,
-			}
-			entries = append(entries, entry)
-		}
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
 
 	sort.Slice(entries, func(i, j int) bool {
-		typeI := entries[i]["type"].(string)
-		typeJ := entries[j]["type"].(string)
-		if typeI != typeJ {
-			return typeI == "tree"
+		if entries[i].Type != entries[j].Type {
+			return entries[i].Type == "tree"
 		}
-		nameI := entries[i]["name"].(string)
-		nameJ := entries[j]["name"].(string)
-		return nameI < nameJ
+		return entries[i].Name < entries[j].Name
 	})
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
@@ -523,8 +579,8 @@ func GetRepositoryFile(c fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Repository not initialized"})
 	}
 
-	cmd := exec.Command("git", "-C", result.Repo.LocalPath, "show", ref+":"+path)
-	output, err := cmd.Output()
+	gitSvc := services.NewGitService()
+	content, err := gitSvc.GetFileContentByRef(result.Owner.Username, result.Repo.Name, ref, path)
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "File not found"})
 	}
@@ -532,7 +588,7 @@ func GetRepositoryFile(c fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
 		"path":    path,
 		"ref":     ref,
-		"content": string(output),
+		"content": content,
 	})
 }
 
@@ -546,19 +602,10 @@ func GetRepositoryBranches(c fiber.Ctx) error {
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{"branches": []string{}})
 	}
 
-	cmd := exec.Command("git", "-C", result.Repo.LocalPath, "branch", "-a", "--format=%(refname:short)")
-	output, err := cmd.Output()
+	gitSvc := services.NewGitService()
+	branches, err := gitSvc.GetAllBranches(result.Owner.Username, result.Repo.Name)
 	if err != nil {
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{"branches": []string{}})
-	}
-
-	var branches []string
-	lines := strings.Split(string(output), "\n")
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line != "" {
-			branches = append(branches, line)
-		}
 	}
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"branches": branches})

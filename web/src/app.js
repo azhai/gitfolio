@@ -1,4 +1,4 @@
-import { Auth } from './api.js';
+import { Auth, API } from './api.js';
 import { Dashboard } from './pages/dashboard.js';
 import { ProjectList } from './pages/projects.js';
 import { ProjectDetail } from './pages/project-detail.js';
@@ -19,12 +19,39 @@ import { LoginPage } from './pages/login.js';
 
 Auth.init();
 
-const requireAuth = function(vnode) {
-    if (!Auth.isAuthenticated()) {
-        m.route.set('/login');
-        return false;
+async function loadTheme() {
+    try {
+        const stats = await API.get('/stats');
+        if (stats && stats.theme) {
+            document.documentElement.setAttribute('data-theme', stats.theme);
+        } else {
+            document.documentElement.setAttribute('data-theme', 'orange');
+        }
+    } catch (err) {
+        console.error('Failed to load theme:', err);
+        document.documentElement.setAttribute('data-theme', 'orange');
     }
-    return true;
+}
+
+loadTheme();
+
+const AuthGuard = {
+    oninit(vnode) {
+        if (!Auth.isAuthenticated()) {
+            m.route.set('/login');
+        }
+    },
+    view(vnode) {
+        return Auth.isAuthenticated() ? m(vnode.attrs.component, vnode.attrs) : null;
+    }
+};
+
+const withAuth = (component) => {
+    return {
+        view(vnode) {
+            return m(AuthGuard, { ...vnode.attrs, component });
+        }
+    };
 };
 
 m.route.prefix = '';
@@ -33,8 +60,8 @@ const routes = {
     '/': Dashboard,
     '/login': LoginPage,
     '/projects': ProjectList,
-    '/projects/new': CreateProjectPage,
-    '/projects/migrate': MigrateProjectPage,
+    '/projects/new': withAuth(CreateProjectPage),
+    '/projects/migrate': withAuth(MigrateProjectPage),
     '/project/:owner/:repo': ProjectDetail,
     '/issues/:owner/:repo': IssueList,
     '/issues/:owner/:repo/:number': IssueDetail,
@@ -44,15 +71,15 @@ const routes = {
     '/tasks/:owner/:repo/:id': TaskDetail,
     '/releases/:owner/:repo': ReleasesPage,
     '/stats/:owner/:repo': StatsPage,
-    '/settings/:owner/:repo': SettingsPage,
+    '/settings/:owner/:repo': withAuth(SettingsPage),
     '/groups': Groups,
-    '/groups/new': NewGroup,
+    '/groups/new': withAuth(NewGroup),
     '/groups/:name': GroupDetail,
     '/activity': Activities,
     '/snippets': SnippetsPage,
-    '/snippets/new': NewSnippet,
+    '/snippets/new': withAuth(NewSnippet),
     '/snippets/:id': SnippetDetail,
-    '/snippets/:id/edit': EditSnippet
+    '/snippets/:id/edit': withAuth(EditSnippet)
 };
 
 m.route(document.getElementById('app'), '/', routes);

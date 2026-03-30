@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/azhai/gitfolio/database"
 	"github.com/azhai/gitfolio/middleware"
 	"github.com/azhai/gitfolio/models"
 )
@@ -19,7 +18,7 @@ func TestCreateRepository(t *testing.T) {
 		IsActive: true,
 	}
 	user.SetPassword("password123")
-	db := database.GetDB()
+	db := models.GetDB()
 	db.User.Insert().One(&user)
 
 	token, _ := middleware.GenerateToken(&user)
@@ -90,7 +89,7 @@ func TestDuplicateRepositoryName(t *testing.T) {
 		IsActive: true,
 	}
 	user.SetPassword("password123")
-	db := database.GetDB()
+	db := models.GetDB()
 	db.User.Insert().One(&user)
 
 	token, _ := middleware.GenerateToken(&user)
@@ -120,7 +119,7 @@ func TestListRepositories(t *testing.T) {
 		IsActive: true,
 	}
 	user.SetPassword("password123")
-	db := database.GetDB()
+	db := models.GetDB()
 	db.User.Insert().One(&user)
 
 	repos := []models.Repository{
@@ -153,7 +152,7 @@ func TestGetRepository(t *testing.T) {
 		IsActive: true,
 	}
 	user.SetPassword("password123")
-	db := database.GetDB()
+	db := models.GetDB()
 	db.User.Insert().One(&user)
 
 	repo := models.Repository{
@@ -178,7 +177,7 @@ func TestGetPrivateRepository(t *testing.T) {
 		IsActive: true,
 	}
 	owner.SetPassword("password123")
-	db := database.GetDB()
+	db := models.GetDB()
 	db.User.Insert().One(&owner)
 
 	otherUser := models.User{
@@ -217,7 +216,7 @@ func TestUpdateRepository(t *testing.T) {
 		IsActive: true,
 	}
 	user.SetPassword("password123")
-	db := database.GetDB()
+	db := models.GetDB()
 	db.User.Insert().One(&user)
 
 	repo := models.Repository{
@@ -249,7 +248,7 @@ func TestDeleteRepository(t *testing.T) {
 		IsActive: true,
 	}
 	user.SetPassword("password123")
-	db := database.GetDB()
+	db := models.GetDB()
 	db.User.Insert().One(&user)
 
 	repo := models.Repository{
@@ -277,7 +276,7 @@ func TestStarRepository(t *testing.T) {
 		IsActive: true,
 	}
 	owner.SetPassword("password123")
-	db := database.GetDB()
+	db := models.GetDB()
 	db.User.Insert().One(&owner)
 
 	repo := models.Repository{

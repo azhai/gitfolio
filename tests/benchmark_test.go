@@ -3,7 +3,6 @@ package tests
 import (
 	"testing"
 
-	"github.com/azhai/gitfolio/database"
 	"github.com/azhai/gitfolio/middleware"
 	"github.com/azhai/gitfolio/models"
 )
@@ -34,7 +33,7 @@ func BenchmarkUserLogin(b *testing.B) {
 		IsActive: true,
 	}
 	user.SetPassword("password123")
-	db := database.GetDB()
+	db := models.GetDB()
 	db.User.Insert().One(&user)
 
 	payload := map[string]string{
@@ -57,7 +56,7 @@ func BenchmarkCreateRepository(b *testing.B) {
 		IsActive: true,
 	}
 	user.SetPassword("password123")
-	db := database.GetDB()
+	db := models.GetDB()
 	db.User.Insert().One(&user)
 
 	token, _ := middleware.GenerateToken(&user)
@@ -86,7 +85,7 @@ func BenchmarkCreateIssue(b *testing.B) {
 		IsActive: true,
 	}
 	user.SetPassword("password123")
-	db := database.GetDB()
+	db := models.GetDB()
 	db.User.Insert().One(&user)
 
 	repo := models.Repository{
@@ -121,7 +120,7 @@ func BenchmarkListRepositories(b *testing.B) {
 		IsActive: true,
 	}
 	user.SetPassword("password123")
-	db := database.GetDB()
+	db := models.GetDB()
 	db.User.Insert().One(&user)
 
 	for i := range 100 {

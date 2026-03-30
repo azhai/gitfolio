@@ -8,8 +8,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/azhai/gitfolio/cmd"
 	"github.com/azhai/gitfolio/config"
-	"github.com/azhai/gitfolio/database"
+	"github.com/azhai/gitfolio/models"
 	"github.com/azhai/gitfolio/routes"
 	"github.com/gofiber/fiber/v3"
 )
@@ -31,11 +32,8 @@ func SetupTestRouter() *fiber.App {
 		Name: ":memory:",
 	}
 
-	err := database.Init(cfg)
-	if err != nil {
-		panic("failed to connect database: " + err.Error())
-	}
-
+	cmd.ConnectDB(cfg)
+	defer models.Disconnect()
 	return routes.SetupRouter()
 }
 

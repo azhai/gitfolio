@@ -5,32 +5,15 @@ import (
 	"log"
 	"time"
 
-	"github.com/azhai/gitfolio/config"
-	"github.com/azhai/gitfolio/database"
+	"github.com/azhai/gitfolio/cmd"
 	"github.com/azhai/gitfolio/models"
 	"github.com/azhai/goent"
-	"github.com/azhai/goent/drivers/pgsql"
-	"github.com/azhai/goent/drivers/sqlite"
-	"github.com/azhai/goent/model"
 )
 
 func main() {
-	cfg := config.Load()
-
-	var drv model.Driver
-	switch cfg.Database.Type {
-	case "pgsql":
-		drv = pgsql.OpenDSN(cfg.Database.GetDSN())
-	case "sqlite":
-		drv = sqlite.OpenDSN(cfg.Database.Name)
-	default:
-		log.Fatal("Unsupported database type:", cfg.Database.Type)
-	}
-
-	db, err := goent.Open[database.Database](drv, "stdout")
-	if err != nil {
-		log.Fatal("Failed to connect database:", err)
-	}
+	_ = cmd.InitDB()
+	defer models.Disconnect()
+	db := models.GetDB()
 
 	ctx := context.Background()
 	if err := goent.AutoMigrateContext(ctx, db); err != nil {
@@ -45,7 +28,7 @@ func main() {
 		Email:    "test@example.com",
 		Avatar:   "https://avatars.githubusercontent.com/u/1?v=4",
 	}
-	err = db.User.Insert().One(user)
+	err := db.User.Insert().One(user)
 	if err != nil {
 		log.Println("User already exists or error:", err)
 		user, _ = db.User.Select().Where("username = ?", "testuser").One()
@@ -105,11 +88,9 @@ func main() {
 	repo := &models.Repository{
 		Name:        "test-repo",
 		Description: "测试仓库，用于演示功能",
+		Homepage:    "https://github.com/test/test-repo",
 		OwnerID:     user.ID,
 		IsPrivate:   false,
-		StarsCount:  42,
-		ForksCount:  10,
-		WatchCount:  15,
 	}
 	err = db.Repository.Insert().One(repo)
 	if err != nil {
@@ -119,16 +100,22 @@ func main() {
 		log.Println("Created repository:", repo.Name)
 	}
 
+	repoStats := &models.RepositoryStats{
+		RepositoryID: repo.ID,
+		StarsCount:   42,
+		ForksCount:   10,
+		WatchCount:   15,
+	}
+	db.RepositoryStats.Insert().One(repoStats)
+
 	// Create mirror repository
 	mirrorRepo := &models.Repository{
 		Name:          "builder-mirror",
 		Description:   "镜像项目：xorm/builder - SQL builder for Go",
+		Homepage:      "https://gitea.com/xorm/builder",
 		OwnerID:       user.ID,
 		IsPrivate:     false,
 		IsMirror:      true,
-		StarsCount:    128,
-		ForksCount:    32,
-		WatchCount:    45,
 		ProjectType:   string(models.ProjectTypeMirror),
 		MirrorURL:     "https://gitea.com/xorm/builder.git",
 		LocalPath:     "./repos/builder-mirror.git",
@@ -141,6 +128,14 @@ func main() {
 	} else {
 		log.Println("Created mirror repository:", mirrorRepo.Name)
 	}
+
+	mirrorStats := &models.RepositoryStats{
+		RepositoryID: mirrorRepo.ID,
+		StarsCount:   128,
+		ForksCount:   32,
+		WatchCount:   45,
+	}
+	db.RepositoryStats.Insert().One(mirrorStats)
 
 	// Create activities
 	now := time.Now()
@@ -263,8 +258,8 @@ func main() {
 	}
 	log.Println("Created", len(issues), "issues")
 
-	// Create merge requests
-	mrs := []*models.MergeRequest{
+	// Create pull requests
+	prs := []*models.PullRequest{
 		{
 			Title:        "添加用户头像上传功能",
 			Body:         "实现了用户头像上传和裁剪功能",
@@ -291,13 +286,13 @@ func main() {
 		},
 	}
 
-	for _, mr := range mrs {
-		err = db.MergeRequest.Insert().One(mr)
+	for _, pr := range prs {
+		err = db.PullRequest.Insert().One(pr)
 		if err != nil {
-			log.Println("MergeRequest error:", err)
+			log.Println("PullRequest error:", err)
 		}
 	}
-	log.Println("Created", len(mrs), "merge requests")
+	log.Println("Created", len(prs), "pull requests")
 
 	log.Println("Seed data inserted successfully!")
 }

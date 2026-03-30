@@ -148,7 +148,7 @@ func TestAdminOnly(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			app := fiber.New()
 			app.Use(func(c fiber.Ctx) error {
-				c.Locals("user_id", uint(1))
+				c.Locals("user_id", int64(1))
 				c.Locals("is_admin", tt.isAdmin)
 				return c.Next()
 			})
@@ -196,7 +196,7 @@ func TestGetCurrentUserID(t *testing.T) {
 	t.Run("With user ID in context", func(t *testing.T) {
 		app := fiber.New()
 		app.Use(func(c fiber.Ctx) error {
-			c.Locals("user_id", uint(123))
+			c.Locals("user_id", int64(123))
 			return c.Next()
 		})
 		app.Get("/test", func(c fiber.Ctx) error {

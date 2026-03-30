@@ -5,14 +5,13 @@ import (
 	"time"
 
 	"github.com/azhai/gitfolio/config"
-	"github.com/azhai/gitfolio/database"
 	"github.com/azhai/gitfolio/models"
 	"github.com/gofiber/fiber/v3"
 	"github.com/golang-jwt/jwt/v5"
 )
 
 type Claims struct {
-	UserID   uint   `json:"user_id"`
+	UserID   int64  `json:"user_id"`
 	Username string `json:"username"`
 	Email    string `json:"email"`
 	IsAdmin  bool   `json:"is_admin"`
@@ -114,9 +113,9 @@ func GetCurrentUser(c fiber.Ctx) (*models.User, error) {
 		return nil, nil
 	}
 
-	db := database.GetDB()
+	db := models.GetDB()
 
-	user, err := db.User.Select().Where("id = ?", userID.(uint)).One()
+	user, err := db.User.Select().Where("id = ?", userID.(int64)).One()
 	if err != nil {
 		return nil, err
 	}
@@ -124,10 +123,10 @@ func GetCurrentUser(c fiber.Ctx) (*models.User, error) {
 	return user, nil
 }
 
-func GetCurrentUserID(c fiber.Ctx) uint {
+func GetCurrentUserID(c fiber.Ctx) int64 {
 	userID := c.Locals("user_id")
 	if userID == nil {
 		return 0
 	}
-	return userID.(uint)
+	return userID.(int64)
 }

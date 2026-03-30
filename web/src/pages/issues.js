@@ -17,8 +17,8 @@ const IssueList = {
         
         Promise.all([
             RepositoryService.get(owner, repo),
-            IssueService.list(owner, repo),
-            PullRequestService.list(owner, repo),
+            IssueService.list(owner, repo, { per_page: 1000 }),
+            PullRequestService.list(owner, repo, { per_page: 1000 }),
             LabelService.list(owner, repo)
         ]).then(([repoResult, issuesResult, prsResult, labelsResult]) => {
             vnode.state.repo = repoResult.data || repoResult;

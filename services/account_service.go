@@ -4,19 +4,18 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/azhai/gitfolio/database"
 	"github.com/azhai/gitfolio/models"
 )
 
 type AccountService struct {
-	db *database.Database
+	db *models.Database
 }
 
-func NewAccountService(db *database.Database) *AccountService {
+func NewAccountService(db *models.Database) *AccountService {
 	return &AccountService{db: db}
 }
 
-func (s *AccountService) CreateOrUpdateAccount(platform, username, email, avatarURL, apiURL string, userID uint) (*models.PlatformAccount, error) {
+func (s *AccountService) CreateOrUpdateAccount(platform, username, email, avatarURL, apiURL string, userID int64) (*models.PlatformAccount, error) {
 	accounts, err := s.db.PlatformAccount.Select().Where("platform = ? AND username = ?", platform, username).All()
 	if err != nil {
 		return nil, err
@@ -51,7 +50,7 @@ func (s *AccountService) CreateOrUpdateAccount(platform, username, email, avatar
 	return &account, nil
 }
 
-func (s *AccountService) CreateOrUpdateToken(platform, name, accessToken, refreshToken, tokenType string, expiresAt *time.Time, scopes string, accountID uint, repoID *uint) (*models.SyncToken, error) {
+func (s *AccountService) CreateOrUpdateToken(platform, name, accessToken, refreshToken, tokenType string, expiresAt *time.Time, scopes string, accountID int64, repoID *int64) (*models.SyncToken, error) {
 	tokens, err := s.db.SyncToken.Select().Where("platform = ? AND account_id = ? AND name = ?", platform, accountID, name).All()
 	if err != nil {
 		return nil, err
@@ -105,7 +104,7 @@ func (s *AccountService) GetAccountByPlatform(platform, username string) (*model
 	return accounts[0], nil
 }
 
-func (s *AccountService) GetTokenByAccount(accountID uint) (*models.SyncToken, error) {
+func (s *AccountService) GetTokenByAccount(accountID int64) (*models.SyncToken, error) {
 	tokens, err := s.db.SyncToken.Select().Where("account_id = ? AND is_active = ?", accountID, true).All()
 	if err != nil {
 		return nil, err
@@ -116,15 +115,15 @@ func (s *AccountService) GetTokenByAccount(accountID uint) (*models.SyncToken, e
 	return tokens[0], nil
 }
 
-func (s *AccountService) ListAccounts(userID uint) ([]*models.PlatformAccount, error) {
+func (s *AccountService) ListAccounts(userID int64) ([]*models.PlatformAccount, error) {
 	return s.db.PlatformAccount.Select().Where("user_id = ?", userID).All()
 }
 
-func (s *AccountService) DeleteAccount(accountID uint) error {
+func (s *AccountService) DeleteAccount(accountID int64) error {
 	return s.db.PlatformAccount.Delete().Where("id = ?", accountID).Exec()
 }
 
-func (s *AccountService) DeactivateToken(tokenID uint) error {
+func (s *AccountService) DeactivateToken(tokenID int64) error {
 	tokens, err := s.db.SyncToken.Select().Where("id = ?", tokenID).All()
 	if err != nil {
 		return err

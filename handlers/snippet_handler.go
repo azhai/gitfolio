@@ -1,9 +1,8 @@
-package controllers
+package handlers
 
 import (
 	"time"
 
-	"github.com/azhai/gitfolio/database"
 	"github.com/azhai/gitfolio/helpers"
 	"github.com/azhai/gitfolio/middleware"
 	"github.com/azhai/gitfolio/models"
@@ -11,13 +10,13 @@ import (
 )
 
 type SnippetResponse struct {
-	ID          uint   `json:"id"`
+	ID          int64  `json:"id"`
 	Title       string `json:"title"`
 	Description string `json:"description"`
 	Language    string `json:"language"`
 	Code        string `json:"code"`
 	Visibility  string `json:"visibility"`
-	UserID      *uint  `json:"user_id"`
+	UserID      *int64 `json:"user_id"`
 	Username    string `json:"username"`
 	CreatedAt   string `json:"created_at"`
 	UpdatedAt   string `json:"updated_at"`
@@ -43,7 +42,7 @@ func ListSnippets(c fiber.Ctx) error {
 	language := c.Query("language")
 	visibility := c.Query("visibility", "public")
 
-	db := database.GetDB()
+	db := models.GetDB()
 
 	query := db.Snippet.Select()
 	if language != "" {
@@ -79,7 +78,7 @@ func GetSnippet(c fiber.Ctx) error {
 		return helpers.JSONError(c, helpers.HTTPStatusBadRequest, "Invalid snippet ID")
 	}
 
-	db := database.GetDB()
+	db := models.GetDB()
 
 	snippet, err := db.Snippet.Select().Where("id = ?", id).One()
 	if err != nil {
@@ -124,7 +123,7 @@ func CreateSnippet(c fiber.Ctx) error {
 		req.Visibility = "public"
 	}
 
-	db := database.GetDB()
+	db := models.GetDB()
 
 	snippet := &models.Snippet{
 		Title:       req.Title,
@@ -163,7 +162,7 @@ func UpdateSnippet(c fiber.Ctx) error {
 		return helpers.JSONError(c, helpers.HTTPStatusBadRequest, err.Error())
 	}
 
-	db := database.GetDB()
+	db := models.GetDB()
 
 	snippet, err := db.Snippet.Select().Where("id = ?", id).One()
 	if err != nil {
@@ -205,7 +204,7 @@ func DeleteSnippet(c fiber.Ctx) error {
 		return helpers.JSONError(c, helpers.HTTPStatusBadRequest, "Invalid snippet ID")
 	}
 
-	db := database.GetDB()
+	db := models.GetDB()
 
 	snippet, err := db.Snippet.Select().Where("id = ?", id).One()
 	if err != nil {

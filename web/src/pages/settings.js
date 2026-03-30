@@ -21,8 +21,8 @@ const SettingsPage = {
 
         Promise.all([
             RepositoryService.get(owner, repo),
-            IssueService.list(owner, repo),
-            PullRequestService.list(owner, repo)
+            IssueService.list(owner, repo, { state: 'all', per_page: 1000 }),
+            PullRequestService.list(owner, repo, { state: 'all', per_page: 1000 })
         ]).then(([repoResult, issuesResult, prsResult]) => {
             vnode.state.repo = repoResult.data || repoResult;
             vnode.state.issuesCount = (issuesResult.data || issuesResult || []).filter(i => !i.is_closed).length;

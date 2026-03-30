@@ -1,9 +1,9 @@
-package controllers
+package handlers
 
 import (
 	"strconv"
 
-	"github.com/azhai/gitfolio/database"
+	"github.com/azhai/gitfolio/config"
 	"github.com/azhai/gitfolio/middleware"
 	"github.com/azhai/gitfolio/models"
 	"github.com/gofiber/fiber/v3"
@@ -28,7 +28,7 @@ type UpdateUserRequest struct {
 }
 
 type UserResponse struct {
-	ID        uint   `json:"id"`
+	ID        int64  `json:"id"`
 	Username  string `json:"username"`
 	Email     string `json:"email,omitempty"`
 	FullName  string `json:"full_name"`
@@ -71,7 +71,7 @@ func Register(c fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	db := database.GetDB()
+	db := models.GetDB()
 
 	existingUser, _ := db.User.Select().Where("username = ?", req.Username).One()
 	if existingUser != nil {
@@ -114,7 +114,7 @@ func Login(c fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	db := database.GetDB()
+	db := models.GetDB()
 
 	userModel, err := db.User.Select().Where("username = ? OR email = ?", req.Username, req.Username).One()
 	if err != nil {
@@ -146,7 +146,7 @@ func GetCurrentUser(c fiber.Ctx) error {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Not authenticated"})
 	}
 
-	db := database.GetDB()
+	db := models.GetDB()
 
 	userModel, err := db.User.Select().Where("id = ?", userID).One()
 	if err != nil {
@@ -159,7 +159,7 @@ func GetCurrentUser(c fiber.Ctx) error {
 func GetUser(c fiber.Ctx) error {
 	username := c.Params("username")
 
-	db := database.GetDB()
+	db := models.GetDB()
 
 	userModel, err := db.User.Select().Where("username = ?", username).One()
 	if err != nil {
@@ -177,7 +177,7 @@ func UpdateUser(c fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	db := database.GetDB()
+	db := models.GetDB()
 
 	userModel, err := db.User.Select().Where("id = ?", userID).One()
 	if err != nil {
@@ -207,10 +207,13 @@ func UpdateUser(c fiber.Ctx) error {
 
 func GetUserRepositories(c fiber.Ctx) error {
 	username := c.Params("username")
-	page, _ := strconv.Atoi(c.Query("page", "1"))
-	perPage, _ := strconv.Atoi(c.Query("per_page", "30"))
+	page, _ := strconv.Atoi(c.Query("page", strconv.Itoa(config.DefaultPage)))
+	perPage, _ := strconv.Atoi(c.Query("per_page", strconv.Itoa(config.DefaultPerPage)))
+	if perPage > config.MaxPerPage {
+		perPage = config.MaxPerPage
+	}
 
-	db := database.GetDB()
+	db := models.GetDB()
 
 	userModel, err := db.User.Select().Where("username = ?", username).One()
 	if err != nil {
@@ -229,4 +232,8 @@ func GetUserRepositories(c fiber.Ctx) error {
 	}
 
 	return c.Status(fiber.StatusOK).JSON(repos)
+}
+
+func Logout(c fiber.Ctx) error {
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Logged out successfully"})
 }

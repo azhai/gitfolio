@@ -124,8 +124,8 @@ const ProjectDetail = {
         
         Promise.all([
             RepositoryService.get(owner, repo),
-            IssueService.list(owner, repo),
-            PullRequestService.list(owner, repo)
+            IssueService.list(owner, repo, { state: 'all', per_page: 1000 }),
+            PullRequestService.list(owner, repo, { state: 'all', per_page: 1000 })
         ]).then(([repoResult, issuesResult, prsResult]) => {
             vnode.state.repo = repoResult.data || repoResult;
             vnode.state.issuesCount = (issuesResult.data || issuesResult || []).filter(i => !i.is_closed).length;
@@ -311,11 +311,33 @@ const TreeEntry = {
                 m(`i.fas.${isTree ? 'fa-folder' : 'fa-file-code'}`)
             ]),
             m('span.file-name', entry.name),
-            m('span.file-commit-message', entry.hash ? entry.hash.substring(0, 7) : ''),
-            m('span.file-commit-time', entry.size && !isTree ? formatSize(entry.size) : '')
+            m('span.file-commit-message', entry.last_commit_message || ''),
+            m('span.file-commit-time', entry.last_commit_time ? formatRelativeTime(entry.last_commit_time) : '')
         ]);
     }
 };
+
+function formatRelativeTime(timeStr) {
+    const date = new Date(timeStr);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    
+    if (diffDays < 7) {
+        if (diffDays === 0) {
+            const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+            if (diffHours === 0) {
+                const diffMinutes = Math.floor(diffMs / (1000 * 60));
+                if (diffMinutes === 0) return '刚刚';
+                return `${diffMinutes}分钟前`;
+            }
+            return `${diffHours}小时前`;
+        }
+        return `${diffDays}天前`;
+    }
+    
+    return date.toLocaleDateString('zh-CN');
+}
 
 function formatSize(size) {
     const s = parseInt(size);
@@ -333,7 +355,7 @@ function renderBreadcrumb(owner, repo, currentPath, onNavigate) {
             href: '#', 
             onclick: (e) => { e.preventDefault(); onNavigate(''); } 
         }, [
-            m('i.fas.fa-folder'),
+            m('i.fas.fa-map-marker-alt'),
             ` ${repo}`
         ])
     ];

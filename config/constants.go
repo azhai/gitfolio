@@ -1,14 +1,16 @@
-package constants
+package config
 
 const (
 	APIVersion = "v1"
 	APIBaseURL = "/api/" + APIVersion
+)
 
+const (
 	DefaultPage    = 1
 	DefaultPerPage = 30
 	DefaultBranch  = "main"
 
-	MaxPerPage = 100
+	MaxPerPage = 1000
 )
 
 const (
@@ -29,9 +31,9 @@ const (
 )
 
 const (
-	MRStatusOpen   = "open"
-	MRStatusClosed = "closed"
-	MRStatusMerged = "merged"
+	PRStatusOpen   = "open"
+	PRStatusClosed = "closed"
+	PRStatusMerged = "merged"
 )
 
 const (

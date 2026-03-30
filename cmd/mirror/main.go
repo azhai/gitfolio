@@ -8,12 +8,11 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"os/exec"
 	"time"
 
-	"github.com/azhai/gitfolio/config"
-	"github.com/azhai/gitfolio/database"
+	"github.com/azhai/gitfolio/cmd"
 	"github.com/azhai/gitfolio/models"
+	"github.com/azhai/gitfolio/services"
 )
 
 type MirrorConfig struct {
@@ -28,7 +27,7 @@ type MirrorConfig struct {
 }
 
 type GiteaUser struct {
-	ID        uint   `json:"id"`
+	ID        int64  `json:"id"`
 	Login     string `json:"login"`
 	FullName  string `json:"full_name"`
 	Email     string `json:"email"`
@@ -36,11 +35,12 @@ type GiteaUser struct {
 }
 
 type GiteaRepository struct {
-	ID            uint      `json:"id"`
+	ID            int64     `json:"id"`
 	Owner         GiteaUser `json:"owner"`
 	Name          string    `json:"name"`
 	FullName      string    `json:"full_name"`
 	Description   string    `json:"description"`
+	Homepage      string    `json:"html_url"`
 	Private       bool      `json:"private"`
 	Fork          bool      `json:"fork"`
 	StarsCount    int       `json:"stars_count"`
@@ -53,7 +53,7 @@ type GiteaRepository struct {
 }
 
 type GiteaIssue struct {
-	ID          uint       `json:"id"`
+	ID          int64      `json:"id"`
 	Number      int        `json:"number"`
 	Title       string     `json:"title"`
 	Body        string     `json:"body"`
@@ -70,7 +70,7 @@ type GiteaIssue struct {
 }
 
 type GiteaPullRequest struct {
-	ID        uint          `json:"id"`
+	ID        int64         `json:"id"`
 	Number    int           `json:"number"`
 	Title     string        `json:"title"`
 	Body      string        `json:"body"`
@@ -158,12 +158,9 @@ func main() {
 	fmt.Printf("Sync PRs: %v\n", cfg.SyncPRs)
 	fmt.Println()
 
-	appCfg := config.Load()
-	if err := database.Init(&appCfg.Database); err != nil {
-		log.Fatalf("Failed to initialize database: %v", err)
-	}
-
-	db := database.GetDB()
+	_ = cmd.InitDB()
+	defer models.Disconnect()
+	db := models.GetDB()
 
 	stats, err := mirrorRepository(db, cfg)
 	if err != nil {
@@ -204,7 +201,7 @@ func fetchFromAPI(baseURL, path string) ([]byte, error) {
 	return io.ReadAll(resp.Body)
 }
 
-func mirrorRepository(db *database.Database, cfg *MirrorConfig) (*MirrorStats, error) {
+func mirrorRepository(db *models.Database, cfg *MirrorConfig) (*MirrorStats, error) {
 	stats := &MirrorStats{}
 
 	fmt.Println("Fetching repository info...")
@@ -253,9 +250,6 @@ func mirrorRepository(db *database.Database, cfg *MirrorConfig) (*MirrorStats, e
 	if err == nil && len(repos) > 0 {
 		repo = *repos[0]
 		repo.Description = giteaRepo.Description
-		repo.StarsCount = giteaRepo.StarsCount
-		repo.ForksCount = giteaRepo.ForksCount
-		repo.WatchCount = giteaRepo.Watchers
 		repo.UpdatedAt = giteaRepo.UpdatedAt
 		repo.IsMirror = true
 		repo.MirrorURL = mirrorURL
@@ -268,15 +262,13 @@ func mirrorRepository(db *database.Database, cfg *MirrorConfig) (*MirrorStats, e
 		repo = models.Repository{
 			Name:          giteaRepo.Name,
 			Description:   giteaRepo.Description,
+			Homepage:      giteaRepo.Homepage,
 			OwnerID:       owner.ID,
 			IsPrivate:     giteaRepo.Private,
 			IsFork:        giteaRepo.Fork,
 			IsMirror:      true,
 			MirrorURL:     mirrorURL,
 			LastSyncAt:    &now,
-			StarsCount:    giteaRepo.StarsCount,
-			ForksCount:    giteaRepo.ForksCount,
-			WatchCount:    giteaRepo.Watchers,
 			DefaultBranch: giteaRepo.DefaultBranch,
 			CreatedAt:     giteaRepo.CreatedAt,
 			UpdatedAt:     giteaRepo.UpdatedAt,
@@ -286,6 +278,43 @@ func mirrorRepository(db *database.Database, cfg *MirrorConfig) (*MirrorStats, e
 		}
 		stats.RepoCreated = true
 		fmt.Printf("Created repository: %s\n", repo.Name)
+	}
+
+	repoStats, _ := db.RepositoryStats.Select().Where("repository_id = ?", repo.ID).One()
+	if repoStats == nil {
+		repoStats = &models.RepositoryStats{
+			RepositoryID: repo.ID,
+			StarsCount:   giteaRepo.StarsCount,
+			ForksCount:   giteaRepo.ForksCount,
+			WatchCount:   giteaRepo.Watchers,
+		}
+		db.RepositoryStats.Insert().One(repoStats)
+	} else {
+		repoStats.StarsCount = giteaRepo.StarsCount
+		repoStats.ForksCount = giteaRepo.ForksCount
+		repoStats.WatchCount = giteaRepo.Watchers
+		db.RepositoryStats.Save().One(repoStats)
+	}
+
+	remoteRepo := models.RemoteRepository{
+		Platform:     cfg.Platform,
+		Owner:        cfg.Owner,
+		RepoName:     cfg.Repo,
+		CloneURL:     fmt.Sprintf("%s/%s/%s.git", cfg.BaseURL, cfg.Owner, cfg.Repo),
+		WebURL:       fmt.Sprintf("%s/%s/%s", cfg.BaseURL, cfg.Owner, cfg.Repo),
+		RepositoryID: repo.ID,
+		IsPrimary:    true,
+		Direction:    "pull",
+		LastSyncAt:   &now,
+		SyncEnabled:  true,
+	}
+	existingRemotes, _ := db.RemoteRepository.Select().Where("repository_id = ? AND platform = ?", repo.ID, cfg.Platform).All()
+	if len(existingRemotes) > 0 {
+		remoteRepo = *existingRemotes[0]
+		remoteRepo.LastSyncAt = &now
+		db.RemoteRepository.Save().One(&remoteRepo)
+	} else {
+		db.RemoteRepository.Insert().One(&remoteRepo)
 	}
 
 	if cfg.SyncIssues {
@@ -309,7 +338,7 @@ func mirrorRepository(db *database.Database, cfg *MirrorConfig) (*MirrorStats, e
 	return stats, nil
 }
 
-func syncIssuesData(db *database.Database, repo *models.Repository, cfg *MirrorConfig, stats *MirrorStats) error {
+func syncIssuesData(db *models.Database, repo *models.Repository, cfg *MirrorConfig, stats *MirrorStats) error {
 	fmt.Println("\n=== Syncing Issues ===")
 
 	page := 1
@@ -397,7 +426,7 @@ func syncIssuesData(db *database.Database, repo *models.Repository, cfg *MirrorC
 	return nil
 }
 
-func syncPullRequests(db *database.Database, repo *models.Repository, cfg *MirrorConfig, stats *MirrorStats) error {
+func syncPullRequests(db *models.Database, repo *models.Repository, cfg *MirrorConfig, stats *MirrorStats) error {
 	fmt.Println("\n=== Syncing Pull Requests ===")
 
 	page := 1
@@ -438,8 +467,8 @@ func syncPullRequests(db *database.Database, repo *models.Repository, cfg *Mirro
 				stats.UsersCreated++
 			}
 
-			mrs, err := db.MergeRequest.Select().Where("repository_id = ? AND number = ?", repo.ID, giteaPR.Number).All()
-			var mr models.MergeRequest
+			mrs, err := db.PullRequest.Select().Where("repository_id = ? AND number = ?", repo.ID, giteaPR.Number).All()
+			var pr models.PullRequest
 
 			isClosed := giteaPR.State == "closed"
 			isMerged := giteaPR.MergedAt != nil
@@ -461,16 +490,16 @@ func syncPullRequests(db *database.Database, repo *models.Repository, cfg *Mirro
 			}
 
 			if err == nil && len(mrs) > 0 {
-				mr = *mrs[0]
-				mr.Title = giteaPR.Title
-				mr.Body = giteaPR.Body
-				mr.IsClosed = isClosed
-				mr.IsMerged = isMerged
-				mr.Status = status
-				mr.SourceBranch = sourceBranch
-				mr.TargetBranch = targetBranch
-				mr.UpdatedAt = giteaPR.UpdatedAt
-				if err := db.MergeRequest.Save().One(&mr); err != nil {
+				pr = *mrs[0]
+				pr.Title = giteaPR.Title
+				pr.Body = giteaPR.Body
+				pr.IsClosed = isClosed
+				pr.IsMerged = isMerged
+				pr.Status = status
+				pr.SourceBranch = sourceBranch
+				pr.TargetBranch = targetBranch
+				pr.UpdatedAt = giteaPR.UpdatedAt
+				if err := db.PullRequest.Save().One(&pr); err != nil {
 					if *verbose {
 						fmt.Printf("Warning: failed to update PR #%d: %v\n", giteaPR.Number, err)
 					}
@@ -478,7 +507,7 @@ func syncPullRequests(db *database.Database, repo *models.Repository, cfg *Mirro
 				}
 				stats.PRsUpdated++
 			} else {
-				mr = models.MergeRequest{
+				pr = models.PullRequest{
 					Title:        giteaPR.Title,
 					Body:         giteaPR.Body,
 					Number:       giteaPR.Number,
@@ -492,7 +521,7 @@ func syncPullRequests(db *database.Database, repo *models.Repository, cfg *Mirro
 					CreatedAt:    giteaPR.CreatedAt,
 					UpdatedAt:    giteaPR.UpdatedAt,
 				}
-				if err := db.MergeRequest.Insert().One(&mr); err != nil {
+				if err := db.PullRequest.Insert().One(&pr); err != nil {
 					if *verbose {
 						fmt.Printf("Warning: failed to create PR #%d: %v\n", giteaPR.Number, err)
 					}
@@ -510,7 +539,7 @@ func syncPullRequests(db *database.Database, repo *models.Repository, cfg *Mirro
 	return nil
 }
 
-func getOrCreateUser(db *database.Database, giteaUser *GiteaUser) (*models.User, bool, error) {
+func getOrCreateUser(db *models.Database, giteaUser *GiteaUser) (*models.User, bool, error) {
 	users, err := db.User.Select().Where("username = ?", giteaUser.Login).All()
 	if err == nil && len(users) > 0 {
 		return users[0], false, nil
@@ -531,40 +560,26 @@ func getOrCreateUser(db *database.Database, giteaUser *GiteaUser) (*models.User,
 	return &user, true, nil
 }
 
-func syncRepositoryCode(db *database.Database, repo *models.Repository, cfg *MirrorConfig, stats *MirrorStats) error {
+func syncRepositoryCode(db *models.Database, repo *models.Repository, cfg *MirrorConfig, stats *MirrorStats) error {
 	fmt.Println("\n=== Syncing Repository Code ===")
 
-	repoPath := fmt.Sprintf("%s/%s/%s", *repoRoot, cfg.Owner, cfg.Repo)
+	gitSvc := services.NewGitService()
 	gitURL := fmt.Sprintf("%s/%s/%s.git", cfg.BaseURL, cfg.Owner, cfg.Repo)
 
-	if _, err := os.Stat(repoPath); os.IsNotExist(err) {
+	if _, err := os.Stat(fmt.Sprintf("%s/%s/%s.git", *repoRoot, cfg.Owner, cfg.Repo)); os.IsNotExist(err) {
 		fmt.Printf("Cloning repository from %s\n", gitURL)
-		cmd := exec.Command("git", "clone", gitURL, repoPath)
-		if *verbose {
-			cmd.Stdout = os.Stdout
-			cmd.Stderr = os.Stderr
-		}
-		if err := cmd.Run(); err != nil {
+		_, err := gitSvc.CloneRepository(cfg.Owner, cfg.Repo, gitURL, false)
+		if err != nil {
 			return fmt.Errorf("failed to clone repository: %v", err)
 		}
-		fmt.Printf("Repository cloned to: %s\n", repoPath)
+		fmt.Printf("Repository cloned\n")
 	} else {
-		fmt.Printf("Updating repository at %s\n", repoPath)
-		cmd := exec.Command("git", "-C", repoPath, "fetch", "--all")
-		if *verbose {
-			cmd.Stdout = os.Stdout
-			cmd.Stderr = os.Stderr
-		}
-		if err := cmd.Run(); err != nil {
+		fmt.Printf("Updating repository\n")
+		if err := gitSvc.FetchRepository(cfg.Owner, cfg.Repo); err != nil {
 			return fmt.Errorf("failed to fetch updates: %v", err)
 		}
 
-		cmd = exec.Command("git", "-C", repoPath, "pull")
-		if *verbose {
-			cmd.Stdout = os.Stdout
-			cmd.Stderr = os.Stderr
-		}
-		if err := cmd.Run(); err != nil {
+		if err := gitSvc.PullRepository(cfg.Owner, cfg.Repo); err != nil {
 			fmt.Printf("Warning: failed to pull updates: %v\n", err)
 		}
 		fmt.Printf("Repository updated\n")

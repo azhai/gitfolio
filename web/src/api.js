@@ -16,10 +16,30 @@ const Auth = {
     
     isAuthenticated() {
         return !!this.token;
+    },
+    
+    logout() {
+        return API.post('/auth/logout').then(() => {
+            this.setToken(null);
+            localStorage.removeItem('user');
+        }).catch(() => {
+            this.setToken(null);
+            localStorage.removeItem('user');
+        });
     }
 };
 
 const API = {
+    normalizeResponse(data) {
+        if (data === null) {
+            return {};
+        }
+        if (data && typeof data === 'object' && data.data === null) {
+            data.data = [];
+        }
+        return data;
+    },
+
     request(options) {
         const headers = {};
 
@@ -36,19 +56,57 @@ const API = {
         const requestOptions = {
             url: `${Constants.API_BASE_URL}${options.url}`,
             method: options.method || 'GET',
-            headers: headers
+            headers: headers,
+            extract: function(xhr) {
+                return {
+                    status: xhr.status,
+                    body: xhr.responseText ? JSON.parse(xhr.responseText) : null
+                };
+            }
         };
 
         if (options.body) {
             requestOptions.body = options.body;
         }
 
-        return m.request(requestOptions).catch(error => {
-            if (error.code === Constants.HTTP_STATUS.UNAUTHORIZED) {
+        return m.request(requestOptions).then(data => {
+            if (data.status >= 400) {
+                let errorMsg = '请求失败';
+                if (data.body && data.body.error) {
+                    errorMsg = data.body.error;
+                } else if (data.body && data.body.message) {
+                    errorMsg = data.body.message;
+                } else if (typeof data.body === 'string') {
+                    errorMsg = data.body;
+                }
+                throw new Error(errorMsg);
+            }
+            return this.normalizeResponse(data.body);
+        }).catch(error => {
+            if (error && error.message) {
+                throw error;
+            }
+            if (error && error.code === Constants.HTTP_STATUS.UNAUTHORIZED) {
                 Auth.setToken(null);
                 m.route.set('/login');
             }
-            throw error;
+            let errorMsg = '请求失败';
+            if (typeof error === 'string') {
+                errorMsg = error;
+            } else if (error && error.message) {
+                errorMsg = error.message;
+            } else if (error && error.error) {
+                errorMsg = error.error;
+            } else if (error && error.response && error.response.error) {
+                errorMsg = error.response.error;
+            } else if (error && typeof error === 'object') {
+                try {
+                    errorMsg = JSON.stringify(error);
+                } catch (e) {
+                    errorMsg = String(error);
+                }
+            }
+            throw new Error(errorMsg);
         });
     },
     
@@ -203,33 +261,33 @@ const TaskService = {
 const PullRequestService = {
     list(owner, repo, params = {}) {
         const url = owner && repo 
-            ? `/${owner}/${repo}/merge_requests`
-            : '/merge_requests';
+            ? `/${owner}/${repo}/pull_requests`
+            : '/pull_requests';
         return API.get(url, params);
     },
     
     get(owner, repo, number) {
-        return API.get(`/${owner}/${repo}/merge_requests/${number}`);
+        return API.get(`/${owner}/${repo}/pull_requests/${number}`);
     },
     
     create(owner, repo, data) {
-        return API.post(`/${owner}/${repo}/merge_requests`, data);
+        return API.post(`/${owner}/${repo}/pull_requests`, data);
     },
     
     update(owner, repo, number, data) {
-        return API.put(`/${owner}/${repo}/merge_requests/${number}`, data);
+        return API.put(`/${owner}/${repo}/pull_requests/${number}`, data);
     },
     
     merge(owner, repo, number) {
-        return API.post(`/${owner}/${repo}/merge_requests/${number}/merge`);
+        return API.post(`/${owner}/${repo}/pull_requests/${number}/merge`);
     },
     
     close(owner, repo, number) {
-        return API.post(`/${owner}/${repo}/merge_requests/${number}/close`);
+        return API.post(`/${owner}/${repo}/pull_requests/${number}/close`);
     },
     
     reopen(owner, repo, number) {
-        return API.post(`/${owner}/${repo}/merge_requests/${number}/reopen`);
+        return API.post(`/${owner}/${repo}/pull_requests/${number}/reopen`);
     }
 };
 

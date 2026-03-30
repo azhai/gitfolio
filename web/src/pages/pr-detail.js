@@ -1,20 +1,36 @@
-import { Layout, Loading, ProjectHeader, ProjectTabs, EmptyState, formatTime } from '../components.js';
+import { Layout, Loading, ProjectHeader, ProjectTabs, EmptyState, formatTime, MarkdownRenderer } from '../components.js';
 import { RepositoryService, IssueService, PullRequestService, API } from '../api.js';
 
 const PRCommentService = {
     list(owner, repo, prNumber) {
-        return API.get(`/${owner}/${repo}/merge_requests/${prNumber}/comments`);
+        return API.get(`/${owner}/${repo}/pull_requests/${prNumber}/comments`);
     },
     
     create(owner, repo, prNumber, data) {
-        return API.post(`/${owner}/${repo}/merge_requests/${prNumber}/comments`, data);
+        return API.post(`/${owner}/${repo}/pull_requests/${prNumber}/comments`, data);
     }
 };
 
 const PullRequestDetail = {
     oninit(vnode) {
+        PullRequestDetail.loadData(vnode);
+    },
+    
+    onbeforeupdate(vnode) {
+        const { number: newNumber } = vnode.attrs;
+        const { number: oldNumber } = vnode.state;
+        
+        if (newNumber !== oldNumber) {
+            vnode.state.loading = true;
+            vnode.state.comments = [];
+            PullRequestDetail.loadData(vnode);
+        }
+    },
+    
+    loadData(vnode) {
         const { owner, repo, number } = vnode.attrs;
         
+        vnode.state.number = number;
         vnode.state.repo = null;
         vnode.state.pr = null;
         vnode.state.comments = [];
@@ -30,8 +46,8 @@ const PullRequestDetail = {
         Promise.all([
             RepositoryService.get(owner, repo),
             PullRequestService.get(owner, repo, number),
-            IssueService.list(owner, repo),
-            PullRequestService.list(owner, repo)
+            IssueService.list(owner, repo, { state: 'all', per_page: 1000 }),
+            PullRequestService.list(owner, repo, { state: 'all', per_page: 1000 })
         ]).then(([repoResult, prResult, issuesResult, prsResult]) => {
             vnode.state.repo = repoResult.data || repoResult;
             vnode.state.pr = prResult.data || prResult;
@@ -190,136 +206,138 @@ const PullRequestDetail = {
         }
         
         return m(Layout, [
-            m('div.pr-detail-page', [
-                m(ProjectHeader, {
-                    owner: owner,
-                    repo: repo.name,
-                    description: repo.description,
-                    stars: repo.stars_count,
-                    forks: repo.forks_count,
-                    visibility: repo.is_private ? 'private' : 'public'
-                }),
-                
-                m(ProjectTabs, {
-                    owner: owner,
-                    repo: repo.name,
-                    issuesCount: vnode.state.issuesCount,
-                    prsCount: vnode.state.prsCount,
-                    activeTab: 'prs'
-                }),
-                
-                m('div.pr-detail-content', [
-                    m('div.pr-detail-header', [
-                        m('div.pr-title-row', [
-                            m('div.pr-number', `#${pr.number}`),
-                            editMode ? 
-                                m('input.pr-title-input', {
-                                    value: editTitle,
-                                    oninput: (e) => { vnode.state.editTitle = e.target.value; }
-                                }) :
-                                m('h1.pr-title', pr.title),
-                            m('div.pr-status-badge', { 
-                                class: statusClass
-                            }, statusText)
+            m(ProjectHeader, {
+                owner: owner,
+                repo: repo.name,
+                description: repo.description,
+                stars: repo.stars_count,
+                forks: repo.forks_count,
+                visibility: repo.is_private ? 'private' : 'public'
+            }),
+            
+            m(ProjectTabs, {
+                owner: owner,
+                repo: repo.name,
+                issuesCount: vnode.state.issuesCount,
+                prsCount: vnode.state.prsCount,
+                activeTab: 'prs'
+            }),
+            
+            m('div.pr-detail-content', [
+                m('div.pr-detail-header', [
+                    m('div.pr-title-row', [
+                        m('div.pr-number', `#${pr.number}`),
+                        editMode ? 
+                            m('input.pr-title-input', {
+                                value: editTitle,
+                                oninput: (e) => { vnode.state.editTitle = e.target.value; }
+                            }) :
+                            m('h1.pr-title', pr.title),
+                        m('div.pr-status-badge', { 
+                            class: statusClass
+                        }, statusText)
+                    ]),
+                    m('div.pr-meta', [
+                        m('span', [
+                            m('strong', pr.source_branch),
+                            ' → ',
+                            m('strong', pr.target_branch)
                         ]),
-                        m('div.pr-meta', [
-                            m('span', [
-                                m('strong', pr.source_branch),
-                                ' → ',
-                                m('strong', pr.target_branch)
-                            ]),
-                            m('span', ' · '),
-                            m('span', `由 ${pr.author || '未知'} 创建于 ${formatTime(pr.created_at)}`),
-                            pr.updated_at !== pr.created_at ? 
-                                m('span', ` · 更新于 ${formatTime(pr.updated_at)}`) : null
+                        m('span', ' · '),
+                        m('span', `由 ${pr.author || '未知'} 创建于 ${formatTime(pr.created_at)}`),
+                        pr.updated_at !== pr.created_at ? 
+                            m('span', ` · 更新于 ${formatTime(pr.updated_at)}`) : null
+                    ])
+                ]),
+                
+                m('div.pr-detail-body', [
+                    m('div.pr-main', [
+                        m('div.pr-description', [
+                            editMode ? [
+                                m('textarea.pr-body-textarea', {
+                                    value: editBody,
+                                    oninput: (e) => { vnode.state.editBody = e.target.value; },
+                                    placeholder: '添加描述...'
+                                }),
+                                m('div.pr-edit-actions', [
+                                    m('button.btn.btn-primary', {
+                                        onclick: () => PullRequestDetail.handleSave(vnode),
+                                        disabled: submitting
+                                    }, submitting ? '保存中...' : '保存'),
+                                    m('button.btn', {
+                                        onclick: () => { vnode.state.editMode = false; }
+                                    }, '取消')
+                                ])
+                            ] : [
+                                m('div.pr-body', [
+                                    m(MarkdownRenderer, { content: pr.body || '暂无描述', owner, repo: repo.name })
+                                ]),
+                                m('div.pr-actions', [
+                                    m('button.btn.btn-sm', {
+                                        onclick: () => { vnode.state.editMode = true; }
+                                    }, [m('i.fas.fa-edit'), ' 编辑']),
+                                    !pr.is_closed && !pr.is_merged ? [
+                                        m('button.btn.btn-sm.btn-success', {
+                                            onclick: () => PullRequestDetail.handleMerge(vnode)
+                                        }, [m('i.fas.fa-code-branch'), ' 合并']),
+                                        m('button.btn.btn-sm', {
+                                            onclick: () => PullRequestDetail.handleClose(vnode)
+                                        }, [m('i.fas.fa-times'), ' 关闭'])
+                                    ] : pr.is_closed && !pr.is_merged ? [
+                                        m('button.btn.btn-sm', {
+                                            onclick: () => PullRequestDetail.handleReopen(vnode)
+                                        }, [m('i.fas.fa-redo'), ' 重新打开'])
+                                    ] : null
+                                ])
+                            ]
+                        ]),
+                        
+                        m('div.pr-comments', [
+                            m('h3', '评论'),
+                            comments.length === 0 ? 
+                                m('p.no-comments', '暂无评论') :
+                                m('div.comment-list', comments.map(comment => 
+                                    m('div.comment-item', [
+                                        m('div.comment-header', [
+                                            m('span.comment-author', comment.author),
+                                            m('span.comment-time', formatTime(comment.created_at))
+                                        ]),
+                                        m('div.comment-body', [
+                                            m(MarkdownRenderer, { content: comment.body, owner, repo: repo.name })
+                                        ])
+                                    ])
+                                )),
+                            
+                            m('div.comment-form', [
+                                m('textarea.comment-input', {
+                                    placeholder: '添加评论...',
+                                    value: newComment,
+                                    oninput: (e) => { vnode.state.newComment = e.target.value; }
+                                }),
+                                m('button.btn.btn-primary', {
+                                    onclick: () => PullRequestDetail.handleAddComment(vnode),
+                                    disabled: submitting || !newComment.trim()
+                                }, '发表评论')
+                            ])
                         ])
                     ]),
                     
-                    m('div.pr-detail-body', [
-                        m('div.pr-main', [
-                            m('div.pr-description', [
-                                editMode ? [
-                                    m('textarea.pr-body-textarea', {
-                                        value: editBody,
-                                        oninput: (e) => { vnode.state.editBody = e.target.value; },
-                                        placeholder: '添加描述...'
-                                    }),
-                                    m('div.pr-edit-actions', [
-                                        m('button.btn.btn-primary', {
-                                            onclick: () => PullRequestDetail.handleSave(vnode),
-                                            disabled: submitting
-                                        }, submitting ? '保存中...' : '保存'),
-                                        m('button.btn', {
-                                            onclick: () => { vnode.state.editMode = false; }
-                                        }, '取消')
-                                    ])
-                                ] : [
-                                    m('div.pr-body', pr.body || '暂无描述'),
-                                    m('div.pr-actions', [
-                                        m('button.btn.btn-sm', {
-                                            onclick: () => { vnode.state.editMode = true; }
-                                        }, [m('i.fas.fa-edit'), ' 编辑']),
-                                        !pr.is_closed && !pr.is_merged ? [
-                                            m('button.btn.btn-sm.btn-success', {
-                                                onclick: () => PullRequestDetail.handleMerge(vnode)
-                                            }, [m('i.fas.fa-code-branch'), ' 合并']),
-                                            m('button.btn.btn-sm', {
-                                                onclick: () => PullRequestDetail.handleClose(vnode)
-                                            }, [m('i.fas.fa-times'), ' 关闭'])
-                                        ] : pr.is_closed && !pr.is_merged ? [
-                                            m('button.btn.btn-sm', {
-                                                onclick: () => PullRequestDetail.handleReopen(vnode)
-                                            }, [m('i.fas.fa-redo'), ' 重新打开'])
-                                        ] : null
-                                    ])
-                                ]
-                            ]),
-                            
-                            m('div.pr-comments', [
-                                m('h3', '评论'),
-                                comments.length === 0 ? 
-                                    m('p.no-comments', '暂无评论') :
-                                    m('div.comment-list', comments.map(comment => 
-                                        m('div.comment-item', [
-                                            m('div.comment-header', [
-                                                m('span.comment-author', comment.author),
-                                                m('span.comment-time', formatTime(comment.created_at))
-                                            ]),
-                                            m('div.comment-body', comment.body)
-                                        ])
-                                    )),
-                                
-                                m('div.comment-form', [
-                                    m('textarea.comment-input', {
-                                        placeholder: '添加评论...',
-                                        value: newComment,
-                                        oninput: (e) => { vnode.state.newComment = e.target.value; }
-                                    }),
-                                    m('button.btn.btn-primary', {
-                                        onclick: () => PullRequestDetail.handleAddComment(vnode),
-                                        disabled: submitting || !newComment.trim()
-                                    }, '发表评论')
-                                ])
-                            ])
+                    m('div.pr-sidebar', [
+                        m('div.sidebar-card', [
+                            m('h4', '源分支'),
+                            m('p', pr.source_branch)
                         ]),
-                        
-                        m('div.pr-sidebar', [
-                            m('div.sidebar-card', [
-                                m('h4', '源分支'),
-                                m('p', pr.source_branch)
-                            ]),
-                            m('div.sidebar-card', [
-                                m('h4', '目标分支'),
-                                m('p', pr.target_branch)
-                            ]),
-                            m('div.sidebar-card', [
-                                m('h4', '指派给'),
-                                m('p', pr.assignee || '未指派')
-                            ]),
-                            m('div.sidebar-card', [
-                                m('h4', '标签'),
-                                m('p', '暂无标签')
-                            ])
+                        m('div.sidebar-card', [
+                            m('h4', '目标分支'),
+                            m('p', pr.target_branch)
+                        ]),
+                        m('div.sidebar-card', [
+                            m('h4', '指派给'),
+                            m('p', pr.assignee || '未指派')
+                        ]),
+                        m('div.sidebar-card', [
+                            m('h4', '标签'),
+                            m('p', '暂无标签')
                         ])
                     ])
                 ])

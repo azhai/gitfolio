@@ -5,19 +5,16 @@ import (
 	"log"
 	"os"
 
-	"github.com/azhai/gitfolio/config"
-	"github.com/azhai/gitfolio/database"
+	"github.com/azhai/gitfolio/cmd"
+	"github.com/azhai/gitfolio/models"
 	"github.com/azhai/gitfolio/routes"
 )
 
 func main() {
-	cfg := config.Load()
-
-	if err := database.Init(&cfg.Database); err != nil {
-		log.Fatalf("Failed to initialize database: %v", err)
-	}
-
-	database.SeedData()
+	cfg := cmd.InitDB()
+	cmd.SeedUsers()
+	cmd.AddGithubToken(cfg.Github.Username, cfg.Github.Token)
+	defer models.Disconnect()
 
 	if err := os.MkdirAll(cfg.Repository.Root, 0755); err != nil {
 		log.Fatalf("Failed to create repository root: %v", err)

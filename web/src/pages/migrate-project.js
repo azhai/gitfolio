@@ -7,12 +7,14 @@ const MigrateProjectPage = {
             clone_url: '',
             name: '',
             description: '',
+            homepage: '',
             is_private: false,
             project_type: 'mirror'
         };
         vnode.state.loading = false;
         vnode.state.error = null;
         vnode.state.detected = null;
+        vnode.state.fetchingGitHub = false;
     },
 
     detectPlatform(url) {
@@ -43,16 +45,41 @@ const MigrateProjectPage = {
         return null;
     },
 
+    async fetchGitHubInfo(vnode, url) {
+        if (!url || !url.includes('github.com')) return;
+        
+        vnode.state.fetchingGitHub = true;
+        m.redraw();
+        
+        try {
+            const response = await fetch(`/api/v1/repos/github-info?url=${encodeURIComponent(url)}`);
+            if (response.ok) {
+                const data = await response.json();
+                if (!vnode.state.formData.name) {
+                    vnode.state.formData.name = data.name;
+                }
+                if (!vnode.state.formData.description) {
+                    vnode.state.formData.description = data.description || '';
+                }
+                if (!vnode.state.formData.homepage) {
+                    vnode.state.formData.homepage = data.homepage || '';
+                }
+            }
+        } catch (err) {
+            console.error('Failed to fetch GitHub info:', err);
+        } finally {
+            vnode.state.fetchingGitHub = false;
+            m.redraw();
+        }
+    },
+
     handleCloneUrlInput(vnode, e) {
         vnode.state.formData.clone_url = e.target.value;
         const detectedInfo = MigrateProjectPage.extractRepoInfo(e.target.value);
         if (detectedInfo) {
             vnode.state.detected = detectedInfo;
-            if (!vnode.state.formData.name) {
-                vnode.state.formData.name = detectedInfo.repo;
-            }
-            if (!vnode.state.formData.description) {
-                vnode.state.formData.description = '从 ' + detectedInfo.platform + ' 镜像的项目';
+            if (detectedInfo.platform === 'github') {
+                MigrateProjectPage.fetchGitHubInfo(vnode, e.target.value);
             }
         } else {
             vnode.state.detected = null;
@@ -69,18 +96,34 @@ const MigrateProjectPage = {
             submitData.platform = vnode.state.detected.platform;
         }
 
-        RepositoryService.create('ryan', submitData).then(result => {
+        RepositoryService.create(submitData).then(result => {
             vnode.state.loading = false;
             m.route.set('/projects');
         }).catch(err => {
             vnode.state.loading = false;
-            vnode.state.error = err.message || '迁移项目失败';
+            let errorMsg = '迁移项目失败';
+            if (typeof err === 'string') {
+                errorMsg = err;
+            } else if (err && err.message) {
+                errorMsg = err.message;
+            } else if (err && err.error) {
+                errorMsg = err.error;
+            } else if (err && err.response && err.response.error) {
+                errorMsg = err.response.error;
+            } else if (err && typeof err === 'object') {
+                try {
+                    errorMsg = JSON.stringify(err);
+                } catch (e) {
+                    errorMsg = String(err);
+                }
+            }
+            vnode.state.error = errorMsg;
             m.redraw();
         });
     },
 
     view(vnode) {
-        const { formData, loading, error, detected } = vnode.state;
+        const { formData, loading, error, detected, fetchingGitHub } = vnode.state;
 
         return m(Layout, [
             m('div.migrate-project-page', [
@@ -110,7 +153,8 @@ const MigrateProjectPage = {
 
                         detected ? m('div.detected-info', [
                             m('i.fas.fa-check-circle'),
-                            m('span', '检测到 ' + detected.platform + ' 仓库: ' + detected.owner + '/' + detected.repo)
+                            m('span', '检测到 ' + detected.platform + ' 仓库: ' + detected.owner + '/' + detected.repo),
+                            fetchingGitHub ? m('span.loading-hint', ' (正在获取信息...)') : null
                         ]) : null
                     ]),
 
@@ -137,6 +181,17 @@ const MigrateProjectPage = {
                                 value: formData.description,
                                 oninput: (e) => { formData.description = e.target.value; }
                             })
+                        ]),
+
+                        m('div.form-group', [
+                            m('label.form-label', { for: 'homepage' }, '主页'),
+                            m('input#homepage.form-input', {
+                                type: 'url',
+                                placeholder: 'https://example.com',
+                                value: formData.homepage,
+                                oninput: (e) => { formData.homepage = e.target.value; }
+                            }),
+                            m('p.form-hint', '项目主页地址')
                         ])
                     ]),
 

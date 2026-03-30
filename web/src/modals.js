@@ -199,26 +199,30 @@ const CreateTaskModal = {
                 m('div.form-group', [
                     m('label.form-label', { for: 'task-draft' }, '草稿'),
                     m('p.field-hint', '评审前的初始规划'),
-                    m('textarea#task-draft.form-input.form-textarea', {
-                        placeholder: '任务草稿...',
-                        rows: 5,
+                    m(MarkdownEditor, {
                         value: formData.draft,
                         oninput: (e) => {
                             vnode.state.formData.draft = e.target.value;
-                        }
+                        },
+                        placeholder: '任务草稿... (支持 Markdown 格式)',
+                        rows: 8,
+                        owner: owner,
+                        repo: repo
                     })
                 ]),
                 
                 m('div.form-group', [
                     m('label.form-label', { for: 'task-goal' }, '目标'),
                     m('p.field-hint', '评审后形成的最终版本'),
-                    m('textarea#task-goal.form-input.form-textarea', {
-                        placeholder: '任务目标...',
-                        rows: 3,
+                    m(MarkdownEditor, {
                         value: formData.goal,
                         oninput: (e) => {
                             vnode.state.formData.goal = e.target.value;
-                        }
+                        },
+                        placeholder: '任务目标... (支持 Markdown 格式)',
+                        rows: 6,
+                        owner: owner,
+                        repo: repo
                     })
                 ]),
                 

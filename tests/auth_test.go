@@ -4,7 +4,6 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/azhai/gitfolio/database"
 	"github.com/azhai/gitfolio/middleware"
 	"github.com/azhai/gitfolio/models"
 )
@@ -74,7 +73,7 @@ func TestDuplicateUserRegistration(t *testing.T) {
 		Email:    "existing@example.com",
 	}
 	user.SetPassword("password123")
-	db := database.GetDB()
+	db := models.GetDB()
 	db.User.Insert().One(&user)
 
 	payload := map[string]string{
@@ -96,7 +95,7 @@ func TestUserLogin(t *testing.T) {
 		IsActive: true,
 	}
 	user.SetPassword("password123")
-	db := database.GetDB()
+	db := models.GetDB()
 	db.User.Insert().One(&user)
 
 	tests := []struct {
@@ -160,7 +159,7 @@ func TestInactiveUserLogin(t *testing.T) {
 		IsActive: false,
 	}
 	user.SetPassword("password123")
-	db := database.GetDB()
+	db := models.GetDB()
 	db.User.Insert().One(&user)
 
 	payload := map[string]string{
@@ -181,7 +180,7 @@ func TestGetCurrentUser(t *testing.T) {
 		IsActive: true,
 	}
 	user.SetPassword("password123")
-	db := database.GetDB()
+	db := models.GetDB()
 	db.User.Insert().One(&user)
 
 	token, _ := middleware.GenerateToken(&user)

@@ -1,0 +1,135 @@
+package services
+
+import (
+	"time"
+
+	"github.com/azhai/gitfolio/models"
+)
+
+type StatsService struct {
+	db *models.Database
+}
+
+func NewStatsService(db *models.Database) *StatsService {
+	return &StatsService{db: db}
+}
+
+func (s *StatsService) UpdateRepositoryStats(repoID int64) error {
+	stats, err := s.getOrCreateStats(repoID)
+	if err != nil {
+		return err
+	}
+
+	openIssues, _ := s.db.Issue.Select().Where("repository_id = ? AND is_closed = ?", repoID, false).Count("*")
+	closedIssues, _ := s.db.Issue.Select().Where("repository_id = ? AND is_closed = ?", repoID, true).Count("*")
+	openPRs, _ := s.db.PullRequest.Select().Where("repository_id = ? AND is_closed = ? AND is_merged = ?", repoID, false, false).Count("*")
+	closedPRs, _ := s.db.PullRequest.Select().Where("repository_id = ? AND is_closed = ? AND is_merged = ?", repoID, true, false).Count("*")
+	mergedPRs, _ := s.db.PullRequest.Select().Where("repository_id = ? AND is_merged = ?", repoID, true).Count("*")
+	contributors, _ := s.db.Contributor.Select().Where("repository_id = ?", repoID).Count("*")
+	tags, _ := s.db.Release.Select().Where("repository_id = ?", repoID).Count("*")
+
+	stats.OpenIssuesCount = int(openIssues)
+	stats.ClosedIssuesCount = int(closedIssues)
+	stats.OpenPRsCount = int(openPRs)
+	stats.ClosedPRsCount = int(closedPRs)
+	stats.MergedPRsCount = int(mergedPRs)
+	stats.ContributorsCount = int(contributors)
+	stats.TagsCount = int(tags)
+	stats.UpdatedAt = time.Now()
+
+	return s.db.RepositoryStats.Save().One(stats)
+}
+
+func (s *StatsService) getOrCreateStats(repoID int64) (*models.RepositoryStats, error) {
+	stats, err := s.db.RepositoryStats.Select().Where("repository_id = ?", repoID).One()
+	if err == nil {
+		return stats, nil
+	}
+
+	stats = &models.RepositoryStats{
+		RepositoryID:      repoID,
+		CreatedAt:         time.Now(),
+		UpdatedAt:         time.Now(),
+		StarsCount:        0,
+		ForksCount:        0,
+		WatchCount:        0,
+		CommitsCount:      0,
+		TagsCount:         0,
+		ContributorsCount: 0,
+		OpenIssuesCount:   0,
+		ClosedIssuesCount: 0,
+		OpenPRsCount:      0,
+		ClosedPRsCount:    0,
+		MergedPRsCount:    0,
+	}
+
+	if err := s.db.RepositoryStats.Insert().One(stats); err != nil {
+		return nil, err
+	}
+
+	return stats, nil
+}
+
+func (s *StatsService) UpdateStarsCount(repoID int64, count int) error {
+	stats, err := s.getOrCreateStats(repoID)
+	if err != nil {
+		return err
+	}
+
+	stats.StarsCount = count
+	stats.UpdatedAt = time.Now()
+
+	return s.db.RepositoryStats.Save().One(stats)
+}
+
+func (s *StatsService) UpdateForksCount(repoID int64, count int) error {
+	stats, err := s.getOrCreateStats(repoID)
+	if err != nil {
+		return err
+	}
+
+	stats.ForksCount = count
+	stats.UpdatedAt = time.Now()
+
+	return s.db.RepositoryStats.Save().One(stats)
+}
+
+func (s *StatsService) UpdateWatchCount(repoID int64, count int) error {
+	stats, err := s.getOrCreateStats(repoID)
+	if err != nil {
+		return err
+	}
+
+	stats.WatchCount = count
+	stats.UpdatedAt = time.Now()
+
+	return s.db.RepositoryStats.Save().One(stats)
+}
+
+func (s *StatsService) UpdateCommitsCount(repoID int64, count int) error {
+	stats, err := s.getOrCreateStats(repoID)
+	if err != nil {
+		return err
+	}
+
+	stats.CommitsCount = count
+	stats.UpdatedAt = time.Now()
+
+	return s.db.RepositoryStats.Save().One(stats)
+}
+
+func (s *StatsService) UpdateLastCommitAt(repoID int64, t *time.Time) error {
+	stats, err := s.getOrCreateStats(repoID)
+	if err != nil {
+		return err
+	}
+
+	stats.LastCommitAt = t
+	stats.UpdatedAt = time.Now()
+
+	return s.db.RepositoryStats.Save().One(stats)
+}
+
+func (s *StatsService) GetRepositoryStats(repoID int64) (*models.RepositoryStats, error) {
+	return s.getOrCreateStats(repoID)
+}

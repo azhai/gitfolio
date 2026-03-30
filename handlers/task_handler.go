@@ -1,19 +1,18 @@
-package controllers
+package handlers
 
 import (
 	"strconv"
 	"time"
 
-	"github.com/gofiber/fiber/v3"
-
-	"github.com/azhai/gitfolio/database"
+	"github.com/azhai/gitfolio/config"
 	"github.com/azhai/gitfolio/helpers"
 	"github.com/azhai/gitfolio/middleware"
 	"github.com/azhai/gitfolio/models"
+	"github.com/gofiber/fiber/v3"
 )
 
 type TaskResponse struct {
-	ID            uint                 `json:"id"`
+	ID            int64                `json:"id"`
 	Title         string               `json:"title"`
 	Draft         string               `json:"draft"`
 	Goal          string               `json:"goal"`
@@ -21,13 +20,13 @@ type TaskResponse struct {
 	Status        string               `json:"status"`
 	Priority      int                  `json:"priority"`
 	SortOrder     int                  `json:"sort_order"`
-	RepositoryID  uint                 `json:"repository_id"`
+	RepositoryID  int64                `json:"repository_id"`
 	Initiator     string               `json:"initiator"`
-	InitiatorID   uint                 `json:"initiator_id"`
+	InitiatorID   int64                `json:"initiator_id"`
 	Verifier      string               `json:"verifier,omitempty"`
-	VerifierID    *uint                `json:"verifier_id,omitempty"`
+	VerifierID    *int64               `json:"verifier_id,omitempty"`
 	Handler       string               `json:"handler,omitempty"`
-	HandlerID     *uint                `json:"handler_id,omitempty"`
+	HandlerID     *int64               `json:"handler_id,omitempty"`
 	Schedules     []TaskScheduleResp   `json:"schedules,omitempty"`
 	Attachments   []TaskAttachmentResp `json:"attachments,omitempty"`
 	Issues        []TaskIssueResp      `json:"issues,omitempty"`
@@ -37,14 +36,14 @@ type TaskResponse struct {
 }
 
 type TaskIssueResp struct {
-	ID     uint   `json:"id"`
+	ID     int64  `json:"id"`
 	Title  string `json:"title"`
 	Status string `json:"status"`
 	Number int    `json:"number"`
 }
 
 type TaskScheduleResp struct {
-	ID              uint   `json:"id"`
+	ID              int64  `json:"id"`
 	ScheduleType    string `json:"schedule_type"`
 	PlanStartDate   string `json:"plan_start_date,omitempty"`
 	PlanEndDate     string `json:"plan_end_date,omitempty"`
@@ -60,7 +59,7 @@ type TaskScheduleResp struct {
 }
 
 type TaskAttachmentResp struct {
-	ID       uint   `json:"id"`
+	ID       int64  `json:"id"`
 	FileName string `json:"file_name"`
 	FilePath string `json:"file_path"`
 	FileSize int64  `json:"file_size"`
@@ -159,8 +158,11 @@ func ToTaskResponse(task *models.Task, initiator *models.User, verifier *models.
 }
 
 func ListTasks(c fiber.Ctx) error {
-	page, _ := strconv.Atoi(c.Query("page", "1"))
-	perPage, _ := strconv.Atoi(c.Query("per_page", "30"))
+	page, _ := strconv.Atoi(c.Query("page", strconv.Itoa(config.DefaultPage)))
+	perPage, _ := strconv.Atoi(c.Query("per_page", strconv.Itoa(config.DefaultPerPage)))
+	if perPage > config.MaxPerPage {
+		perPage = config.MaxPerPage
+	}
 	status := c.Query("status", "")
 	priority := c.Query("priority", "")
 
@@ -169,7 +171,7 @@ func ListTasks(c fiber.Ctx) error {
 		return err
 	}
 
-	db := database.GetDB()
+	db := models.GetDB()
 
 	query := db.Task.Select().Where("repository_id = ?", result.Repo.ID)
 
@@ -185,7 +187,7 @@ func ListTasks(c fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch tasks"})
 	}
 
-	userIDs := make(map[uint]bool)
+	userIDs := make(map[int64]bool)
 	for _, task := range tasks {
 		if task.InitiatorID != 0 {
 			userIDs[task.InitiatorID] = true
@@ -198,7 +200,7 @@ func ListTasks(c fiber.Ctx) error {
 		}
 	}
 
-	usersMap := make(map[uint]*models.User)
+	usersMap := make(map[int64]*models.User)
 	for userID := range userIDs {
 		user, err := db.User.Select().Where("id = ?", userID).One()
 		if err == nil {
@@ -207,6 +209,7 @@ func ListTasks(c fiber.Ctx) error {
 	}
 
 	var response []TaskResponse
+	response = make([]TaskResponse, 0)
 	for _, task := range tasks {
 		initiator := usersMap[task.InitiatorID]
 		var verifier *models.User
@@ -236,7 +239,7 @@ func GetTask(c fiber.Ctx) error {
 		return err
 	}
 
-	db := database.GetDB()
+	db := models.GetDB()
 
 	task, err := db.Task.Select().Where("id = ? AND repository_id = ?", taskID, result.Repo.ID).One()
 	if err != nil {
@@ -262,13 +265,13 @@ func GetTask(c fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(ToTaskResponse(task, initiator, verifier, handler, schedules, attachments, issues))
 }
 
-func getTaskSchedules(db *database.Database, taskID uint) []TaskScheduleResp {
+func getTaskSchedules(db *models.Database, taskID int64) []TaskScheduleResp {
 	schedules, err := db.TaskSchedule.Select().Where("task_id = ?", taskID).All()
 	if err != nil {
 		return []TaskScheduleResp{}
 	}
 
-	userIDs := make(map[uint]bool)
+	userIDs := make(map[int64]bool)
 	for _, s := range schedules {
 		if s.User1ID != nil && *s.User1ID != 0 {
 			userIDs[*s.User1ID] = true
@@ -281,7 +284,7 @@ func getTaskSchedules(db *database.Database, taskID uint) []TaskScheduleResp {
 		}
 	}
 
-	usersMap := make(map[uint]*models.User)
+	usersMap := make(map[int64]*models.User)
 	for userID := range userIDs {
 		user, err := db.User.Select().Where("id = ?", userID).One()
 		if err == nil {
@@ -336,7 +339,7 @@ func getTaskSchedules(db *database.Database, taskID uint) []TaskScheduleResp {
 	return result
 }
 
-func getTaskAttachments(db *database.Database, taskID uint) []TaskAttachmentResp {
+func getTaskAttachments(db *models.Database, taskID int64) []TaskAttachmentResp {
 	attachments, err := db.TaskAttachment.Select().Where("task_id = ?", taskID).All()
 	if err != nil {
 		return []TaskAttachmentResp{}
@@ -356,13 +359,13 @@ func getTaskAttachments(db *database.Database, taskID uint) []TaskAttachmentResp
 	return result
 }
 
-func getTaskIssues(db *database.Database, taskID uint) []TaskIssueResp {
+func getTaskIssues(db *models.Database, taskID int64) []TaskIssueResp {
 	taskIssues, err := db.TaskIssue.Select().Where("task_id = ?", taskID).All()
 	if err != nil {
 		return []TaskIssueResp{}
 	}
 
-	var issueIDs []uint
+	var issueIDs []int64
 	for _, ti := range taskIssues {
 		issueIDs = append(issueIDs, ti.IssueID)
 	}
@@ -402,7 +405,7 @@ func CreateTask(c fiber.Ctx) error {
 		return err
 	}
 
-	db := database.GetDB()
+	db := models.GetDB()
 
 	task := &models.Task{
 		Title:        req.Title,
@@ -514,7 +517,7 @@ func UpdateTask(c fiber.Ctx) error {
 		return err
 	}
 
-	db := database.GetDB()
+	db := models.GetDB()
 
 	task, err := db.Task.Select().Where("id = ? AND repository_id = ?", taskID, result.Repo.ID).One()
 	if err != nil {
@@ -644,7 +647,7 @@ func DeleteTask(c fiber.Ctx) error {
 		return err
 	}
 
-	db := database.GetDB()
+	db := models.GetDB()
 
 	task, err := db.Task.Select().Where("id = ? AND repository_id = ?", taskID, result.Repo.ID).One()
 	if err != nil {
@@ -668,7 +671,7 @@ func AddIssueToTask(c fiber.Ctx) error {
 	userID := middleware.GetCurrentUserID(c)
 
 	var req struct {
-		IssueID uint `json:"issue_id"`
+		IssueID int64 `json:"issue_id"`
 	}
 	if err := c.Bind().JSON(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
@@ -679,7 +682,7 @@ func AddIssueToTask(c fiber.Ctx) error {
 		return err
 	}
 
-	db := database.GetDB()
+	db := models.GetDB()
 
 	task, err := db.Task.Select().Where("id = ? AND repository_id = ?", taskID, result.Repo.ID).One()
 	if err != nil {
@@ -722,7 +725,7 @@ func RemoveIssueFromTask(c fiber.Ctx) error {
 		return err
 	}
 
-	db := database.GetDB()
+	db := models.GetDB()
 
 	task, err := db.Task.Select().Where("id = ? AND repository_id = ?", taskID, result.Repo.ID).One()
 	if err != nil {
@@ -747,7 +750,7 @@ func UploadTaskAttachment(c fiber.Ctx) error {
 		return err
 	}
 
-	db := database.GetDB()
+	db := models.GetDB()
 
 	task, err := db.Task.Select().Where("id = ? AND repository_id = ?", taskID, result.Repo.ID).One()
 	if err != nil {
@@ -804,7 +807,7 @@ func DeleteTaskAttachment(c fiber.Ctx) error {
 		return err
 	}
 
-	db := database.GetDB()
+	db := models.GetDB()
 
 	attachment, err := db.TaskAttachment.Select().Where("id = ?", attachmentID).One()
 	if err != nil {

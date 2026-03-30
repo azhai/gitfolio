@@ -1,69 +1,18 @@
-package database
+package cmd
 
 import (
 	"log"
 
 	"github.com/azhai/gitfolio/models"
-	"golang.org/x/crypto/bcrypt"
 )
 
-func SeedData() {
-	db := GetDB()
-
-	existingUsers, _ := db.User.Select().All()
-	if len(existingUsers) > 0 {
-		log.Println("Database already seeded, skipping...")
-		return
-	}
-
-	log.Println("Seeding database with real repository data...")
-
-	users := []*models.User{
-		{
-			Username: "ryan",
-			Email:    "ryan@home504.io",
-			FullName: "Ryan",
-			Bio:      "Developer and open source enthusiast",
-			Website:  "https://git.home504.io/ryan",
-			Location: "China",
-			IsActive: true,
-			IsAdmin:  false,
-		},
-		{
-			Username: "xorm",
-			Email:    "xorm@xorm.io",
-			FullName: "XORM",
-			Bio:      "Simple and Powerful ORM for Go",
-			Website:  "https://xorm.io",
-			Location: "China",
-			IsActive: true,
-			IsAdmin:  false,
-		},
-		{
-			Username: "admin",
-			Email:    "admin@gitfolio.com",
-			FullName: "System Admin",
-			Bio:      "GitFolio administrator",
-			IsActive: true,
-			IsAdmin:  true,
-		},
-	}
-
-	for _, user := range users {
-		password, _ := bcrypt.GenerateFromPassword([]byte("password123"), bcrypt.DefaultCost)
-		user.Password = string(password)
-		err := db.User.Insert().One(user)
-		if err != nil {
-			log.Printf("Failed to create user %s: %v", user.Username, err)
-		} else {
-			log.Printf("Created user: %s", user.Username)
-		}
-	}
-
+func SeedRepos() {
+	db := models.GetDB()
 	repos := []struct {
 		Owner       string
 		Name        string
 		Description string
+		Homepage    string
 		Readme      string
 		IsPrivate   bool
 		StarsCount  int
@@ -74,6 +23,7 @@ func SeedData() {
 			Owner:       "ryan",
 			Name:        "gx",
 			Description: "A fast file search and batch rename tool written in Go",
+			Homepage:    "https://github.com/ryan/gx",
 			Readme: `# gx
 
 用 Go 编写的快速文件搜索和批量重命名工具。
@@ -119,6 +69,7 @@ MIT 许可证`,
 			Owner:       "xorm",
 			Name:        "builder",
 			Description: "Lightweight and fast SQL builder for Go and XORM",
+			Homepage:    "https://xorm.io/builder",
 			Readme: `# Builder
 
 Lightweight and fast SQL builder for Go and XORM.
@@ -256,12 +207,10 @@ MIT License`,
 		repo := &models.Repository{
 			Name:          repoData.Name,
 			Description:   repoData.Description,
+			Homepage:      repoData.Homepage,
 			Readme:        repoData.Readme,
 			OwnerID:       owner.ID,
 			IsPrivate:     repoData.IsPrivate,
-			StarsCount:    repoData.StarsCount,
-			ForksCount:    repoData.ForksCount,
-			WatchCount:    repoData.WatchCount,
 			DefaultBranch: "main",
 		}
 
@@ -271,6 +220,16 @@ MIT License`,
 		} else {
 			log.Printf("Created repository: %s/%s", repoData.Owner, repoData.Name)
 			repoMap[repoData.Owner+"/"+repoData.Name] = repo
+
+			repoStats := &models.RepositoryStats{
+				RepositoryID: repo.ID,
+				StarsCount:   repoData.StarsCount,
+				ForksCount:   repoData.ForksCount,
+				WatchCount:   repoData.WatchCount,
+			}
+			if err := db.RepositoryStats.Insert().One(repoStats); err != nil {
+				log.Printf("Failed to create repository stats: %v", err)
+			}
 		}
 	}
 
@@ -402,7 +361,7 @@ MIT License`,
 			continue
 		}
 
-		mr := &models.MergeRequest{
+		mr := &models.PullRequest{
 			Title:        mrData.Title,
 			Body:         mrData.Body,
 			RepositoryID: repo.ID,
@@ -421,11 +380,11 @@ MIT License`,
 			mr.Status = "closed"
 		}
 
-		err = db.MergeRequest.Insert().One(mr)
+		err = db.PullRequest.Insert().One(mr)
 		if err != nil {
-			log.Printf("Failed to create merge request: %v", err)
+			log.Printf("Failed to create pull request: %v", err)
 		} else {
-			log.Printf("Created merge request #%d: %s", mr.Number, mr.Title)
+			log.Printf("Created pull request #%d: %s", mr.Number, mr.Title)
 		}
 	}
 

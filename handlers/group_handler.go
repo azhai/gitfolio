@@ -1,10 +1,10 @@
-package controllers
+package handlers
 
 import (
 	"strconv"
 	"time"
 
-	"github.com/azhai/gitfolio/database"
+	"github.com/azhai/gitfolio/config"
 	"github.com/azhai/gitfolio/helpers"
 	"github.com/azhai/gitfolio/middleware"
 	"github.com/azhai/gitfolio/models"
@@ -12,14 +12,14 @@ import (
 )
 
 type GroupResponse struct {
-	ID           uint   `json:"id"`
+	ID           int64  `json:"id"`
 	Name         string `json:"name"`
 	DisplayName  string `json:"display_name"`
 	Description  string `json:"description"`
 	Avatar       string `json:"avatar"`
 	Website      string `json:"website"`
 	Location     string `json:"location"`
-	OwnerID      uint   `json:"owner_id"`
+	OwnerID      int64  `json:"owner_id"`
 	MembersCount int    `json:"members_count"`
 	CreatedAt    string `json:"created_at"`
 }
@@ -40,10 +40,13 @@ func ToGroupResponse(group *models.Group, membersCount int) *GroupResponse {
 }
 
 func ListGroups(c fiber.Ctx) error {
-	page, _ := strconv.Atoi(c.Query("page", "1"))
-	perPage, _ := strconv.Atoi(c.Query("per_page", "30"))
+	page, _ := strconv.Atoi(c.Query("page", strconv.Itoa(config.DefaultPage)))
+	perPage, _ := strconv.Atoi(c.Query("per_page", strconv.Itoa(config.DefaultPerPage)))
+	if perPage > config.MaxPerPage {
+		perPage = config.MaxPerPage
+	}
 
-	db := database.GetDB()
+	db := models.GetDB()
 
 	groups, err := db.Group.Select().Skip((page - 1) * perPage).Take(perPage).All()
 	if err != nil {
@@ -66,7 +69,7 @@ func ListGroups(c fiber.Ctx) error {
 func GetGroup(c fiber.Ctx) error {
 	name := c.Params("name")
 
-	db := database.GetDB()
+	db := models.GetDB()
 
 	group, err := db.Group.Select().Where("name = ?", name).One()
 	if err != nil {
@@ -92,7 +95,7 @@ func CreateGroup(c fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	db := database.GetDB()
+	db := models.GetDB()
 
 	existingGroup, _ := db.Group.Select().Where("name = ?", req.Name).One()
 	if existingGroup != nil {
@@ -124,10 +127,10 @@ func CreateGroup(c fiber.Ctx) error {
 }
 
 type ActivityResponse struct {
-	ID           uint   `json:"id"`
-	UserID       *uint  `json:"user_id"`
+	ID           int64  `json:"id"`
+	UserID       *int64 `json:"user_id"`
 	Username     string `json:"username"`
-	RepositoryID *uint  `json:"repository_id"`
+	RepositoryID *int64 `json:"repository_id"`
 	Repository   string `json:"repository"`
 	ActivityType string `json:"activity_type"`
 	Title        string `json:"title"`
@@ -160,11 +163,14 @@ func ToActivityResponse(activity *models.Activity, user *models.User, repoOwner,
 }
 
 func ListActivities(c fiber.Ctx) error {
-	page, _ := strconv.Atoi(c.Query("page", "1"))
-	perPage, _ := strconv.Atoi(c.Query("per_page", "30"))
+	page, _ := strconv.Atoi(c.Query("page", strconv.Itoa(config.DefaultPage)))
+	perPage, _ := strconv.Atoi(c.Query("per_page", strconv.Itoa(config.DefaultPerPage)))
+	if perPage > config.MaxPerPage {
+		perPage = config.MaxPerPage
+	}
 	userID := c.Query("user_id")
 
-	db := database.GetDB()
+	db := models.GetDB()
 
 	query := db.Activity.Select()
 	if userID != "" {
@@ -210,12 +216,12 @@ func CreateActivity(c fiber.Ctx) error {
 	userID := middleware.GetCurrentUserID(c)
 
 	var req struct {
-		RepositoryID *uint  `json:"repository_id"`
-		GroupID      *uint  `json:"group_id"`
+		RepositoryID *int64 `json:"repository_id"`
+		GroupID      *int64 `json:"group_id"`
 		ActivityType string `json:"activity_type"`
 		Title        string `json:"title"`
 		Content      string `json:"content"`
-		TargetID     *uint  `json:"target_id"`
+		TargetID     *int64 `json:"target_id"`
 		TargetType   string `json:"target_type"`
 	}
 
@@ -223,7 +229,7 @@ func CreateActivity(c fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	db := database.GetDB()
+	db := models.GetDB()
 
 	activity := &models.Activity{
 		UserID:       &userID,
@@ -260,11 +266,11 @@ func CreateActivity(c fiber.Ctx) error {
 }
 
 type MilestoneResponse struct {
-	ID           uint   `json:"id"`
+	ID           int64  `json:"id"`
 	Title        string `json:"title"`
 	Description  string `json:"description"`
 	DueDate      string `json:"due_date"`
-	RepositoryID uint   `json:"repository_id"`
+	RepositoryID int64  `json:"repository_id"`
 	IsClosed     bool   `json:"is_closed"`
 	CreatedAt    string `json:"created_at"`
 }
@@ -292,7 +298,7 @@ func ListMilestones(c fiber.Ctx) error {
 		return err
 	}
 
-	db := database.GetDB()
+	db := models.GetDB()
 
 	milestones, err := db.Milestone.Select().Where("repository_id = ?", result.Repo.ID).All()
 	if err != nil {
@@ -323,7 +329,7 @@ func CreateMilestone(c fiber.Ctx) error {
 		return err
 	}
 
-	db := database.GetDB()
+	db := models.GetDB()
 
 	milestone := &models.Milestone{
 		Title:        req.Title,

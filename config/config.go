@@ -10,12 +10,14 @@ type Config struct {
 	Server     ServerConfig
 	Database   DatabaseConfig
 	Auth       AuthConfig
+	Github     GithubConfig
 	Repository RepositoryConfig
 }
 
 type ServerConfig struct {
-	Port    string
 	Mode    string
+	Theme   string
+	Port    string
 	BaseURL string
 }
 
@@ -43,6 +45,11 @@ type AuthConfig struct {
 	TokenExpiry   int
 }
 
+type GithubConfig struct {
+	Username string
+	Token    string
+}
+
 type RepositoryConfig struct {
 	Root string
 }
@@ -55,6 +62,7 @@ func Load() *Config {
 	config := &Config{
 		Server: ServerConfig{
 			Mode:    env.GetStr("APP_MODE", "debug"),
+			Theme:   env.GetStr("APP_THEME", "orange"),
 			Port:    env.GetStr("SERVER_PORT", "3000"),
 			BaseURL: env.GetStr("BASE_URL", "http://localhost:3000"),
 		},
@@ -71,6 +79,10 @@ func Load() *Config {
 			JWTSecret:     env.GetStr("JWT_SECRET", "your-secret-key-change-in-production"),
 			SessionSecret: env.GetStr("SESSION_SECRET", "session-secret-key"),
 			TokenExpiry:   env.GetInt("TOKEN_EXPIRY", 24),
+		},
+		Github: GithubConfig{
+			Username: env.GetStr("GHITHUB_USERNAME", ""),
+			Token:    env.GetStr("GHITHUB_TOKEN", ""),
 		},
 		Repository: RepositoryConfig{
 			Root: env.GetStr("REPO_ROOT", "./repos"),

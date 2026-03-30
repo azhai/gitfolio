@@ -18,13 +18,16 @@ const TaskList = {
         Promise.all([
             RepositoryService.get(owner, repo),
             TaskService.list(owner, repo),
-            PullRequestService.list(owner, repo)
-        ]).then(([repoResult, tasksResult, prsResult]) => {
+            IssueService.list(owner, repo, { state: 'all', per_page: 1000 }),
+            PullRequestService.list(owner, repo, { state: 'all', per_page: 1000 })
+        ]).then(([repoResult, tasksResult, issuesResult, prsResult]) => {
             vnode.state.repo = repoResult.data || repoResult;
             const taskData = tasksResult.data || tasksResult;
             vnode.state.tasks = Array.isArray(taskData) ? taskData : [];
             const prData = prsResult.data || prsResult;
             vnode.state.prsCount = Array.isArray(prData) ? prData.filter(p => !p.is_closed && !p.is_merged).length : 0;
+            const issuesData = issuesResult.data || issuesResult;
+            vnode.state.issuesCount = Array.isArray(issuesData) ? issuesData.filter(i => !i.is_closed).length : 0;
             vnode.state.loading = false;
             m.redraw();
         }).catch(error => {

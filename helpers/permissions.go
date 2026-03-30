@@ -5,19 +5,19 @@ import (
 	"github.com/gofiber/fiber/v3"
 )
 
-func CheckOwnerPermission(c fiber.Ctx, ownerID uint) bool {
+func CheckOwnerPermission(c fiber.Ctx, ownerID int64) bool {
 	userID := middleware.GetCurrentUserID(c)
 	return userID != 0 && userID == ownerID
 }
 
-func RequireOwner(c fiber.Ctx, ownerID uint) error {
+func RequireOwner(c fiber.Ctx, ownerID int64) error {
 	if !CheckOwnerPermission(c, ownerID) {
 		return JSONError(c, HTTPStatusForbidden, "Access denied")
 	}
 	return nil
 }
 
-func CheckUserPermission(c fiber.Ctx, userID *uint) bool {
+func CheckUserPermission(c fiber.Ctx, userID *int64) bool {
 	if userID == nil {
 		return false
 	}
@@ -25,28 +25,28 @@ func CheckUserPermission(c fiber.Ctx, userID *uint) bool {
 	return currentUserID != 0 && currentUserID == *userID
 }
 
-func RequireUser(c fiber.Ctx, userID *uint) error {
+func RequireUser(c fiber.Ctx, userID *int64) error {
 	if !CheckUserPermission(c, userID) {
 		return JSONError(c, HTTPStatusForbidden, "Access denied")
 	}
 	return nil
 }
 
-func CheckPrivateAccess(c fiber.Ctx, isPrivate bool, ownerID uint) bool {
+func CheckPrivateAccess(c fiber.Ctx, isPrivate bool, ownerID int64) bool {
 	if !isPrivate {
 		return true
 	}
 	return CheckOwnerPermission(c, ownerID)
 }
 
-func RequirePrivateAccess(c fiber.Ctx, isPrivate bool, ownerID uint) error {
+func RequirePrivateAccess(c fiber.Ctx, isPrivate bool, ownerID int64) error {
 	if !CheckPrivateAccess(c, isPrivate, ownerID) {
 		return JSONError(c, HTTPStatusForbidden, "Access denied")
 	}
 	return nil
 }
 
-func GetCurrentUserID(c fiber.Ctx) uint {
+func GetCurrentUserID(c fiber.Ctx) int64 {
 	return middleware.GetCurrentUserID(c)
 }
 

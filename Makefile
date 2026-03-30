@@ -1,6 +1,6 @@
 SINGLETON = folio
 COMMANDS  = mirror sync account
-
+SERVER_PORT = 3000
 
 ifndef GOAMD64
 	GOAMD64 = v2
@@ -42,6 +42,7 @@ build: frontend $(BINFILES)
 dev: frontend
 	@echo "Start development server..."
 	@which air > /dev/null || go install github.com/air-verse/air@latest
+# lsof -i tcp:$(SERVER_PORT) | xargs kill -9
 	air -c .air.toml
 
 clean:

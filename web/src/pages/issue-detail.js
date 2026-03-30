@@ -13,8 +13,24 @@ const CommentService = {
 
 const IssueDetail = {
     oninit(vnode) {
+        IssueDetail.loadData(vnode);
+    },
+    
+    onbeforeupdate(vnode) {
+        const { number: newNumber } = vnode.attrs;
+        const { number: oldNumber } = vnode.state;
+        
+        if (newNumber !== oldNumber) {
+            vnode.state.loading = true;
+            vnode.state.comments = [];
+            IssueDetail.loadData(vnode);
+        }
+    },
+    
+    loadData(vnode) {
         const { owner, repo, number } = vnode.attrs;
         
+        vnode.state.number = number;
         vnode.state.repo = null;
         vnode.state.issue = null;
         vnode.state.labels = [];
@@ -32,8 +48,8 @@ const IssueDetail = {
         Promise.all([
             RepositoryService.get(owner, repo),
             IssueService.get(owner, repo, number),
-            IssueService.list(owner, repo),
-            PullRequestService.list(owner, repo),
+            IssueService.list(owner, repo, { state: 'all', per_page: 1000 }),
+            PullRequestService.list(owner, repo, { state: 'all', per_page: 1000 }),
             LabelService.list(owner, repo)
         ]).then(([repoResult, issueResult, issuesResult, prsResult, labelsResult]) => {
             vnode.state.repo = repoResult.data || repoResult;
@@ -149,149 +165,147 @@ const IssueDetail = {
         }
         
         return m(Layout, [
-            m('div.issue-detail-page', [
-                m(ProjectHeader, {
-                    owner: owner,
-                    repo: repo.name,
-                    description: repo.description,
-                    stars: repo.stars_count,
-                    forks: repo.forks_count,
-                    visibility: repo.is_private ? 'private' : 'public'
-                }),
+            m(ProjectHeader, {
+                owner: owner,
+                repo: repo.name,
+                description: repo.description,
+                stars: repo.stars_count,
+                forks: repo.forks_count,
+                visibility: repo.is_private ? 'private' : 'public'
+            }),
+            
+            m(ProjectTabs, {
+                owner: owner,
+                repo: repo.name,
+                issuesCount: vnode.state.issuesCount,
+                prsCount: vnode.state.prsCount,
+                activeTab: 'issues'
+            }),
+            
+            m('div.issue-detail-content', [
+                m('div.issue-detail-header', [
+                    m('div.issue-title-row', [
+                        m('div.issue-number', `#${issue.number}`),
+                        editMode ? 
+                            m('input.issue-title-input', {
+                                value: editTitle,
+                                oninput: (e) => { vnode.state.editTitle = e.target.value; }
+                            }) :
+                            m('h1.issue-title', issue.title),
+                        m('div.issue-status-badge', { 
+                            class: issue.is_closed ? 'closed' : 'open' 
+                        }, issue.is_closed ? '已关闭' : '开启')
+                    ]),
+                    m('div.issue-meta', [
+                        m('span', `由 ${issue.author} 创建于 ${formatTime(issue.created_at)}`),
+                        issue.updated_at !== issue.created_at ? 
+                            m('span', ` · 更新于 ${formatTime(issue.updated_at)}`) : null
+                    ])
+                ]),
                 
-                m(ProjectTabs, {
-                    owner: owner,
-                    repo: repo.name,
-                    issuesCount: vnode.state.issuesCount,
-                    prsCount: vnode.state.prsCount,
-                    activeTab: 'issues'
-                }),
-                
-                m('div.issue-detail-content', [
-                    m('div.issue-detail-header', [
-                        m('div.issue-title-row', [
-                            m('div.issue-number', `#${issue.number}`),
-                            editMode ? 
-                                m('input.issue-title-input', {
-                                    value: editTitle,
-                                    oninput: (e) => { vnode.state.editTitle = e.target.value; }
-                                }) :
-                                m('h1.issue-title', issue.title),
-                            m('div.issue-status-badge', { 
-                                class: issue.is_closed ? 'closed' : 'open' 
-                            }, issue.is_closed ? '已关闭' : '开启')
+                m('div.issue-detail-body', [
+                    m('div.issue-main', [
+                        m('div.issue-description', [
+                            editMode ? [
+                                m('div.form-group', [
+                                    m('label.form-label', '描述'),
+                                    m(MarkdownEditor, {
+                                        value: editBody,
+                                        oninput: (e) => { vnode.state.editBody = e.target.value; },
+                                        placeholder: '添加描述... (支持 Markdown 格式)',
+                                        rows: 10,
+                                        owner: owner,
+                                        repo: repo.name
+                                    })
+                                ]),
+                                m('div.issue-edit-actions', [
+                                    m('button.btn.btn-primary', {
+                                        onclick: () => IssueDetail.handleSave(vnode),
+                                        disabled: submitting
+                                    }, submitting ? '保存中...' : '保存'),
+                                    m('button.btn', {
+                                        onclick: () => { 
+                                            vnode.state.editMode = false; 
+                                            vnode.state.editLabels = (issue.labels || []).map(l => l.name);
+                                        }
+                                    }, '取消')
+                                ])
+                            ] : [
+                                m('div.issue-body', [
+                                    m(MarkdownRenderer, { content: issue.body || '暂无描述', owner, repo: repo.name })
+                                ]),
+                                m('div.issue-actions', [
+                                    m('button.btn.btn-sm', {
+                                        onclick: () => { 
+                                            vnode.state.editMode = true; 
+                                            vnode.state.editLabels = (issue.labels || []).map(l => l.name);
+                                        }
+                                    }, [m('i.fas.fa-edit'), ' 编辑']),
+                                    m('button.btn.btn-sm', {
+                                        onclick: () => IssueDetail.handleClose(vnode)
+                                    }, issue.is_closed ? [m('i.fas.fa-redo'), ' 重新打开'] : [m('i.fas.fa-times'), ' 关闭'])
+                                ])
+                            ]
                         ]),
-                        m('div.issue-meta', [
-                            m('span', `由 ${issue.author} 创建于 ${formatTime(issue.created_at)}`),
-                            issue.updated_at !== issue.created_at ? 
-                                m('span', ` · 更新于 ${formatTime(issue.updated_at)}`) : null
+                        
+                        m('div.issue-comments', [
+                            m('h3', '评论'),
+                            comments.length === 0 ? 
+                                m('p.no-comments', '暂无评论') :
+                                m('div.comment-list', comments.map(comment => 
+                                    m('div.comment-item', [
+                                        m('div.comment-header', [
+                                            m('span.comment-author', comment.author),
+                                            m('span.comment-time', formatTime(comment.created_at))
+                                        ]),
+                                        m('div.comment-body', [
+                                            m(MarkdownRenderer, { content: comment.body, owner, repo: repo.name })
+                                        ])
+                                    ])
+                                )),
+                            
+                            m('div.comment-form', [
+                                m('textarea.comment-input', {
+                                    placeholder: '添加评论...',
+                                    value: newComment,
+                                    oninput: (e) => { vnode.state.newComment = e.target.value; }
+                                }),
+                                m('button.btn.btn-primary', {
+                                    onclick: () => IssueDetail.handleAddComment(vnode),
+                                    disabled: submitting || !newComment.trim()
+                                }, '发表评论')
+                            ])
                         ])
                     ]),
                     
-                    m('div.issue-detail-body', [
-                        m('div.issue-main', [
-                            m('div.issue-description', [
-                                editMode ? [
-                                    m('div.form-group', [
-                                        m('label.form-label', '描述'),
-                                        m(MarkdownEditor, {
-                                            value: editBody,
-                                            oninput: (e) => { vnode.state.editBody = e.target.value; },
-                                            placeholder: '添加描述... (支持 Markdown 格式)',
-                                            rows: 10,
-                                            owner: owner,
-                                            repo: repo.name
-                                        })
-                                    ]),
-                                    m('div.issue-edit-actions', [
-                                        m('button.btn.btn-primary', {
-                                            onclick: () => IssueDetail.handleSave(vnode),
-                                            disabled: submitting
-                                        }, submitting ? '保存中...' : '保存'),
-                                        m('button.btn', {
-                                            onclick: () => { 
-                                                vnode.state.editMode = false; 
-                                                vnode.state.editLabels = (issue.labels || []).map(l => l.name);
-                                            }
-                                        }, '取消')
-                                    ])
-                                ] : [
-                                    m('div.issue-body', [
-                                        m(MarkdownRenderer, { content: issue.body || '暂无描述' })
-                                    ]),
-                                    m('div.issue-actions', [
-                                        m('button.btn.btn-sm', {
-                                            onclick: () => { 
-                                                vnode.state.editMode = true; 
-                                                vnode.state.editLabels = (issue.labels || []).map(l => l.name);
-                                            }
-                                        }, [m('i.fas.fa-edit'), ' 编辑']),
-                                        m('button.btn.btn-sm', {
-                                            onclick: () => IssueDetail.handleClose(vnode)
-                                        }, issue.is_closed ? [m('i.fas.fa-redo'), ' 重新打开'] : [m('i.fas.fa-times'), ' 关闭'])
-                                    ])
-                                ]
-                            ]),
-                            
-                            m('div.issue-comments', [
-                                m('h3', '评论'),
-                                comments.length === 0 ? 
-                                    m('p.no-comments', '暂无评论') :
-                                    m('div.comment-list', comments.map(comment => 
-                                        m('div.comment-item', [
-                                            m('div.comment-header', [
-                                                m('span.comment-author', comment.author),
-                                                m('span.comment-time', formatTime(comment.created_at))
-                                            ]),
-                                            m('div.comment-body', [
-                                                m(MarkdownRenderer, { content: comment.body })
-                                            ])
-                                        ])
-                                    )),
-                                
-                                m('div.comment-form', [
-                                    m('textarea.comment-input', {
-                                        placeholder: '添加评论...',
-                                        value: newComment,
-                                        oninput: (e) => { vnode.state.newComment = e.target.value; }
-                                    }),
-                                    m('button.btn.btn-primary', {
-                                        onclick: () => IssueDetail.handleAddComment(vnode),
-                                        disabled: submitting || !newComment.trim()
-                                    }, '发表评论')
-                                ])
-                            ])
+                    m('div.issue-sidebar', [
+                        m('div.sidebar-card', [
+                            m('h4', '指派给'),
+                            m('p', issue.assignee || '未指派')
                         ]),
-                        
-                        m('div.issue-sidebar', [
-                            m('div.sidebar-card', [
-                                m('h4', '指派给'),
-                                m('p', issue.assignee || '未指派')
-                            ]),
-                            m('div.sidebar-card', [
-                                m('h4', '标签'),
-                                editMode ? 
-                                    m('div.labels-editor', labels.map(label => 
-                                        m('button.btn.btn-sm.label-btn', {
-                                            type: 'button',
-                                            class: editLabels.includes(label.name) ? 'active' : '',
-                                            style: editLabels.includes(label.name) ? `background-color: ${label.color}; color: white; border-color: ${label.color};` : `border-color: ${label.color};`,
-                                            onclick: () => {
-                                                if (editLabels.includes(label.name)) {
-                                                    vnode.state.editLabels = editLabels.filter(l => l !== label.name);
-                                                } else {
-                                                    vnode.state.editLabels.push(label.name);
-                                                }
+                        m('div.sidebar-card', [
+                            m('h4', '标签'),
+                            editMode ? 
+                                m('div.labels-editor', labels.map(label => 
+                                    m('button.btn.btn-sm.label-btn', {
+                                        type: 'button',
+                                        class: editLabels.includes(label.name) ? 'active' : '',
+                                        style: editLabels.includes(label.name) ? `background-color: ${label.color}; color: white; border-color: ${label.color};` : `border-color: ${label.color};`,
+                                        onclick: () => {
+                                            if (editLabels.includes(label.name)) {
+                                                vnode.state.editLabels = editLabels.filter(l => l !== label.name);
+                                            } else {
+                                                vnode.state.editLabels.push(label.name);
                                             }
-                                        }, label.name)
+                                        }
+                                    }, label.name)
+                                )) :
+                                (issue.labels && issue.labels.length > 0 ? 
+                                    m('div.issue-labels-list', issue.labels.map(label => 
+                                        m('span.issue-label', { style: { backgroundColor: label.color } }, label.name)
                                     )) :
-                                    (issue.labels && issue.labels.length > 0 ? 
-                                        m('div.issue-labels-list', issue.labels.map(label => 
-                                            m('span.issue-label', { style: { backgroundColor: label.color } }, label.name)
-                                        )) :
-                                        m('p', '暂无标签')
-                                    )
-                            ])
+                                    m('p', '暂无标签')
+                                )
                         ])
                     ])
                 ])

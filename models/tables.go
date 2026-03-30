@@ -3,11 +3,45 @@ package models
 import (
 	"time"
 
+	"github.com/azhai/goent"
 	"golang.org/x/crypto/bcrypt"
 )
 
+type FolioSchema struct {
+	Activity         *goent.Table[Activity]
+	Branch           *goent.Table[Branch]
+	Comment          *goent.Table[Comment]
+	Contributor      *goent.Table[Contributor]
+	Group            *goent.Table[Group]
+	GroupMember      *goent.Table[GroupMember]
+	Issue            *goent.Table[Issue]
+	IssueLabel       *goent.Table[IssueLabel]
+	Label            *goent.Table[Label]
+	Milestone        *goent.Table[Milestone]
+	Owner            *goent.Table[Owner]
+	PlatformAccount  *goent.Table[PlatformAccount]
+	PullRequest      *goent.Table[PullRequest]
+	PullRequestLabel *goent.Table[PullRequestLabel]
+	Release          *goent.Table[Release]
+	RemoteRepository *goent.Table[RemoteRepository]
+	Repository       *goent.Table[Repository]
+	RepositoryStats  *goent.Table[RepositoryStats]
+	Snippet          *goent.Table[Snippet]
+	Star             *goent.Table[Star]
+	SyncLog          *goent.Table[SyncLog]
+	SyncPoint        *goent.Table[SyncPoint]
+	SyncToken        *goent.Table[SyncToken]
+	Task             *goent.Table[Task]
+	TaskAttachment   *goent.Table[TaskAttachment]
+	TaskSchedule     *goent.Table[TaskSchedule]
+	TaskIssue        *goent.Table[TaskIssue]
+	User             *goent.Table[User]
+	Watch            *goent.Table[Watch]
+	Webhook          *goent.Table[Webhook]
+}
+
 type User struct {
-	ID        uint `goe:"primaryKey"`
+	ID        int64 `goe:"pk"`
 	CreatedAt time.Time
 	UpdatedAt time.Time
 
@@ -39,14 +73,15 @@ func (u *User) CheckPassword(password string) bool {
 }
 
 type Repository struct {
-	ID        uint `goe:"primaryKey"`
+	ID        int64 `goe:"pk"`
 	CreatedAt time.Time
 	UpdatedAt time.Time
 
 	Name        string `goe:"index"`
 	Description string
+	Homepage    string
 	Readme      string
-	OwnerID     uint `goe:"index"`
+	OwnerID     int64 `goe:"index"`
 
 	ProjectType string `goe:"default:'owned';index"`
 	IsPrivate   bool   `goe:"default:false"`
@@ -57,15 +92,33 @@ type Repository struct {
 	LastSyncAt *time.Time
 	LocalPath  string
 
-	StarsCount int `goe:"default:0"`
-	ForksCount int `goe:"default:0"`
-	WatchCount int `goe:"default:0"`
-
 	DefaultBranch string `goe:"default:'main'"`
 }
 
+type RepositoryStats struct {
+	ID        int64 `goe:"pk"`
+	CreatedAt time.Time
+	UpdatedAt time.Time
+
+	RepositoryID int64 `goe:"unique"`
+	LastCommitAt *time.Time
+
+	StarsCount        int `goe:"default:0"`
+	ForksCount        int `goe:"default:0"`
+	WatchCount        int `goe:"default:0"`
+	CommitsCount      int `goe:"default:0"`
+	TagsCount         int `goe:"default:0"`
+	ContributorsCount int `goe:"default:0"`
+
+	OpenIssuesCount   int `goe:"default:0"`
+	ClosedIssuesCount int `goe:"default:0"`
+	OpenPRsCount      int `goe:"default:0"`
+	ClosedPRsCount    int `goe:"default:0"`
+	MergedPRsCount    int `goe:"default:0"`
+}
+
 type Owner struct {
-	ID       uint   `goe:"primaryKey"`
+	ID       int64  `goe:"pk"`
 	Username string `goe:"unique"`
 	Email    string
 	FullName string
@@ -73,19 +126,19 @@ type Owner struct {
 }
 
 type Branch struct {
-	ID        uint `goe:"primaryKey"`
+	ID        int64 `goe:"pk"`
 	CreatedAt time.Time
 	UpdatedAt time.Time
 
 	Name         string
-	RepositoryID uint `goe:"index"`
+	RepositoryID int64 `goe:"index"`
 
 	CommitHash string
 	CommitMsg  string
 }
 
 type Issue struct {
-	ID        uint `goe:"primaryKey"`
+	ID        int64 `goe:"pk"`
 	CreatedAt time.Time
 	UpdatedAt time.Time
 
@@ -93,18 +146,18 @@ type Issue struct {
 	Body   string
 	Number int `goe:"index"`
 
-	RepositoryID uint `goe:"index"`
+	RepositoryID int64 `goe:"index"`
 
-	AuthorID uint `goe:"index"`
+	AuthorID int64 `goe:"index"`
 
-	AssigneeID *uint
+	AssigneeID *int64
 
 	IsClosed bool `goe:"default:false;index"`
 	IsLocked bool `goe:"default:false"`
 }
 
 type Label struct {
-	ID        uint `goe:"primaryKey"`
+	ID        int64 `goe:"pk"`
 	CreatedAt time.Time
 	UpdatedAt time.Time
 
@@ -112,24 +165,24 @@ type Label struct {
 	Color       string
 	Description string
 
-	RepositoryID uint
+	RepositoryID int64
 }
 
 type Comment struct {
-	ID        uint `goe:"primaryKey"`
+	ID        int64 `goe:"pk"`
 	CreatedAt time.Time
 	UpdatedAt time.Time
 
 	Body string
 
-	IssueID        *uint `goe:"index"`
-	MergeRequestID *uint `goe:"index"`
+	IssueID       *int64 `goe:"index"`
+	PullRequestID *int64 `goe:"index"`
 
-	AuthorID uint `goe:"index"`
+	AuthorID int64 `goe:"index"`
 }
 
 type Release struct {
-	ID        uint `goe:"primaryKey"`
+	ID        int64 `goe:"pk"`
 	CreatedAt time.Time
 	UpdatedAt time.Time
 
@@ -137,32 +190,32 @@ type Release struct {
 	Title   string
 	Body    string
 
-	RepositoryID uint
+	RepositoryID int64
 
-	AuthorID uint
+	AuthorID int64
 
 	IsDraft      bool `goe:"default:false"`
 	IsPrerelease bool `goe:"default:false"`
 }
 
 type Star struct {
-	ID        uint `goe:"primaryKey"`
+	ID        int64 `goe:"pk"`
 	CreatedAt time.Time
 
-	UserID       uint `goe:"uniqueIndex:idx_user_repo"`
-	RepositoryID uint `goe:"uniqueIndex:idx_user_repo"`
+	UserID       int64 `goe:"unique"`
+	RepositoryID int64 `goe:"unique"`
 }
 
 type Watch struct {
-	ID        uint `goe:"primaryKey"`
+	ID        int64 `goe:"pk"`
 	CreatedAt time.Time
 
-	UserID       uint `goe:"uniqueIndex:idx_user_repo_watch"`
-	RepositoryID uint `goe:"uniqueIndex:idx_user_repo_watch"`
+	UserID       int64 `goe:"unique"`
+	RepositoryID int64 `goe:"unique"`
 }
 
-type MergeRequest struct {
-	ID        uint `goe:"primaryKey"`
+type PullRequest struct {
+	ID        int64 `goe:"pk"`
 	CreatedAt time.Time
 	UpdatedAt time.Time
 
@@ -170,14 +223,14 @@ type MergeRequest struct {
 	Body   string
 	Number int `goe:"index"`
 
-	RepositoryID uint `goe:"index"`
+	RepositoryID int64 `goe:"index"`
 
-	AuthorID uint `goe:"index"`
+	AuthorID int64 `goe:"index"`
 
 	SourceBranch string
 	TargetBranch string `goe:"default:'main'"`
 
-	AssigneeID *uint
+	AssigneeID *int64
 
 	Status string `goe:"default:'open';index"`
 
@@ -187,25 +240,30 @@ type MergeRequest struct {
 }
 
 type IssueLabel struct {
-	ID        uint `goe:"primaryKey"`
-	IssueID   uint `goe:"uniqueIndex:idx_issue_label"`
-	LabelID   uint `goe:"uniqueIndex:idx_issue_label"`
+	ID        int64 `goe:"pk"`
+	IssueID   int64 `goe:"index"`
+	LabelID   int64 `goe:"index"`
 	CreatedAt time.Time
 }
 
+type PullRequestLabel struct {
+	ID            int64 `goe:"pk"`
+	PullRequestID int64 `goe:"index"`
+	LabelID       int64 `goe:"index"`
+	CreatedAt     time.Time
+}
+
 type Webhook struct {
-	ID        uint `goe:"primaryKey"`
+	ID        int64 `goe:"pk"`
 	CreatedAt time.Time
 	UpdatedAt time.Time
 
-	RepositoryID uint `goe:"index"`
+	RepositoryID int64 `goe:"index"`
 
 	URL      string
 	Secret   string
 	IsActive bool `goe:"default:true"`
 	Events   string
-
-	Repository *Repository `goe:"rel:belongsTo;field:repository_id"`
 }
 
 type ProjectType string
@@ -226,7 +284,7 @@ const (
 )
 
 type PlatformAccount struct {
-	ID        uint `goe:"primaryKey"`
+	ID        int64 `goe:"pk"`
 	CreatedAt time.Time
 	UpdatedAt time.Time
 
@@ -235,14 +293,12 @@ type PlatformAccount struct {
 	Email     string
 	AvatarURL string
 	APIURL    string
-	IsActive  bool `goe:"default:true"`
-	UserID    uint `goe:"index"`
-
-	User *User `goe:"rel:belongsTo;field:user_id"`
+	IsActive  bool  `goe:"default:true"`
+	UserID    int64 `goe:"index"`
 }
 
 type SyncToken struct {
-	ID        uint `goe:"primaryKey"`
+	ID        int64 `goe:"pk"`
 	CreatedAt time.Time
 	UpdatedAt time.Time
 
@@ -253,16 +309,13 @@ type SyncToken struct {
 	TokenType    string
 	ExpiresAt    *time.Time
 	Scopes       string
-	AccountID    uint  `goe:"index"`
-	RepositoryID *uint `goe:"index"`
-	IsActive     bool  `goe:"default:true"`
-
-	Account    *PlatformAccount `goe:"rel:belongsTo;field:account_id"`
-	Repository *Repository      `goe:"rel:belongsTo;field:repository_id"`
+	AccountID    int64  `goe:"index"`
+	RepositoryID *int64 `goe:"index"`
+	IsActive     bool   `goe:"default:true"`
 }
 
 type RemoteRepository struct {
-	ID        uint `goe:"primaryKey"`
+	ID        int64 `goe:"pk"`
 	CreatedAt time.Time
 	UpdatedAt time.Time
 
@@ -273,24 +326,21 @@ type RemoteRepository struct {
 	SSHURL       string
 	APIURL       string
 	WebURL       string
-	RepositoryID uint   `goe:"index"`
-	AccountID    *uint  `goe:"index"`
+	RepositoryID int64  `goe:"index"`
+	AccountID    *int64 `goe:"index"`
 	IsPrimary    bool   `goe:"default:false"`
 	Direction    string `goe:"default:'pull'"`
 	LastSyncAt   *time.Time
 	SyncEnabled  bool `goe:"default:true"`
-
-	Repository *Repository      `goe:"rel:belongsTo;field:repository_id"`
-	Account    *PlatformAccount `goe:"rel:belongsTo;field:account_id"`
 }
 
 type SyncPoint struct {
-	ID        uint `goe:"primaryKey"`
+	ID        int64 `goe:"pk"`
 	CreatedAt time.Time
 	UpdatedAt time.Time
 
-	RepositoryID    uint   `goe:"index"`
-	RemoteRepoID    uint   `goe:"index"`
+	RepositoryID    int64  `goe:"index"`
+	RemoteRepoID    int64  `goe:"index"`
 	SyncType        string `goe:"index"`
 	LastSyncAt      *time.Time
 	LastSuccessAt   *time.Time
@@ -305,16 +355,13 @@ type SyncPoint struct {
 	SyncInterval    int `goe:"default:3600"`
 	LastError       string
 	IsPaused        bool `goe:"default:false"`
-
-	Repository *Repository       `goe:"rel:belongsTo;field:repository_id"`
-	RemoteRepo *RemoteRepository `goe:"rel:belongsTo;field:remote_repo_id"`
 }
 
 type SyncLog struct {
-	ID        uint `goe:"primaryKey"`
+	ID        int64 `goe:"pk"`
 	CreatedAt time.Time
 
-	SyncPointID uint `goe:"index"`
+	SyncPointID int64 `goe:"index"`
 	SyncType    string
 	Status      string
 	Message     string
@@ -322,12 +369,10 @@ type SyncLog struct {
 	ItemsSynced int
 	ItemsFailed int
 	Details     string
-
-	SyncPoint *SyncPoint `goe:"rel:belongsTo;field:sync_point_id"`
 }
 
 type Group struct {
-	ID        uint `goe:"primaryKey"`
+	ID        int64 `goe:"pk"`
 	CreatedAt time.Time
 	UpdatedAt time.Time
 
@@ -338,45 +383,35 @@ type Group struct {
 	Website     string
 	Location    string
 
-	OwnerID uint `goe:"index"`
-
-	Owner   *User          `goe:"rel:belongsTo;field:owner_id"`
-	Members []*GroupMember `goe:"rel:hasMany;field:group_id"`
+	OwnerID int64 `goe:"index"`
 }
 
 type GroupMember struct {
-	ID        uint `goe:"primaryKey"`
+	ID        int64 `goe:"pk"`
 	CreatedAt time.Time
 
-	GroupID uint `goe:"uniqueIndex:idx_group_user"`
-	UserID  uint `goe:"uniqueIndex:idx_group_user"`
+	GroupID int64 `goe:"unique"`
+	UserID  int64 `goe:"unique"`
 	Role    string
-
-	Group *Group `goe:"rel:belongsTo;field:group_id"`
-	User  *User  `goe:"rel:belongsTo;field:user_id"`
 }
 
 type Activity struct {
-	ID        uint `goe:"primaryKey"`
+	ID        int64 `goe:"pk"`
 	CreatedAt time.Time
 
-	UserID       *uint `goe:"index"`
-	RepositoryID *uint `goe:"index"`
-	GroupID      *uint `goe:"index"`
+	UserID       *int64 `goe:"index"`
+	RepositoryID *int64 `goe:"index"`
+	GroupID      *int64 `goe:"index"`
 
 	ActivityType string `goe:"index"`
 	Title        string
 	Content      string
-	TargetID     *uint
+	TargetID     *int64
 	TargetType   string
-
-	User       *User       `goe:"rel:belongsTo;field:user_id"`
-	Repository *Repository `goe:"rel:belongsTo;field:repository_id"`
-	Group      *Group      `goe:"rel:belongsTo;field:group_id"`
 }
 
 type Milestone struct {
-	ID        uint `goe:"primaryKey"`
+	ID        int64 `goe:"pk"`
 	CreatedAt time.Time
 	UpdatedAt time.Time
 
@@ -384,15 +419,13 @@ type Milestone struct {
 	Description string
 	DueDate     *time.Time
 
-	RepositoryID uint `goe:"index"`
+	RepositoryID int64 `goe:"index"`
 
 	IsClosed bool `goe:"default:false;index"`
-
-	Repository *Repository `goe:"rel:belongsTo;field:repository_id"`
 }
 
 type Snippet struct {
-	ID        uint `goe:"primaryKey"`
+	ID        int64 `goe:"pk"`
 	CreatedAt time.Time
 	UpdatedAt time.Time
 
@@ -402,19 +435,85 @@ type Snippet struct {
 	Code        string
 	Visibility  string `goe:"default:'public';index"`
 
-	UserID       *uint `goe:"index"`
-	RepositoryID *uint `goe:"index"`
+	UserID       *int64 `goe:"index"`
+	RepositoryID *int64 `goe:"index"`
 }
 
 type Contributor struct {
-	ID        uint `goe:"primaryKey"`
+	ID        int64 `goe:"pk"`
 	CreatedAt time.Time
 	UpdatedAt time.Time
 
 	Name         string `goe:"index"`
 	Email        string `goe:"index"`
-	RepositoryID uint   `goe:"index"`
-	CommitsCount int    `goe:"default:0"`
+	Avatar       string
+	RepositoryID int64 `goe:"index"`
+	CommitsCount int   `goe:"default:0"`
+}
 
-	Repository *Repository `goe:"rel:belongsTo;field:repository_id"`
+type Task struct {
+	ID        int64 `goe:"pk"`
+	CreatedAt time.Time
+	UpdatedAt time.Time
+
+	Title        string
+	Draft        string
+	Goal         string
+	PreviewImage string
+
+	Status    string `goe:"default:'draft';index"`
+	Priority  int    `goe:"default:3;index"`
+	SortOrder int    `goe:"default:0;index"`
+
+	RepositoryID int64 `goe:"index"`
+
+	InitiatorID int64  `goe:"index"`
+	VerifierID  *int64 `goe:"index"`
+	HandlerID   *int64 `goe:"index"`
+
+	LastHandledAt *time.Time
+}
+
+type TaskAttachment struct {
+	ID        int64 `goe:"pk"`
+	CreatedAt time.Time
+
+	TaskID int64 `goe:"index"`
+
+	FileName string
+	FilePath string
+	FileSize int64
+	FileType string
+}
+
+type TaskSchedule struct {
+	ID        int64 `goe:"pk"`
+	CreatedAt time.Time
+	UpdatedAt time.Time
+
+	TaskID int64 `goe:"index"`
+
+	ScheduleType string `goe:"index"`
+
+	PlanStartDate *time.Time
+	PlanEndDate   *time.Time
+	PlanStartNoon string
+	PlanEndNoon   string
+
+	ActualStartDate *time.Time
+	ActualEndDate   *time.Time
+	ActualStartNoon string
+	ActualEndNoon   string
+
+	User1ID *int64 `goe:"index"`
+	User2ID *int64 `goe:"index"`
+	User3ID *int64 `goe:"index"`
+}
+
+type TaskIssue struct {
+	ID        int64 `goe:"pk"`
+	CreatedAt time.Time
+
+	TaskID  int64 `goe:"index"`
+	IssueID int64 `goe:"index"`
 }

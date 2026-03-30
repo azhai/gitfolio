@@ -8,14 +8,13 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/azhai/gitfolio/config"
-	"github.com/azhai/gitfolio/database"
 	"github.com/azhai/gitfolio/models"
+	"github.com/azhai/gitfolio/services"
 	"github.com/azhai/goent"
 	"github.com/azhai/goent/drivers/pgsql"
 	"github.com/azhai/goent/drivers/sqlite"
@@ -96,12 +95,6 @@ type GiteaUser struct {
 	AvatarURL string `json:"avatar_url"`
 }
 
-type GitContributor struct {
-	Name  string
-	Email string
-	Count int
-}
-
 func main() {
 	cfg := config.Load()
 
@@ -115,7 +108,7 @@ func main() {
 		log.Fatal("Unsupported database type:", cfg.Database.Type)
 	}
 
-	db, err := goent.Open[database.Database](drv, "stdout")
+	db, err := goent.Open[models.Database](drv, "stdout")
 	if err != nil {
 		log.Fatal("Failed to connect database:", err)
 	}
@@ -156,7 +149,7 @@ func main() {
 	log.Println("=== Import completed successfully! ===")
 }
 
-func cleanData(db *database.Database) {
+func cleanData(db *models.Database) {
 	log.Println("Cleaning contributors...")
 	db.Contributor.Delete().Exec()
 
@@ -181,8 +174,8 @@ func cleanData(db *database.Database) {
 	log.Println("Cleaning comments...")
 	db.Comment.Delete().Exec()
 
-	log.Println("Cleaning merge requests...")
-	db.MergeRequest.Delete().Exec()
+	log.Println("Cleaning pull requests...")
+	db.PullRequest.Delete().Exec()
 
 	log.Println("Cleaning issues...")
 	db.Issue.Delete().Exec()
@@ -232,7 +225,7 @@ func cleanData(db *database.Database) {
 	log.Println("Data cleaning completed")
 }
 
-func createRyanUser(db *database.Database) *models.User {
+func createRyanUser(db *models.Database) *models.User {
 	ryan := &models.User{
 		Username: "ryan",
 		Email:    "ryan@example.com",
@@ -256,34 +249,40 @@ func createRyanUser(db *database.Database) *models.User {
 	return ryan
 }
 
-func createMirrorProjects(db *database.Database, user *models.User) []*models.Repository {
+func createMirrorProjects(db *models.Database, user *models.User) []*models.Repository {
 	repos := []*models.Repository{
 		{
 			Name:          "go-redis",
 			Description:   "Redis Go client",
+			Homepage:      "https://redis.uptrace.dev",
 			OwnerID:       user.ID,
 			ProjectType:   string(models.ProjectTypeMirror),
 			IsMirror:      true,
 			MirrorURL:     "https://github.com/redis/go-redis.git",
 			LocalPath:     "./repos/go-redis.git",
 			DefaultBranch: "master",
-			StarsCount:    19700,
-			ForksCount:    2340,
-			WatchCount:    19700,
 		},
 		{
 			Name:          "builder",
 			Description:   "SQL builder for Go",
+			Homepage:      "https://xorm.io/builder",
 			OwnerID:       user.ID,
 			ProjectType:   string(models.ProjectTypeMirror),
 			IsMirror:      true,
 			MirrorURL:     "https://gitea.com/xorm/builder.git",
 			LocalPath:     "./repos/builder.git",
 			DefaultBranch: "master",
-			StarsCount:    128,
-			ForksCount:    32,
-			WatchCount:    45,
 		},
+	}
+
+	repoStats := []struct {
+		Name       string
+		StarsCount int
+		ForksCount int
+		WatchCount int
+	}{
+		{"go-redis", 19700, 2340, 19700},
+		{"builder", 128, 32, 45},
 	}
 
 	for _, repo := range repos {
@@ -299,23 +298,36 @@ func createMirrorProjects(db *database.Database, user *models.User) []*models.Re
 			}
 			log.Printf("Created repository: %s", repo.Name)
 		}
+
+		for _, stats := range repoStats {
+			if stats.Name == repo.Name {
+				repoStat := &models.RepositoryStats{
+					RepositoryID: repo.ID,
+					StarsCount:   stats.StarsCount,
+					ForksCount:   stats.ForksCount,
+					WatchCount:   stats.WatchCount,
+				}
+				if err := db.RepositoryStats.Insert().One(repoStat); err != nil {
+					log.Printf("Failed to create stats for %s: %v", repo.Name, err)
+				}
+				break
+			}
+		}
 	}
 
 	return repos
 }
 
 func cloneRepositories(repos []*models.Repository) {
+	gitSvc := services.NewGitService()
 	for _, repo := range repos {
 		if _, err := os.Stat(repo.LocalPath); os.IsNotExist(err) {
 			log.Printf("Cloning %s to %s...", repo.MirrorURL, repo.LocalPath)
 
 			os.MkdirAll(filepath.Dir(repo.LocalPath), 0755)
 
-			cmd := exec.Command("git", "clone", "--bare", repo.MirrorURL, repo.LocalPath)
-			cmd.Stdout = os.Stdout
-			cmd.Stderr = os.Stderr
-
-			if err := cmd.Run(); err != nil {
+			_, err := gitSvc.CloneRepository(filepath.Base(filepath.Dir(repo.LocalPath)), repo.Name, repo.MirrorURL, true)
+			if err != nil {
 				log.Printf("Failed to clone %s: %v", repo.MirrorURL, err)
 			} else {
 				log.Printf("Successfully cloned %s", repo.Name)
@@ -326,7 +338,7 @@ func cloneRepositories(repos []*models.Repository) {
 	}
 }
 
-func importGitHubData(db *database.Database, repo *models.Repository, user *models.User) {
+func importGitHubData(db *models.Database, repo *models.Repository, user *models.User) {
 	log.Printf("Importing GitHub data for %s...", repo.Name)
 
 	client := &http.Client{Timeout: 30 * time.Second}
@@ -342,7 +354,7 @@ func importGitHubData(db *database.Database, repo *models.Repository, user *mode
 	importGitHubPRs(db, client, repo, user, owner, repoName)
 }
 
-func importGitHubIssues(db *database.Database, client *http.Client, repo *models.Repository, user *models.User, owner, repoName string) {
+func importGitHubIssues(db *models.Database, client *http.Client, repo *models.Repository, user *models.User, owner, repoName string) {
 	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/issues?state=all&per_page=100", owner, repoName)
 
 	resp, err := client.Get(url)
@@ -390,7 +402,7 @@ func importGitHubIssues(db *database.Database, client *http.Client, repo *models
 	log.Printf("Imported %d issues from GitHub", count)
 }
 
-func importGitHubPRs(db *database.Database, client *http.Client, repo *models.Repository, user *models.User, owner, repoName string) {
+func importGitHubPRs(db *models.Database, client *http.Client, repo *models.Repository, user *models.User, owner, repoName string) {
 	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/pulls?state=all&per_page=100", owner, repoName)
 
 	resp, err := client.Get(url)
@@ -425,7 +437,7 @@ func importGitHubPRs(db *database.Database, client *http.Client, repo *models.Re
 			status = "closed"
 		}
 
-		pr := &models.MergeRequest{
+		pr := &models.PullRequest{
 			Title:        ghPR.Title,
 			Body:         ghPR.Body,
 			Number:       ghPR.Number,
@@ -440,7 +452,7 @@ func importGitHubPRs(db *database.Database, client *http.Client, repo *models.Re
 			UpdatedAt:    ghPR.UpdatedAt,
 		}
 
-		if err := db.MergeRequest.Insert().One(pr); err != nil {
+		if err := db.PullRequest.Insert().One(pr); err != nil {
 			log.Printf("Failed to insert PR #%d: %v", ghPR.Number, err)
 		} else {
 			count++
@@ -449,7 +461,7 @@ func importGitHubPRs(db *database.Database, client *http.Client, repo *models.Re
 	log.Printf("Imported %d PRs from GitHub", count)
 }
 
-func importGiteaData(db *database.Database, repo *models.Repository, user *models.User) {
+func importGiteaData(db *models.Database, repo *models.Repository, user *models.User) {
 	log.Printf("Importing Gitea data for %s...", repo.Name)
 
 	client := &http.Client{Timeout: 30 * time.Second}
@@ -465,7 +477,7 @@ func importGiteaData(db *database.Database, repo *models.Repository, user *model
 	importGiteaPRs(db, client, repo, user, owner, repoName)
 }
 
-func importGiteaIssues(db *database.Database, client *http.Client, repo *models.Repository, user *models.User, owner, repoName string) {
+func importGiteaIssues(db *models.Database, client *http.Client, repo *models.Repository, user *models.User, owner, repoName string) {
 	url := fmt.Sprintf("https://gitea.com/api/v1/repos/%s/%s/issues?state=all&limit=100", owner, repoName)
 
 	resp, err := client.Get(url)
@@ -513,7 +525,7 @@ func importGiteaIssues(db *database.Database, client *http.Client, repo *models.
 	log.Printf("Imported %d issues from Gitea", count)
 }
 
-func importGiteaPRs(db *database.Database, client *http.Client, repo *models.Repository, user *models.User, owner, repoName string) {
+func importGiteaPRs(db *models.Database, client *http.Client, repo *models.Repository, user *models.User, owner, repoName string) {
 	url := fmt.Sprintf("https://gitea.com/api/v1/repos/%s/%s/pulls?state=all&limit=100", owner, repoName)
 
 	resp, err := client.Get(url)
@@ -548,7 +560,7 @@ func importGiteaPRs(db *database.Database, client *http.Client, repo *models.Rep
 			status = "closed"
 		}
 
-		pr := &models.MergeRequest{
+		pr := &models.PullRequest{
 			Title:        giteaPR.Title,
 			Body:         giteaPR.Body,
 			Number:       giteaPR.Number,
@@ -563,7 +575,7 @@ func importGiteaPRs(db *database.Database, client *http.Client, repo *models.Rep
 			UpdatedAt:    giteaPR.UpdatedAt,
 		}
 
-		if err := db.MergeRequest.Insert().One(pr); err != nil {
+		if err := db.PullRequest.Insert().One(pr); err != nil {
 			log.Printf("Failed to insert PR #%d: %v", giteaPR.Number, err)
 		} else {
 			count++
@@ -572,7 +584,7 @@ func importGiteaPRs(db *database.Database, client *http.Client, repo *models.Rep
 	log.Printf("Imported %d PRs from Gitea", count)
 }
 
-func importContributors(db *database.Database, repo *models.Repository) {
+func importContributors(db *models.Database, repo *models.Repository) {
 	log.Printf("Importing contributors for %s...", repo.Name)
 
 	if _, err := os.Stat(repo.LocalPath); os.IsNotExist(err) {
@@ -580,14 +592,13 @@ func importContributors(db *database.Database, repo *models.Repository) {
 		return
 	}
 
-	cmd := exec.Command("git", "-C", repo.LocalPath, "shortlog", "-sne", "HEAD")
-	output, err := cmd.Output()
+	gitSvc := services.NewGitService()
+	owner := filepath.Base(filepath.Dir(repo.LocalPath))
+	contributors, err := gitSvc.GetContributors(owner, repo.Name)
 	if err != nil {
 		log.Printf("Failed to get contributors: %v", err)
 		return
 	}
-
-	contributors := parseGitShortlog(string(output))
 
 	count := 0
 	for _, c := range contributors {
@@ -605,41 +616,4 @@ func importContributors(db *database.Database, repo *models.Repository) {
 		}
 	}
 	log.Printf("Imported %d contributors", count)
-}
-
-func parseGitShortlog(output string) []GitContributor {
-	var contributors []GitContributor
-	lines := strings.Split(output, "\n")
-
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-
-		parts := strings.SplitN(line, "\t", 2)
-		if len(parts) != 2 {
-			continue
-		}
-
-		var count int
-		fmt.Sscanf(parts[0], "%d", &count)
-
-		nameEmail := parts[1]
-		idx := strings.LastIndex(nameEmail, "<")
-		if idx == -1 {
-			continue
-		}
-
-		name := strings.TrimSpace(nameEmail[:idx])
-		email := strings.Trim(nameEmail[idx:], "<>")
-
-		contributors = append(contributors, GitContributor{
-			Name:  name,
-			Email: email,
-			Count: count,
-		})
-	}
-
-	return contributors
 }

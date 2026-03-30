@@ -1,5 +1,5 @@
 import { Layout, Loading, ProjectHeader, ProjectTabs, EmptyState, formatTime, MarkdownRenderer } from '../components.js';
-import { RepositoryService, TaskService, PullRequestService } from '../api.js';
+import { RepositoryService, TaskService, PullRequestService, IssueService } from '../api.js';
 
 const TaskDetail = {
     oninit(vnode) {
@@ -7,21 +7,28 @@ const TaskDetail = {
         
         vnode.state.repo = null;
         vnode.state.task = null;
+        vnode.state.allIssues = [];
         vnode.state.loading = true;
         vnode.state.prsCount = 0;
         vnode.state.issuesCount = 0;
         vnode.state.editMode = false;
         vnode.state.editData = {};
+        vnode.state.showIssueSelector = false;
+        vnode.state.selectedIssueId = '';
         
         Promise.all([
             RepositoryService.get(owner, repo),
             TaskService.get(owner, repo, id),
-            PullRequestService.list(owner, repo)
-        ]).then(([repoResult, taskResult, prsResult]) => {
+            PullRequestService.list(owner, repo, { state: 'all', per_page: 1000 }),
+            IssueService.list(owner, repo, { state: 'all', per_page: 1000 })
+        ]).then(([repoResult, taskResult, prsResult, issuesResult]) => {
             vnode.state.repo = repoResult.data || repoResult;
             vnode.state.task = taskResult.data || taskResult;
             const prData = prsResult.data || prsResult;
             vnode.state.prsCount = Array.isArray(prData) ? prData.filter(p => !p.is_closed && !p.is_merged).length : 0;
+            const issuesData = issuesResult.data || issuesResult;
+            vnode.state.issuesCount = Array.isArray(issuesData) ? issuesData.filter(i => !i.is_closed).length : 0;
+            vnode.state.allIssues = Array.isArray(issuesData) ? issuesData : [];
             vnode.state.loading = false;
             m.redraw();
         }).catch(error => {
@@ -60,6 +67,58 @@ const TaskDetail = {
             m.route.set(`/tasks/${owner}/${repo}`);
         }).catch(error => {
             alert('删除失败: ' + (error.message || '未知错误'));
+        });
+    },
+    
+    handleAddIssue: function(vnode) {
+        const { owner, repo, id } = vnode.attrs;
+        const { selectedIssueId, allIssues, task } = vnode.state;
+        
+        if (!selectedIssueId) {
+            alert('请选择要关联的Issue');
+            return;
+        }
+        
+        const issueId = parseInt(selectedIssueId);
+        
+        if (task.issues && task.issues.some(i => i.id === issueId)) {
+            alert('该Issue已经关联到此任务');
+            return;
+        }
+        
+        TaskService.addIssue(owner, repo, id, issueId).then(() => {
+            const issue = allIssues.find(i => i.id === issueId);
+            if (issue) {
+                if (!vnode.state.task.issues) {
+                    vnode.state.task.issues = [];
+                }
+                vnode.state.task.issues.push({
+                    id: issue.id,
+                    title: issue.title,
+                    status: issue.is_closed ? 'closed' : 'open',
+                    number: issue.number
+                });
+            }
+            vnode.state.showIssueSelector = false;
+            vnode.state.selectedIssueId = '';
+            m.redraw();
+        }).catch(error => {
+            alert('关联失败: ' + (error.message || '未知错误'));
+        });
+    },
+    
+    handleRemoveIssue: function(vnode, issueId) {
+        const { owner, repo, id } = vnode.attrs;
+        
+        if (!confirm('确定要取消关联此Issue吗？')) {
+            return;
+        }
+        
+        TaskService.removeIssue(owner, repo, id, issueId).then(() => {
+            vnode.state.task.issues = vnode.state.task.issues.filter(i => i.id !== issueId);
+            m.redraw();
+        }).catch(error => {
+            alert('取消关联失败: ' + (error.message || '未知错误'));
         });
     },
     
@@ -234,10 +293,42 @@ const TaskDetail = {
                                                 m.route.set(`/${owner}/${repo}/issues/${issue.number}`);
                                             }
                                         }, `#${issue.number}`),
-                                        m('span.issue-title', issue.title)
+                                        m('span.issue-title', issue.title),
+                                        m('button.btn.btn-sm.btn-danger', {
+                                            onclick: () => TaskDetail.handleRemoveIssue(vnode, issue.id)
+                                        }, [m('i.fas.fa-times')])
                                     ])
                                 ))
                             ]) : null,
+                            
+                            m('div.task-issue-actions', [
+                                vnode.state.showIssueSelector ? [
+                                    m('div.issue-selector', [
+                                        m('select.form-input', {
+                                            value: vnode.state.selectedIssueId,
+                                            onchange: (e) => { vnode.state.selectedIssueId = e.target.value; }
+                                        }, [
+                                            m('option', { value: '' }, '选择Issue...'),
+                                            vnode.state.allIssues.map(issue => 
+                                                m('option', { value: issue.id }, `#${issue.number} - ${issue.title}`)
+                                            )
+                                        ]),
+                                        m('button.btn.btn-primary.btn-sm', {
+                                            onclick: () => TaskDetail.handleAddIssue(vnode)
+                                        }, '关联'),
+                                        m('button.btn.btn-sm', {
+                                            onclick: () => { 
+                                                vnode.state.showIssueSelector = false;
+                                                vnode.state.selectedIssueId = '';
+                                            }
+                                        }, '取消')
+                                    ])
+                                ] : [
+                                    m('button.btn.btn-sm', {
+                                        onclick: () => { vnode.state.showIssueSelector = true; }
+                                    }, [m('i.fas.fa-plus'), ' 关联Issue'])
+                                ]
+                            ]),
                             
                             m('div.task-actions', [
                                 editMode ? [

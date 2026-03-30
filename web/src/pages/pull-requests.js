@@ -15,8 +15,8 @@ const PullRequestList = {
         
         Promise.all([
             RepositoryService.get(owner, repo),
-            PullRequestService.list(owner, repo),
-            IssueService.list(owner, repo)
+            PullRequestService.list(owner, repo, { per_page: 1000 }),
+            IssueService.list(owner, repo, { per_page: 1000 })
         ]).then(([repoResult, prsResult, issuesResult]) => {
             vnode.state.repo = repoResult.data || repoResult;
             vnode.state.prs = prsResult.data || prsResult || [];

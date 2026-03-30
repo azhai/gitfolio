@@ -18,11 +18,9 @@ const TopBar = {
             m('div.top-bar-left', [
                 m('button.menu-toggle', {
                     onclick: () => {
-                        const sidebar = document.getElementById('sidebar');
-                        if (sidebar) {
-                            sidebar.classList.toggle('collapsed');
-                            sidebar.classList.toggle('active');
-                        }
+                        Sidebar.isCollapsed = !Sidebar.isCollapsed;
+                        localStorage.setItem('sidebarCollapsed', Sidebar.isCollapsed);
+                        m.redraw();
                     }
                 }, m('i.fas.fa-bars')),
                 m('a.logo', { href: '/', oncreate: m.route.link }, [
@@ -40,21 +38,62 @@ const TopBar = {
                     m('i.fas.fa-bell'),
                     m('span.badge', '3')
                 ]),
-                m('div.user-menu', [
-                    m('img.avatar', { src: '/images/avatar-32.svg', alt: '用户头像' }),
-                    m('span.username', 'ryan'),
-                    m('i.fas.fa-chevron-down')
-                ])
+                Auth.isAuthenticated() ? 
+                    m('div.user-menu', [
+                        m('div.user-menu-header', { 
+                            onclick: (e) => {
+                                e.stopPropagation();
+                                const dropdown = document.querySelector('.user-dropdown');
+                                if (dropdown) dropdown.classList.toggle('show');
+                            }
+                        }, [
+                            m('img.avatar', { src: '/images/avatar-32.svg', alt: '用户头像' }),
+                            m('span.username', 'ryan'),
+                            m('i.fas.fa-chevron-down')
+                        ]),
+                        m('div.user-dropdown', [
+                            m('a.dropdown-item', { 
+                                href: '/settings',
+                                oncreate: m.route.link 
+                            }, [
+                                m('i.fas.fa-cog'),
+                                ' 设置'
+                            ]),
+                            m('a.dropdown-item', { 
+                                href: '#',
+                                onclick: (e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    Auth.logout().then(() => {
+                                        m.route.set('/login');
+                                    });
+                                }
+                            }, [
+                                m('i.fas.fa-sign-out-alt'),
+                                ' 退出登录'
+                            ])
+                        ])
+                    ]) :
+                    m('a.btn.btn-primary.btn-sm', { 
+                        href: '/login',
+                        oncreate: m.route.link 
+                    }, '登录')
             ])
         ]);
     }
 };
 
 const Sidebar = {
+    isCollapsed: false,
+    oninit() {
+        Sidebar.isCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
+    },
     view() {
         const currentRoute = m.route.get();
         
-        return m('aside.sidebar#sidebar', [
+        return m('aside.sidebar#sidebar', {
+            class: Sidebar.isCollapsed ? 'collapsed' : ''
+        }, [
             m('nav.sidebar-nav', [
                 m('div.nav-section', [
                     m('a.nav-item', { 
@@ -63,7 +102,7 @@ const Sidebar = {
                         class: currentRoute === '/' ? 'active' : ''
                     }, [
                         m('i.fas.fa-home'),
-                        m('span', '总览')
+                        !Sidebar.isCollapsed ? m('span', '总览') : null
                     ]),
                     m('a.nav-item', { 
                         href: '/projects', 
@@ -71,7 +110,7 @@ const Sidebar = {
                         class: currentRoute.startsWith('/projects') ? 'active' : ''
                     }, [
                         m('i.fas.fa-folder'),
-                        m('span', '项目')
+                        !Sidebar.isCollapsed ? m('span', '项目') : null
                     ]),
                     m('a.nav-item', { 
                         href: '/groups', 
@@ -79,7 +118,7 @@ const Sidebar = {
                         class: currentRoute === '/groups' ? 'active' : ''
                     }, [
                         m('i.fas.fa-users'),
-                        m('span', '团队')
+                        !Sidebar.isCollapsed ? m('span', '团队') : null
                     ]),
                     m('a.nav-item', { 
                         href: '/activity', 
@@ -87,7 +126,7 @@ const Sidebar = {
                         class: currentRoute === '/activity' ? 'active' : ''
                     }, [
                         m('i.fas.fa-chart-line'),
-                        m('span', '活动')
+                        !Sidebar.isCollapsed ? m('span', '活动') : null
                     ]),
                     m('a.nav-item', { 
                         href: '/snippets', 
@@ -95,7 +134,7 @@ const Sidebar = {
                         class: currentRoute === '/snippets' ? 'active' : ''
                     }, [
                         m('i.fas.fa-code'),
-                        m('span', '片段')
+                        !Sidebar.isCollapsed ? m('span', '片段') : null
                     ])
                 ])
             ])
@@ -315,7 +354,11 @@ const IssueItem = {
                 ]),
                 m('div.issue-item-meta', [
                     m('span', `#${issue.number}`),
-                    m('span', `由 ${issue.author} 创建于 ${formatTime(issue.created_at)}`)
+                    m('span', `由 ${issue.author} 创建于 ${formatTime(issue.created_at)}`),
+                    issue.comments_count > 0 ? m('span', [
+                        m('i.fas.fa-comment'),
+                        ` ${issue.comments_count}`
+                    ]) : null
                 ])
             ])
         ]);
@@ -348,7 +391,15 @@ const PRItem = {
                 m('div.pr-item-meta', [
                     m('span', `#${pr.number}`),
                     m('span', `${pr.source_branch} → ${pr.target_branch}`),
-                    m('span', `由 ${pr.author} 创建于 ${formatTime(pr.created_at)}`)
+                    m('span', `由 ${pr.author} 创建于 ${formatTime(pr.created_at)}`),
+                    pr.comments_count > 0 ? m('span', [
+                        m('i.fas.fa-comment'),
+                        ` ${pr.comments_count}`
+                    ]) : null,
+                    pr.files_count > 0 ? m('span', [
+                        m('i.fas.fa-file-code'),
+                        ` ${pr.files_count}`
+                    ]) : null
                 ])
             ])
         ]);
@@ -466,22 +517,44 @@ const MarkdownEditor = {
 
 const MarkdownRenderer = {
     view(vnode) {
-        const { content } = vnode.attrs;
+        const { content, owner, repo } = vnode.attrs;
         
-        const html = MarkdownRenderer.render(content);
+        const html = MarkdownRenderer.render(content, owner, repo);
         
         return m('div.markdown-body', {
-            innerHTML: html
+            innerHTML: html,
+            onclick: (e) => {
+                let target = e.target;
+                while (target && target !== e.currentTarget) {
+                    if (target.tagName === 'A' && target.classList.contains('issue-ref')) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const href = target.getAttribute('href');
+                        if (href) {
+                            console.log('Navigating to:', href);
+                            m.route.set(href);
+                        }
+                        return;
+                    }
+                    target = target.parentElement;
+                }
+            }
         });
     },
     
-    render(content) {
+    render(content, owner, repo) {
         if (!content) return '';
         
         let html = content
             .replace(/&/g, '&amp;')
             .replace(/</g, '&lt;')
             .replace(/>/g, '&gt;');
+        
+        if (owner && repo) {
+            html = html.replace(/#(\d+)/g, (match, number) => {
+                return `<a href="/issues/${owner}/${repo}/${number}" class="issue-ref">#${number}</a>`;
+            });
+        }
         
         html = html.replace(/```coderef:([^:\n]+):([^:\n]+):([^:\n]+):(\d+)-(\d+)\n```/g, (match, branch, commit, path, start, end) => {
             return `<div class="code-ref-block" data-branch="${branch}" data-commit="${commit}" data-path="${path}" data-start="${start}" data-end="${end}">

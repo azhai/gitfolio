@@ -17,7 +17,7 @@ const CreateProjectPage = {
         vnode.state.loading = true;
         vnode.state.error = null;
 
-        RepositoryService.create('ryan', vnode.state.formData).then(result => {
+        RepositoryService.create(vnode.state.formData).then(result => {
             vnode.state.loading = false;
             m.route.set('/projects');
         }).catch(err => {

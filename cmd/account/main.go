@@ -6,8 +6,8 @@ import (
 	"log"
 	"os"
 
-	"github.com/azhai/gitfolio/config"
-	"github.com/azhai/gitfolio/database"
+	"github.com/azhai/gitfolio/cmd"
+	"github.com/azhai/gitfolio/models"
 	"github.com/azhai/gitfolio/services"
 )
 
@@ -39,12 +39,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	cfg := config.Load()
-	if err := database.Init(&cfg.Database); err != nil {
-		log.Fatalf("Failed to init database: %v", err)
-	}
-
-	db := database.GetDB()
+	cfg := cmd.InitDB()
+	defer models.Disconnect()
+	db := models.GetDB()
 	accountService := services.NewAccountService(db)
 
 	var apiURL string
