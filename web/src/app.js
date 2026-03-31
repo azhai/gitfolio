@@ -4,14 +4,17 @@ import { ProjectList } from './pages/projects.js';
 import { ProjectDetail } from './pages/project-detail.js';
 import { IssueList } from './pages/issues.js';
 import { IssueDetail } from './pages/issue-detail.js';
+import { NewIssue } from './pages/new-issue.js';
 import { PullRequestList } from './pages/pull-requests.js';
 import { PullRequestDetail } from './pages/pr-detail.js';
+import { NewPullRequest } from './pages/new-pr.js';
 import { SettingsPage } from './pages/settings.js';
 import { ReleasesPage, StatsPage } from './pages/releases-stats.js';
 import { Groups, GroupDetail, NewGroup } from './pages/groups.js';
 import { Activities } from './pages/activities.js';
 import { TaskList } from './pages/tasks.js';
 import { TaskDetail } from './pages/task-detail.js';
+import { NewTask } from './pages/new-task.js';
 import { SnippetsPage, SnippetDetail, NewSnippet, EditSnippet } from './pages/snippets.js';
 import { CreateProjectPage } from './pages/create-project.js';
 import { MigrateProjectPage } from './pages/migrate-project.js';
@@ -63,10 +66,13 @@ const routes = {
     '/projects/new': withAuth(CreateProjectPage),
     '/projects/migrate': withAuth(MigrateProjectPage),
     '/project/:owner/:repo': ProjectDetail,
+    '/issues/:owner/:repo/new': withAuth(NewIssue),
     '/issues/:owner/:repo': IssueList,
     '/issues/:owner/:repo/:number': IssueDetail,
+    '/pull-requests/:owner/:repo/new': withAuth(NewPullRequest),
     '/pull-requests/:owner/:repo': PullRequestList,
     '/pull-requests/:owner/:repo/:number': PullRequestDetail,
+    '/tasks/:owner/:repo/new': withAuth(NewTask),
     '/tasks/:owner/:repo': TaskList,
     '/tasks/:owner/:repo/:id': TaskDetail,
     '/releases/:owner/:repo': ReleasesPage,

@@ -190,6 +190,10 @@ const RepositoryService = {
 
     getBranches(owner, repo) {
         return API.get(`/${owner}/${repo}/branches`);
+    },
+    
+    getContributors(owner, repo) {
+        return API.get(`/${owner}/${repo}/contributors`);
     }
 };
 

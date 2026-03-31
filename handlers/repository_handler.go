@@ -65,6 +65,16 @@ type RepositoryResponse struct {
 	MergedPRsCount    int    `json:"merged_prs_count"`
 }
 
+type ContributorResponse struct {
+	ID           int64  `json:"id"`
+	Name         string `json:"name"`
+	Email        string `json:"email"`
+	Avatar       string `json:"avatar"`
+	CommitsCount int    `json:"commits_count"`
+	CreatedAt    string `json:"created_at"`
+	UpdatedAt    string `json:"updated_at"`
+}
+
 func ToRepositoryResponse(repo *models.Repository, owner *models.User) *RepositoryResponse {
 	var lastSyncAt string
 	if repo.LastSyncAt != nil {
@@ -609,4 +619,36 @@ func GetRepositoryBranches(c fiber.Ctx) error {
 	}
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"branches": branches})
+}
+
+func GetRepositoryContributors(c fiber.Ctx) error {
+	result, err := helpers.GetOwnerAndRepoWithPrivateAccessFromParams(c)
+	if err != nil {
+		return err
+	}
+
+	db := models.GetDB()
+	var contributors []*models.Contributor
+	contributors, err = db.Contributor.Select().
+		Where("repository_id = ?", result.Repo.ID).
+		OrderBy("commits_count DESC").All()
+
+	if err != nil {
+		return c.Status(fiber.StatusOK).JSON([]interface{}{})
+	}
+
+	responses := make([]*ContributorResponse, len(contributors))
+	for i, contrib := range contributors {
+		responses[i] = &ContributorResponse{
+			ID:           contrib.ID,
+			Name:         contrib.Name,
+			Email:        contrib.Email,
+			Avatar:       contrib.Avatar,
+			CommitsCount: contrib.CommitsCount,
+			CreatedAt:    contrib.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+			UpdatedAt:    contrib.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		}
+	}
+
+	return c.Status(fiber.StatusOK).JSON(responses)
 }

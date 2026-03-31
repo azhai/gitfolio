@@ -117,6 +117,7 @@ func setupRepositoryRoutes(api fiber.Router) {
 	repo.Get("/tree", middleware.OptionalAuth(), handlers.GetRepositoryTree)
 	repo.Get("/file", middleware.OptionalAuth(), handlers.GetRepositoryFile)
 	repo.Get("/branches", middleware.OptionalAuth(), handlers.GetRepositoryBranches)
+	repo.Get("/contributors", middleware.OptionalAuth(), handlers.GetRepositoryContributors)
 
 	repo.Post("/star", middleware.AuthMiddleware(), handlers.StarRepository)
 	repo.Delete("/star", middleware.AuthMiddleware(), handlers.UnstarRepository)

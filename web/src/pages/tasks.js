@@ -1,6 +1,5 @@
 import { Layout, Loading, ProjectHeader, ProjectTabs, EmptyState } from '../components.js';
-import { RepositoryService, TaskService, PullRequestService } from '../api.js';
-import { CreateTaskModal } from '../modals.js';
+import { RepositoryService, TaskService, IssueService, PullRequestService } from '../api.js';
 
 const TaskList = {
     oninit(vnode) {
@@ -13,7 +12,6 @@ const TaskList = {
         vnode.state.priorityFilter = '';
         vnode.state.prsCount = 0;
         vnode.state.issuesCount = 0;
-        vnode.state.showCreateModal = false;
         
         Promise.all([
             RepositoryService.get(owner, repo),
@@ -38,7 +36,7 @@ const TaskList = {
     },
     
     view(vnode) {
-        const { repo, tasks, loading, statusFilter, priorityFilter, showCreateModal } = vnode.state;
+        const { repo, tasks, loading, statusFilter, priorityFilter } = vnode.state;
         const { owner, repo: repoName } = vnode.attrs;
         
         if (loading) {
@@ -112,7 +110,7 @@ const TaskList = {
                         ])
                     ]),
                     m('button.btn.btn-primary', {
-                        onclick: () => { vnode.state.showCreateModal = true; }
+                        onclick: () => { m.route.set(`/tasks/${owner}/${repo.name}/new`); }
                     }, [
                         m('i.fas.fa-plus'),
                         ' 新建任务'
@@ -150,21 +148,7 @@ const TaskList = {
                             ])
                         ])
                     ))
-            ]),
-            
-            m(CreateTaskModal, {
-                isOpen: showCreateModal,
-                onClose: () => { vnode.state.showCreateModal = false; },
-                onSubmit: (formData) => {
-                    return TaskService.create(owner, repo.name, formData).then(result => {
-                        vnode.state.tasks.unshift(result.data || result);
-                        vnode.state.showCreateModal = false;
-                        m.redraw();
-                    });
-                },
-                owner,
-                repo: repo.name
-            })
+            ])
         ]);
     }
 };

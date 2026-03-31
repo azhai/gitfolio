@@ -25,7 +25,7 @@ const ReleasesPage = {
     },
     
     view(vnode) {
-        const { repo, issuesCount, prsCount, loading } = vnode.state;
+        const { repo, issuesCount, prsCount, contributors, loading } = vnode.state;
         const { owner, repo: repoName } = vnode.attrs;
         
         if (loading) {
@@ -118,16 +118,19 @@ const StatsPage = {
         vnode.state.repo = null;
         vnode.state.issuesCount = 0;
         vnode.state.prsCount = 0;
+        vnode.state.contributors = [];
         vnode.state.loading = true;
         
         Promise.all([
             RepositoryService.get(owner, repo),
             IssueService.list(owner, repo, { state: 'all', per_page: 1000 }),
-            PullRequestService.list(owner, repo, { state: 'all', per_page: 1000 })
-        ]).then(([repoResult, issuesResult, prsResult]) => {
+            PullRequestService.list(owner, repo, { state: 'all', per_page: 1000 }),
+            RepositoryService.getContributors(owner, repo)
+        ]).then(([repoResult, issuesResult, prsResult, contributorsResult]) => {
             vnode.state.repo = repoResult.data || repoResult;
-            vnode.state.issuesCount = (issuesResult.data || issuesResult || []).filter(i => !i.is_closed).length;
+            vnode.state.issuesCount = (issuesResult.data || issuesResult || []).length;
             vnode.state.prsCount = (prsResult.data || prsResult || []).filter(p => !p.is_closed && !p.is_merged).length;
+            vnode.state.contributors = contributorsResult.data || contributorsResult || [];
             vnode.state.loading = false;
             m.redraw();
         }).catch(error => {
@@ -138,7 +141,7 @@ const StatsPage = {
     },
     
     view(vnode) {
-        const { repo, issuesCount, prsCount, loading } = vnode.state;
+        const { repo, issuesCount, prsCount, contributors, loading } = vnode.state;
         const { owner, repo: repoName } = vnode.attrs;
         
         if (loading) {
@@ -196,23 +199,31 @@ const StatsPage = {
                         m('div.stat-card', [
                             m('div.stat-icon', m('i.fas.fa-exclamation-circle')),
                             m('div.stat-info', [
-                                m('div.stat-value', '0'),
-                                m('div.stat-label', 'Issue')
+                                m('div.stat-value', issuesCount),
+                                m('div.stat-label', '议题')
                             ])
                         ])
                     ]),
                     
                     m('div.stats-section', [
                         m('h2', '贡献者'),
-                        m('div.contributors-list', [
-                            m('div.contributor-item', [
-                                m('img.avatar', { src: '/images/avatar-40.svg', alt: '贡献者' }),
-                                m('div.contributor-info', [
-                                    m('div.contributor-name', 'ryan'),
-                                    m('div.contributor-stats', '10 commits')
+                        contributors.length === 0 
+                            ? m(EmptyState, { 
+                                message: '暂无贡献者', 
+                                icon: 'fa-users' 
+                            })
+                            : m('div.contributors-list', contributors.map(contributor => 
+                                m('div.contributor-item', [
+                                    m('img.avatar', { 
+                                        src: contributor.avatar || '/images/avatar-40.svg', 
+                                        alt: contributor.name 
+                                    }),
+                                    m('div.contributor-info', [
+                                        m('div.contributor-name', contributor.name),
+                                        m('div.contributor-stats', `${contributor.commits_count} commits`)
+                                    ])
                                 ])
-                            ])
-                        ])
+                            ))
                     ])
                 ])
             ])

@@ -1,6 +1,5 @@
 import { Layout, Loading, ProjectHeader, ProjectTabs, EmptyState, PRItem } from '../components.js';
 import { RepositoryService, IssueService, PullRequestService } from '../api.js';
-import { CreatePRModal } from '../modals.js';
 
 const PullRequestList = {
     oninit(vnode) {
@@ -11,7 +10,6 @@ const PullRequestList = {
         vnode.state.loading = true;
         vnode.state.filter = 'open';
         vnode.state.issuesCount = 0;
-        vnode.state.showCreateModal = false;
         
         Promise.all([
             RepositoryService.get(owner, repo),
@@ -31,7 +29,7 @@ const PullRequestList = {
     },
     
     view(vnode) {
-        const { repo, prs, loading, filter, showCreateModal } = vnode.state;
+        const { repo, prs, loading, filter } = vnode.state;
         const { owner, repo: repoName } = vnode.attrs;
         
         if (loading) {
@@ -96,7 +94,7 @@ const PullRequestList = {
                             ])
                         ]),
                         m('button.btn.btn-primary', {
-                            onclick: () => { vnode.state.showCreateModal = true; }
+                            onclick: () => { m.route.set(`/pull-requests/${owner}/${repo.name}/new`); }
                         }, [
                             m('i.fas.fa-plus'),
                             ' 新建 PR'
@@ -113,22 +111,7 @@ const PullRequestList = {
                             m(PRItem, { pr, owner, repo: repo.name })
                         ))
                 ])
-            ]),
-            
-            m(CreatePRModal, {
-                isOpen: showCreateModal,
-                onClose: () => { vnode.state.showCreateModal = false; },
-                onSubmit: (formData) => {
-                    return PullRequestService.create(owner, repo.name, formData).then(result => {
-                        vnode.state.prs.unshift(result.data || result);
-                        vnode.state.showCreateModal = false;
-                        m.redraw();
-                    });
-                },
-                owner,
-                repo: repo.name,
-                branches: ['main', 'develop', 'feature-branch']
-            })
+            ])
         ]);
     }
 };

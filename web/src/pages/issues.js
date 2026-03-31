@@ -1,6 +1,5 @@
 import { Layout, Loading, ProjectHeader, ProjectTabs, EmptyState, IssueItem } from '../components.js';
 import { RepositoryService, IssueService, PullRequestService, LabelService } from '../api.js';
-import { CreateIssueModal } from '../modals.js';
 
 const IssueList = {
     oninit(vnode) {
@@ -13,7 +12,6 @@ const IssueList = {
         vnode.state.filter = 'open';
         vnode.state.labelFilter = '';
         vnode.state.prsCount = 0;
-        vnode.state.showCreateModal = false;
         
         Promise.all([
             RepositoryService.get(owner, repo),
@@ -35,7 +33,7 @@ const IssueList = {
     },
     
     view(vnode) {
-        const { repo, issues, labels, loading, filter, labelFilter, showCreateModal } = vnode.state;
+        const { repo, issues, labels, loading, filter, labelFilter } = vnode.state;
         const { owner, repo: repoName } = vnode.attrs;
         
         if (loading) {
@@ -85,10 +83,10 @@ const IssueList = {
                         ])
                     ]),
                     m('button.btn.btn-primary', {
-                        onclick: () => { vnode.state.showCreateModal = true; }
+                        onclick: () => { m.route.set(`/issues/${owner}/${repo.name}/new`); }
                     }, [
                         m('i.fas.fa-plus'),
-                        ' 新建 Issue'
+                        ' 新建议题'
                     ])
                 ]),
                 
@@ -109,28 +107,13 @@ const IssueList = {
                 
                 filteredIssues.length === 0 ? 
                     m(EmptyState, { 
-                        message: filter === 'open' ? '没有开启的Issue' : '没有已关闭的Issue', 
+                        message: filter === 'open' ? '没有开启的议题' : '没有已关闭的议题', 
                         icon: 'fa-inbox' 
                     }) :
                     m('div.issue-list', filteredIssues.map(issue => 
                         m(IssueItem, { issue, owner, repo: repo.name })
                     ))
-            ]),
-            
-            m(CreateIssueModal, {
-                isOpen: showCreateModal,
-                onClose: () => { vnode.state.showCreateModal = false; },
-                onSubmit: (formData) => {
-                    return IssueService.create(owner, repo.name, formData).then(result => {
-                        vnode.state.issues.unshift(result.data || result);
-                        vnode.state.showCreateModal = false;
-                        m.redraw();
-                    });
-                },
-                owner,
-                repo: repo.name,
-                labels: labels
-            })
+            ])
         ]);
     }
 };
