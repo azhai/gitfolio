@@ -1291,7 +1291,7 @@ func (s *SyncService) SyncRepositoryData(ctx context.Context, repoID int64, plat
 	}
 
 	statsSvc := NewStatsService(s.db)
-	if err := statsSvc.UpdateRepositoryStats(repoID); err != nil {
+	if err := statsSvc.UpdateRepositoryStats(repoID, owner, repoName); err != nil {
 		fmt.Printf("Warning: failed to update repository stats: %v\n", err)
 	}
 

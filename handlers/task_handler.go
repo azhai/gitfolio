@@ -182,6 +182,15 @@ func ListTasks(c fiber.Ctx) error {
 		query = query.Where("priority = ?", priority)
 	}
 
+	countQuery := db.Task.Select().Where("repository_id = ?", result.Repo.ID)
+	if status != "" {
+		countQuery = countQuery.Where("status = ?", status)
+	}
+	if priority != "" {
+		countQuery = countQuery.Where("priority = ?", priority)
+	}
+	total, _ := countQuery.Count("*")
+
 	tasks, err := query.Skip((page - 1) * perPage).Take(perPage).All()
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch tasks"})
@@ -226,6 +235,7 @@ func ListTasks(c fiber.Ctx) error {
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
 		"data":     response,
+		"total":    total,
 		"page":     page,
 		"per_page": perPage,
 	})

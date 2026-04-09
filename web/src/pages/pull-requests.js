@@ -1,5 +1,5 @@
 import { Layout, Loading, ProjectHeader, ProjectTabs, EmptyState, PRItem } from '../components.js';
-import { RepositoryService, IssueService, PullRequestService } from '../api.js';
+import { RepositoryService, IssueService, PullRequestService, TaskService } from '../api.js';
 
 const PullRequestList = {
     oninit(vnode) {
@@ -10,15 +10,18 @@ const PullRequestList = {
         vnode.state.loading = true;
         vnode.state.filter = 'open';
         vnode.state.issuesCount = 0;
+        vnode.state.tasksCount = 0;
         
         Promise.all([
             RepositoryService.get(owner, repo),
             PullRequestService.list(owner, repo, { per_page: 1000 }),
-            IssueService.list(owner, repo, { per_page: 1000 })
-        ]).then(([repoResult, prsResult, issuesResult]) => {
+            IssueService.list(owner, repo, { per_page: 1000 }),
+            TaskService.list(owner, repo, { per_page: 1 })
+        ]).then(([repoResult, prsResult, issuesResult, tasksResult]) => {
             vnode.state.repo = repoResult.data || repoResult;
             vnode.state.prs = prsResult.data || prsResult || [];
             vnode.state.issuesCount = (issuesResult.data || issuesResult || []).filter(i => !i.is_closed).length;
+            vnode.state.tasksCount = tasksResult.total || 0;
             vnode.state.loading = false;
             m.redraw();
         }).catch(error => {
@@ -53,7 +56,7 @@ const PullRequestList = {
             m('div.pull-requests-page', [
                 m(ProjectHeader, {
                     owner: owner,
-                    repo: repo.name,
+                    repo: repo,
                     description: repo.description,
                     stars: repo.stars_count,
                     forks: repo.forks_count,
@@ -62,9 +65,10 @@ const PullRequestList = {
                 
                 m(ProjectTabs, {
                     owner: owner,
-                    repo: repo.name,
+                    repo: repo,
                     issuesCount: vnode.state.issuesCount,
                     prsCount: openPRs.length,
+                    tasksCount: vnode.state.tasksCount,
                     activeTab: 'prs'
                 }),
                 

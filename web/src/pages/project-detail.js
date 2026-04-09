@@ -1,5 +1,5 @@
 import { Layout, Loading, ProjectHeader, ProjectTabs, EmptyState } from '../components.js';
-import { RepositoryService, IssueService, PullRequestService } from '../api.js';
+import { RepositoryService, IssueService, PullRequestService, TaskService } from '../api.js';
 
 const getLanguageFromPath = (path) => {
     const ext = path.split('.').pop().toLowerCase();
@@ -85,13 +85,33 @@ const ProjectDetail = {
         vnode.state.repo = null;
         vnode.state.issuesCount = 0;
         vnode.state.prsCount = 0;
+        vnode.state.tasksCount = 0;
         vnode.state.loading = true;
         vnode.state.currentPath = '';
         vnode.state.currentBranch = 'HEAD';
         vnode.state.branches = [];
+        vnode.state.tags = [];
         vnode.state.treeEntries = [];
         vnode.state.fileContent = null;
         vnode.state.showBranchMenu = false;
+        vnode.state.activeTab = 'branches';
+        vnode.state.lastCommit = null;
+        
+        const closeBranchMenu = (e) => {
+            if (vnode.state.showBranchMenu) {
+                const target = e.target;
+                if (!target.closest('.branch-selector')) {
+                    vnode.state.showBranchMenu = false;
+                    m.redraw();
+                }
+            }
+        };
+        
+        document.addEventListener('click', closeBranchMenu);
+        
+        vnode.state.cleanup = function() {
+            document.removeEventListener('click', closeBranchMenu);
+        };
         
         vnode.state.loadBranches = function() {
             RepositoryService.getBranches(owner, repo).then(result => {
@@ -100,15 +120,50 @@ const ProjectDetail = {
             }).catch(() => {});
         };
         
-        vnode.state.loadTree = function() {
-            vnode.state.fileContent = null;
-            RepositoryService.getTree(owner, repo, { path: vnode.state.currentPath, ref: vnode.state.currentBranch }).then(result => {
-                vnode.state.treeEntries = result.entries || [];
+        vnode.state.loadTags = function() {
+            RepositoryService.getTags(owner, repo).then(result => {
+                vnode.state.tags = result.tags || [];
+                m.redraw();
+            }).catch(() => {});
+        };
+        
+        vnode.state.loadLastCommit = function() {
+            RepositoryService.getLastCommit(owner, repo, vnode.state.currentBranch).then(result => {
+                vnode.state.lastCommit = result.data || result;
                 m.redraw();
             }).catch(() => {
+                vnode.state.lastCommit = null;
+            });
+        };
+        
+        vnode.state.loadTree = function() {
+            const branch = vnode.state.currentBranch;
+            const path = vnode.state.currentPath;
+            console.log('🌳 [loadTree] Starting...');
+            console.log('🌳 [loadTree] Parameters:', { owner, repo, ref: branch, path });
+            
+            vnode.state.fileContent = null;
+            
+            console.log('🌳 [loadTree] Calling API: getTree(', owner, ',', repo, ', { path:', path, ', ref:', branch, '})');
+            
+            RepositoryService.getTree(owner, repo, { path: path, ref: branch }).then(result => {
+                console.log('🌳 [loadTree] API Success! Result:', result);
+                const entries = result.entries || [];
+                console.log('🌳 [loadTree] Entries count:', entries.length);
+                console.log('🌳 [loadTree] Updating treeEntries state...');
+                vnode.state.treeEntries = entries;
+                console.log('🌳 [loadTree] Calling m.redraw()...');
+                m.redraw();
+                console.log('🌳 [loadTree] ✅ Complete!');
+            }).catch((error) => {
+                console.error('❌ [loadTree] API Error:', error);
+                console.error('❌ [loadTree] Error details:', error.message, error.stack);
                 vnode.state.treeEntries = [];
                 m.redraw();
             });
+            
+            console.log('🌳 [loadTree] Also calling loadLastCommit()...');
+            vnode.state.loadLastCommit();
         };
         
         vnode.state.loadFile = function(path) {
@@ -125,13 +180,16 @@ const ProjectDetail = {
         Promise.all([
             RepositoryService.get(owner, repo),
             IssueService.list(owner, repo, { state: 'all', per_page: 1000 }),
-            PullRequestService.list(owner, repo, { state: 'all', per_page: 1000 })
-        ]).then(([repoResult, issuesResult, prsResult]) => {
+            PullRequestService.list(owner, repo, { state: 'all', per_page: 1000 }),
+            TaskService.list(owner, repo, { per_page: 1 })
+        ]).then(([repoResult, issuesResult, prsResult, tasksResult]) => {
             vnode.state.repo = repoResult.data || repoResult;
             vnode.state.issuesCount = (issuesResult.data || issuesResult || []).filter(i => !i.is_closed).length;
             vnode.state.prsCount = (prsResult.data || prsResult || []).filter(p => !p.is_closed && !p.is_merged).length;
+            vnode.state.tasksCount = tasksResult.total || 0;
             vnode.state.loading = false;
             vnode.state.loadBranches();
+            vnode.state.loadTags();
             vnode.state.loadTree();
             m.redraw();
         }).catch(error => {
@@ -141,8 +199,16 @@ const ProjectDetail = {
     },
     
     view(vnode) {
-        const { repo, issuesCount, prsCount, loading, currentPath, currentBranch, branches, treeEntries, fileContent, showBranchMenu } = vnode.state;
+        const { repo, issuesCount, prsCount, loading, currentPath, currentBranch, branches, tags, treeEntries, fileContent, showBranchMenu, activeTab, lastCommit } = vnode.state;
         const { owner, repo: repoName } = vnode.attrs;
+        
+        console.log('🎨 [view] Rendering...');
+        console.log('🎨 [view] State:', {
+            currentBranch,
+            currentPath,
+            treeEntriesCount: treeEntries.length,
+            fileContent: fileContent ? 'has content' : null
+        });
         
         if (loading) {
             return m(Layout, m(Loading));
@@ -156,7 +222,7 @@ const ProjectDetail = {
             m('div.project-detail-page', [
                 m(ProjectHeader, {
                     owner: owner,
-                    repo: repo.name,
+                    repo: repo,
                     description: repo.description,
                     stars: repo.stars_count,
                     forks: repo.forks_count,
@@ -165,9 +231,10 @@ const ProjectDetail = {
                 
                 m(ProjectTabs, {
                     owner: owner,
-                    repo: repo.name,
+                    repo: repo,
                     issuesCount: issuesCount,
                     prsCount: prsCount,
+                    tasksCount: vnode.state.tasksCount,
                     activeTab: 'code'
                 }),
                 
@@ -178,6 +245,7 @@ const ProjectDetail = {
                                 m('div.branch-selector', [
                                     m('div.branch-dropdown', {
                                         onclick: (e) => {
+                                            e.stopPropagation();
                                             vnode.state.showBranchMenu = !vnode.state.showBranchMenu;
                                         }
                                     }, [
@@ -185,21 +253,67 @@ const ProjectDetail = {
                                         m('span', currentBranch === 'HEAD' ? (repo.default_branch || 'main') : currentBranch),
                                         m('i.fas.fa-chevron-down')
                                     ]),
-                                    showBranchMenu ? m('div.branch-menu', [
-                                        m('div.branch-menu-header', '切换分支'),
-                                        branches.map(branch => 
-                                            m('div.branch-option', {
-                                                class: currentBranch === branch ? 'active' : '',
-                                                onclick: () => { 
-                                                    vnode.state.currentBranch = branch;
-                                                    vnode.state.showBranchMenu = false;
-                                                    vnode.state.loadTree();
+                                    showBranchMenu ? m('div.branch-menu', {
+                                        onclick: (e) => { e.stopPropagation(); }
+                                    }, [
+                                        m('div.branch-menu-tabs', [
+                                            m('div.branch-menu-tab', {
+                                                class: activeTab === 'branches' ? 'active' : '',
+                                                onclick: (e) => { 
+                                                    e.stopPropagation();
+                                                    vnode.state.activeTab = 'branches'; 
                                                 }
-                                            }, [
-                                                m('i.fas.fa-check', { style: { visibility: currentBranch === branch ? 'visible' : 'hidden' } }),
-                                                branch
-                                            ])
-                                        )
+                                            }, '分支'),
+                                            m('div.branch-menu-tab', {
+                                                class: activeTab === 'tags' ? 'active' : '',
+                                                onclick: (e) => { 
+                                                    e.stopPropagation();
+                                                    vnode.state.activeTab = 'tags'; 
+                                                }
+                                            }, '标签')
+                                        ]),
+                                        m('div.branch-menu-list', [
+                                            activeTab === 'branches' ? 
+                                                branches.map(branch => 
+                                                    m('div.branch-option', {
+                                                        class: currentBranch === branch ? 'active' : '',
+                                                        onclick: (e) => { 
+                                                            console.log('=== Branch clicked ===');
+                                                            console.log('Selected branch:', branch);
+                                                            console.log('Previous branch:', currentBranch);
+                                                            e.stopPropagation();
+                                                            vnode.state.currentBranch = branch;
+                                                            vnode.state.currentPath = '';
+                                                            vnode.state.showBranchMenu = false;
+                                                            console.log('About to call loadTree()...');
+                                                            vnode.state.loadTree();
+                                                            console.log('loadTree() called, triggering redraw...');
+                                                            m.redraw();
+                                                            console.log('=== Branch click complete ===');
+                                                        }
+                                                    }, [
+                                                        m('i.fas.fa-check', { style: { visibility: currentBranch === branch ? 'visible' : 'hidden' } }),
+                                                        branch
+                                                    ])
+                                                ) :
+                                                tags.map(tag => 
+                                                    m('div.branch-option', {
+                                                        class: currentBranch === tag ? 'active' : '',
+                                                        onclick: (e) => { 
+                                                            e.stopPropagation();
+                                                            vnode.state.currentBranch = tag;
+                                                            vnode.state.currentPath = '';
+                                                            vnode.state.showBranchMenu = false;
+                                                            vnode.state.loadTree();
+                                                            m.redraw();
+                                                        }
+                                                    }, [
+                                                        m('i.fas.fa-check', { style: { visibility: currentBranch === tag ? 'visible' : 'hidden' } }),
+                                                        m('i.fas.fa-tag'),
+                                                        tag
+                                                    ])
+                                                )
+                                        ])
                                     ]) : null
                                 ]),
                                 m('div.file-actions', [
@@ -214,10 +328,15 @@ const ProjectDetail = {
                                 ])
                             ]),
                             
-                            m('div.path-breadcrumb', renderBreadcrumb(owner, repo.name, currentPath, (path) => {
-                                vnode.state.currentPath = path;
-                                vnode.state.loadTree();
-                            })),
+                            m('div.path-breadcrumb-container', [
+                                m('div.path-breadcrumb', renderBreadcrumb(owner, repo.name, currentPath, (path) => {
+                                    vnode.state.currentPath = path;
+                                    vnode.state.loadTree();
+                                })),
+                                lastCommit && lastCommit.time ? m('div.last-commit-info', [
+                                    m('span.last-commit-time', `最后提交: ${lastCommit.time}`)
+                                ]) : null
+                            ]),
                             
                             fileContent !== null ? [
                                 m('div.file-content-header', [
@@ -242,22 +361,26 @@ const ProjectDetail = {
                             ] : [
                                 treeEntries.length === 0 
                                     ? m(EmptyState, { message: repo.local_path ? '此目录为空' : '仓库未初始化，请先同步代码', icon: 'fa-folder-open' })
-                                    : m('div.file-list', treeEntries.map(entry => 
-                                        m(TreeEntry, { 
-                                            entry, 
-                                            owner, 
-                                            repo: repo.name,
-                                            currentPath,
-                                            onNavigate: (path, isFile) => {
-                                                if (isFile) {
-                                                    vnode.state.loadFile(path);
-                                                } else {
-                                                    vnode.state.currentPath = path;
-                                                    vnode.state.loadTree();
+                                    : (function() {
+                                        console.log('📁 [view] Rendering file list with', treeEntries.length, 'entries');
+                                        console.log('📁 [view] First entry:', treeEntries[0]);
+                                        return m('div.file-list', treeEntries.map(entry => 
+                                            m(TreeEntry, { 
+                                                entry, 
+                                                owner, 
+                                                repo: repo.name,
+                                                currentPath,
+                                                onNavigate: (path, isFile) => {
+                                                    if (isFile) {
+                                                        vnode.state.loadFile(path);
+                                                    } else {
+                                                        vnode.state.currentPath = path;
+                                                        vnode.state.loadTree();
+                                                    }
                                                 }
-                                            }
-                                        })
-                                    ))
+                                            })
+                                        ));
+                                    })()
                             ]
                         ])
                     ]),

@@ -10,6 +10,7 @@ const NewTask = {
         vnode.state.submitting = false;
         vnode.state.prsCount = 0;
         vnode.state.issuesCount = 0;
+        vnode.state.tasksCount = 0;
         vnode.state.formData = {
             title: '',
             draft: '',
@@ -32,15 +33,21 @@ const NewTask = {
             user2: '',
             user3: ''
         };
+        vnode.state.pendingFiles = [];
+        vnode.state.uploadingFiles = false;
+        vnode.state.uploadProgress = 0;
+        vnode.state.dragOver = false;
         
         Promise.all([
             RepositoryService.get(owner, repo),
             IssueService.list(owner, repo, { state: 'all', per_page: 1000 }),
-            PullRequestService.list(owner, repo, { state: 'all', per_page: 1000 })
-        ]).then(([repoResult, issuesResult, prsResult]) => {
+            PullRequestService.list(owner, repo, { state: 'all', per_page: 1000 }),
+            TaskService.list(owner, repo, { per_page: 1 })
+        ]).then(([repoResult, issuesResult, prsResult, tasksResult]) => {
             vnode.state.repo = repoResult.data || repoResult;
             vnode.state.issuesCount = (issuesResult.data || issuesResult || []).filter(i => !i.is_closed).length;
             vnode.state.prsCount = (prsResult.data || prsResult || []).filter(p => !p.is_closed && !p.is_merged).length;
+            vnode.state.tasksCount = tasksResult.total || 0;
             vnode.state.loading = false;
             m.redraw();
         }).catch(error => {
@@ -76,6 +83,92 @@ const NewTask = {
         vnode.state.formData.schedules.splice(index, 1);
     },
     
+    handleFileSelect(vnode, event) {
+        const files = Array.from(event.target.files || []);
+        if (files.length === 0) return;
+        
+        const maxSize = 10 * 1024 * 1024;
+        const validFiles = [];
+        const oversizedFiles = [];
+        
+        files.forEach(file => {
+            if (file.size > maxSize) {
+                oversizedFiles.push(file.name);
+            } else {
+                validFiles.push(file);
+            }
+        });
+        
+        if (oversizedFiles.length > 0) {
+            alert(`以下文件超过10MB限制：${oversizedFiles.join(', ')}`);
+        }
+        
+        if (validFiles.length > 0) {
+            vnode.state.pendingFiles = [...vnode.state.pendingFiles, ...validFiles];
+            m.redraw();
+        }
+        
+        event.target.value = '';
+    },
+    
+    handleDropUpload(vnode, event) {
+        event.preventDefault();
+        event.stopPropagation();
+        vnode.state.dragOver = false;
+        
+        const files = Array.from(event.dataTransfer.files || []);
+        if (files.length === 0) return;
+        
+        NewTask.handleFileSelect(vnode, { target: { files } });
+    },
+    
+    handleDragOver(vnode, event) {
+        event.preventDefault();
+        event.stopPropagation();
+        vnode.state.dragOver = true;
+    },
+    
+    handleDragLeave(vnode, event) {
+        event.preventDefault();
+        event.stopPropagation();
+        vnode.state.dragOver = false;
+    },
+    
+    removePendingFile(vnode, index) {
+        vnode.state.pendingFiles.splice(index, 1);
+        m.redraw();
+    },
+    
+    async uploadAttachmentsAfterCreate(vnode, taskId) {
+        const { owner, repo } = vnode.attrs;
+        const { pendingFiles } = vnode.state;
+        
+        if (pendingFiles.length === 0) return;
+        
+        vnode.state.uploadingFiles = true;
+        vnode.state.uploadProgress = 0;
+        m.redraw();
+        
+        try {
+            for (let i = 0; i < pendingFiles.length; i++) {
+                const file = pendingFiles[i];
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                await TaskService.uploadAttachment(owner, repo, taskId, formData);
+                vnode.state.uploadProgress = ((i + 1) / pendingFiles.length) * 100;
+                m.redraw();
+            }
+            
+            vnode.state.uploadingFiles = false;
+            vnode.state.pendingFiles = [];
+        } catch (error) {
+            console.error('Upload error:', error);
+            alert('部分附件上传失败: ' + (error.message || '未知错误'));
+            vnode.state.uploadingFiles = false;
+        }
+    },
+    
     handleSubmit(vnode) {
         const { owner, repo } = vnode.attrs;
         const { formData, submitting } = vnode.state;
@@ -89,8 +182,13 @@ const NewTask = {
         
         vnode.state.submitting = true;
         
-        TaskService.create(owner, repo, formData).then(result => {
+        TaskService.create(owner, repo, formData).then(async result => {
             const task = result.data || result;
+            
+            if (vnode.state.pendingFiles.length > 0) {
+                await NewTask.uploadAttachmentsAfterCreate(vnode, task.id);
+            }
+            
             m.route.set(`/tasks/${owner}/${repo}/${task.id}`);
         }).catch(error => {
             vnode.state.submitting = false;
@@ -101,7 +199,7 @@ const NewTask = {
     
     view(vnode) {
         const { owner, repo: repoName } = vnode.attrs;
-        const { repo, loading, submitting, formData, issuesCount, prsCount, showScheduleForm, newSchedule } = vnode.state;
+        const { repo, loading, submitting, formData, issuesCount, prsCount, showScheduleForm, newSchedule, pendingFiles, uploadingFiles, uploadProgress, dragOver } = vnode.state;
         
         const priorityLabels = {
             1: '紧急',
@@ -129,7 +227,7 @@ const NewTask = {
         return m(Layout, [
             m(ProjectHeader, {
                 owner: owner,
-                repo: repo.name,
+                repo: repo,
                 description: repo.description,
                 stars: repo.stars_count,
                 forks: repo.forks_count,
@@ -138,9 +236,10 @@ const NewTask = {
             
             m(ProjectTabs, {
                 owner: owner,
-                repo: repo.name,
+                repo: repo,
                 issuesCount: issuesCount,
                 prsCount: prsCount,
+                tasksCount: vnode.state.tasksCount,
                 activeTab: 'tasks'
             }),
             
@@ -402,6 +501,56 @@ const NewTask = {
                                     }, [m('i.fas.fa-plus'), ' 添加计划'])
                             ]),
                             
+                            m('div.form-group', [
+                                m('label.form-label', '附件'),
+                                m('p.field-hint', '支持上传多个附件，单个文件最大 10MB'),
+                                
+                                m('div.upload-area', {
+                                    class: dragOver ? 'drag-over' : '',
+                                    ondragover: (e) => NewTask.handleDragOver(vnode, e),
+                                    ondragleave: (e) => NewTask.handleDragLeave(vnode, e),
+                                    ondrop: (e) => NewTask.handleDropUpload(vnode, e)
+                                }, [
+                                    m('i.fas.fa-cloud-upload-alt'),
+                                    m('p', '拖拽文件到此处或'),
+                                    m('label.upload-btn', [
+                                        m('input[type=file]', {
+                                            multiple: true,
+                                            accept: '*/*',
+                                            style: { display: 'none' },
+                                            onchange: (e) => NewTask.handleFileSelect(vnode, e)
+                                        }),
+                                        '选择文件'
+                                    ])
+                                ]),
+                                
+                                pendingFiles.length > 0 ? m('div.pending-files-list', [
+                                    m('h4', `待上传文件 (${pendingFiles.length})`),
+                                    pendingFiles.map((file, index) => 
+                                        m('div.pending-file-item', [
+                                            m('div.file-icon', getFileIcon(file.type)),
+                                            m('div.file-info', [
+                                                m('span.file-name', { title: file.name }, file.name),
+                                                m('span.file-size', formatFileSize(file.size))
+                                            ]),
+                                            m('button.btn.btn-sm.btn-danger', {
+                                                onclick: () => NewTask.removePendingFile(vnode, index),
+                                                title: '移除'
+                                            }, [m('i.fas.fa-times')])
+                                        ])
+                                    )
+                                ]) : null,
+                                
+                                uploadingFiles ? m('div.upload-progress-container', [
+                                    m('div.progress-bar-wrapper', [
+                                        m('div.progress-bar-fill', {
+                                            style: { width: uploadProgress + '%' }
+                                        })
+                                    ]),
+                                    m('span.progress-text', `正在上传附件... ${Math.round(uploadProgress)}%`)
+                                ]) : null
+                            ]),
+                            
                             m('div.form-actions', [
                                 m('button.btn.btn-primary', {
                                     onclick: () => NewTask.handleSubmit(vnode),
@@ -420,5 +569,26 @@ const NewTask = {
         ]);
     }
 };
+
+function formatFileSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+function getFileIcon(fileType) {
+    if (!fileType) return m('i.fas.fa-file');
+    
+    if (fileType.startsWith('image/')) return m('i.fas.fa-file-image', { style: { color: '#4CAF50' } });
+    if (fileType === 'application/pdf') return m('i.fas.fa-file-pdf', { style: { color: '#F44336' } });
+    if (fileType.includes('word') || fileType.includes('document')) return m('i.fas.fa-file-word', { style: { color: '#2196F3' } });
+    if (fileType.includes('excel') || fileType.includes('sheet')) return m('i.fas.fa-file-excel', { style: { color: '#4CAF50' } });
+    if (fileType.includes('zip') || fileType.includes('rar') || fileType.includes('archive')) return m('i.fas.fa-file-archive', { style: { color: '#FF9800' } });
+    if (fileType.includes('text') || fileType.includes('plain')) return m('i.fas.fa-file-alt', { style: { color: '#607D8B' } });
+    if (fileType.includes('video')) return m('i.fas.fa-file-video', { style: { color: '#9C27B0' } });
+    if (fileType.includes('audio')) return m('i.fas.fa-file-audio', { style: { color: '#E91E63' } });
+    
+    return m('i.fas.fa-file');
+}
 
 export { NewTask };

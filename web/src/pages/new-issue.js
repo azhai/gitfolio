@@ -1,5 +1,5 @@
 import { Layout, Loading, ProjectHeader, ProjectTabs, MarkdownEditor, MarkdownRenderer } from '../components.js';
-import { RepositoryService, IssueService, PullRequestService, LabelService } from '../api.js';
+import { RepositoryService, IssueService, PullRequestService, LabelService, TaskService } from '../api.js';
 
 const NewIssue = {
     oninit(vnode) {
@@ -11,6 +11,7 @@ const NewIssue = {
         vnode.state.submitting = false;
         vnode.state.prsCount = 0;
         vnode.state.issuesCount = 0;
+        vnode.state.tasksCount = 0;
         vnode.state.formData = {
             title: '',
             body: '',
@@ -21,12 +22,14 @@ const NewIssue = {
             RepositoryService.get(owner, repo),
             LabelService.list(owner, repo),
             IssueService.list(owner, repo, { state: 'all', per_page: 1000 }),
-            PullRequestService.list(owner, repo, { state: 'all', per_page: 1000 })
-        ]).then(([repoResult, labelsResult, issuesResult, prsResult]) => {
+            PullRequestService.list(owner, repo, { state: 'all', per_page: 1000 }),
+            TaskService.list(owner, repo, { per_page: 1 })
+        ]).then(([repoResult, labelsResult, issuesResult, prsResult, tasksResult]) => {
             vnode.state.repo = repoResult.data || repoResult;
             vnode.state.labels = labelsResult || [];
             vnode.state.issuesCount = (issuesResult.data || issuesResult || []).filter(i => !i.is_closed).length;
             vnode.state.prsCount = (prsResult.data || prsResult || []).filter(p => !p.is_closed && !p.is_merged).length;
+            vnode.state.tasksCount = tasksResult.total || 0;
             vnode.state.loading = false;
             m.redraw();
         }).catch(error => {
@@ -74,7 +77,7 @@ const NewIssue = {
         return m(Layout, [
             m(ProjectHeader, {
                 owner: owner,
-                repo: repo.name,
+                repo: repo,
                 description: repo.description,
                 stars: repo.stars_count,
                 forks: repo.forks_count,
@@ -83,9 +86,10 @@ const NewIssue = {
             
             m(ProjectTabs, {
                 owner: owner,
-                repo: repo.name,
+                repo: repo,
                 issuesCount: issuesCount,
                 prsCount: prsCount,
+                tasksCount: vnode.state.tasksCount,
                 activeTab: 'issues'
             }),
             

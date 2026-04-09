@@ -205,6 +205,70 @@ func UpdateUser(c fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(ToUserResponse(userModel))
 }
 
+func UpdateUserByUsername(c fiber.Ctx) error {
+	currentUserID := middleware.GetCurrentUserID(c)
+	targetUsername := c.Params("username")
+
+	var req struct {
+		FullName string `json:"full_name"`
+		Bio      string `json:"bio"`
+		Website  string `json:"website"`
+		Location string `json:"location"`
+		Avatar   string `json:"avatar"`
+		IsActive *bool  `json:"is_active"`
+		IsAdmin  *bool  `json:"is_admin"`
+	}
+
+	if err := c.Bind().JSON(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	db := models.GetDB()
+
+	currentUser, err := db.User.Select().Where("id = ?", currentUserID).One()
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Current user not found"})
+	}
+
+	targetUser, err := db.User.Select().Where("username = ?", targetUsername).One()
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Target user not found"})
+	}
+
+	if !currentUser.IsAdmin {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Only admins can update other users"})
+	}
+
+	if req.FullName != "" {
+		targetUser.FullName = req.FullName
+	}
+	if req.Bio != "" {
+		targetUser.Bio = req.Bio
+	}
+	if req.Website != "" {
+		targetUser.Website = req.Website
+	}
+	if req.Location != "" {
+		targetUser.Location = req.Location
+	}
+	if req.Avatar != "" {
+		targetUser.Avatar = req.Avatar
+	}
+	if req.IsActive != nil {
+		targetUser.IsActive = *req.IsActive
+	}
+	if req.IsAdmin != nil {
+		targetUser.IsAdmin = *req.IsAdmin
+	}
+
+	err = db.User.Save().One(targetUser)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update user"})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(ToUserResponse(targetUser))
+}
+
 func GetUserRepositories(c fiber.Ctx) error {
 	username := c.Params("username")
 	page, _ := strconv.Atoi(c.Query("page", strconv.Itoa(config.DefaultPage)))

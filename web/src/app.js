@@ -19,6 +19,8 @@ import { SnippetsPage, SnippetDetail, NewSnippet, EditSnippet } from './pages/sn
 import { CreateProjectPage } from './pages/create-project.js';
 import { MigrateProjectPage } from './pages/migrate-project.js';
 import { LoginPage } from './pages/login.js';
+import { UserManagement } from './pages/user-management.js';
+import CommitList from './pages/commits.js';
 
 Auth.init();
 
@@ -66,6 +68,8 @@ const routes = {
     '/projects/new': withAuth(CreateProjectPage),
     '/projects/migrate': withAuth(MigrateProjectPage),
     '/project/:owner/:repo': ProjectDetail,
+    '/commits/:owner/:repo': CommitList,
+    '/commits/:owner/:repo/:branch': CommitList,
     '/issues/:owner/:repo/new': withAuth(NewIssue),
     '/issues/:owner/:repo': IssueList,
     '/issues/:owner/:repo/:number': IssueDetail,
@@ -81,6 +85,7 @@ const routes = {
     '/groups': Groups,
     '/groups/new': withAuth(NewGroup),
     '/groups/:name': GroupDetail,
+    '/users': withAuth(UserManagement),
     '/activity': Activities,
     '/snippets': SnippetsPage,
     '/snippets/new': withAuth(NewSnippet),

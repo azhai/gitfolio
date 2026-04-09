@@ -1,5 +1,5 @@
 import { Layout, Loading, ProjectHeader, ProjectTabs, EmptyState, formatTime, MarkdownEditor, MarkdownRenderer } from '../components.js';
-import { RepositoryService, IssueService, PullRequestService, API, LabelService } from '../api.js';
+import { RepositoryService, IssueService, PullRequestService, TaskService, API, LabelService } from '../api.js';
 
 const CommentService = {
     list(owner, repo, issueNumber) {
@@ -38,6 +38,7 @@ const IssueDetail = {
         vnode.state.loading = true;
         vnode.state.issuesCount = 0;
         vnode.state.prsCount = 0;
+        vnode.state.tasksCount = 0;
         vnode.state.editMode = false;
         vnode.state.editTitle = '';
         vnode.state.editBody = '';
@@ -50,13 +51,15 @@ const IssueDetail = {
             IssueService.get(owner, repo, number),
             IssueService.list(owner, repo, { state: 'all', per_page: 1000 }),
             PullRequestService.list(owner, repo, { state: 'all', per_page: 1000 }),
-            LabelService.list(owner, repo)
-        ]).then(([repoResult, issueResult, issuesResult, prsResult, labelsResult]) => {
+            LabelService.list(owner, repo),
+            TaskService.list(owner, repo, { per_page: 1 })
+        ]).then(([repoResult, issueResult, issuesResult, prsResult, labelsResult, tasksResult]) => {
             vnode.state.repo = repoResult.data || repoResult;
             vnode.state.issue = issueResult.data || issueResult;
             vnode.state.labels = labelsResult || [];
             vnode.state.issuesCount = (issuesResult.data || issuesResult || []).filter(i => !i.is_closed).length;
             vnode.state.prsCount = (prsResult.data || prsResult || []).filter(p => !p.is_closed && !p.is_merged).length;
+            vnode.state.tasksCount = tasksResult.total || 0;
             vnode.state.editTitle = vnode.state.issue.title;
             vnode.state.editBody = vnode.state.issue.body || '';
             vnode.state.editLabels = (vnode.state.issue.labels || []).map(l => l.name);
@@ -167,7 +170,7 @@ const IssueDetail = {
         return m(Layout, [
             m(ProjectHeader, {
                 owner: owner,
-                repo: repo.name,
+                repo: repo,
                 description: repo.description,
                 stars: repo.stars_count,
                 forks: repo.forks_count,
@@ -176,9 +179,10 @@ const IssueDetail = {
             
             m(ProjectTabs, {
                 owner: owner,
-                repo: repo.name,
+                repo: repo,
                 issuesCount: vnode.state.issuesCount,
                 prsCount: vnode.state.prsCount,
+                tasksCount: vnode.state.tasksCount,
                 activeTab: 'issues'
             }),
             

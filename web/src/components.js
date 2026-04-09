@@ -152,11 +152,23 @@ const ProjectHeader = {
         const repoForks = forks !== undefined ? forks : (repoObj?.forks_count || 0);
         const repoVisibility = visibility || (repoObj?.is_private ? 'private' : 'public');
         const repoType = projectType || (repoObj?.project_type || 'owned');
+        const mirrorUrl = repoObj?.mirror_url || '';
+        const isMirror = repoObj?.is_mirror || false;
         
         return m('div.project-header', [
             m('div.project-header-top', [
                 m('div.project-title-section', [
-                    m('h1', repo),
+                    m('h1', [
+                        repo,
+                        isMirror && mirrorUrl ? m('a.mirror-link', {
+                            href: mirrorUrl,
+                            target: '_blank',
+                            rel: 'noopener noreferrer',
+                            title: `原始仓库: ${mirrorUrl}`
+                        }, [
+                            m('i.fas.fa-external-link-alt')
+                        ]) : null
+                    ]),
                     m('div.project-badges', [
                         repoType === 'mirror' ? m('span.project-type-badge.mirror', [
                             m('i.fas.fa-clone'),
@@ -195,17 +207,19 @@ const ProjectHeader = {
 
 const ProjectTabs = {
     view(vnode) {
-        const { owner, repo, issuesCount, prsCount, activeTab } = vnode.attrs;
+        const { owner, repo, issuesCount, prsCount, tasksCount, activeTab } = vnode.attrs;
         const currentRoute = m.route.get();
+        const repoName = typeof repo === 'string' ? repo : (repo?.name || '');
         
         const tabs = [
-            { id: 'code', icon: 'fa-code', label: '代码', href: `/project/${owner}/${repo}` },
-            { id: 'issues', icon: 'fa-exclamation-circle', label: '议题', href: `/issues/${owner}/${repo}`, count: issuesCount },
-            { id: 'prs', icon: 'fa-code-branch', label: 'PR', href: `/pull-requests/${owner}/${repo}`, count: prsCount },
-            { id: 'tasks', icon: 'fa-tasks', label: '任务', href: `/tasks/${owner}/${repo}` },
-            { id: 'releases', icon: 'fa-cube', label: '发布', href: `/releases/${owner}/${repo}` },
-            { id: 'stats', icon: 'fa-chart-line', label: '统计', href: `/stats/${owner}/${repo}` },
-            { id: 'settings', icon: 'fa-cog', label: '设置', href: `/settings/${owner}/${repo}` }
+            { id: 'code', icon: 'fa-code', label: '代码', href: `/project/${owner}/${repoName}` },
+            { id: 'commits', icon: 'fa-history', label: '提交', href: `/commits/${owner}/${repoName}` },
+            { id: 'issues', icon: 'fa-exclamation-circle', label: '议题', href: `/issues/${owner}/${repoName}`, count: issuesCount },
+            { id: 'tasks', icon: 'fa-tasks', label: '任务', href: `/tasks/${owner}/${repoName}`, count: tasksCount },
+            { id: 'prs', icon: 'fa-code-branch', label: 'PR', href: `/pull-requests/${owner}/${repoName}`, count: prsCount },
+            { id: 'releases', icon: 'fa-cube', label: '发布', href: `/releases/${owner}/${repoName}` },
+            { id: 'stats', icon: 'fa-chart-line', label: '统计', href: `/stats/${owner}/${repoName}` },
+            { id: 'settings', icon: 'fa-cog', label: '设置', href: `/settings/${owner}/${repoName}` }
         ];
         
         return m('div.project-tabs', tabs.map(tab => {
@@ -247,6 +261,65 @@ const EmptyState = {
         ]);
     }
 };
+
+const Pagination = {
+    view(vnode) {
+        const { page, totalPages, onPageChange } = vnode.attrs;
+        
+        if (totalPages <= 1) return null;
+        
+        const pages = [];
+        const maxVisible = 5;
+        let startPage = Math.max(1, page - Math.floor(maxVisible / 2));
+        let endPage = Math.min(totalPages, startPage + maxVisible - 1);
+        
+        if (endPage - startPage < maxVisible - 1) {
+            startPage = Math.max(1, endPage - maxVisible + 1);
+        }
+        
+        if (startPage > 1) {
+            pages.push({ num: 1, label: '1' });
+            if (startPage > 2) {
+                pages.push({ num: null, label: '...' });
+            }
+        }
+        
+        for (let i = startPage; i <= endPage; i++) {
+            pages.push({ num: i, label: String(i) });
+        }
+        
+        if (endPage < totalPages) {
+            if (endPage < totalPages - 1) {
+                pages.push({ num: null, label: '...' });
+            }
+            pages.push({ num: totalPages, label: String(totalPages) });
+        }
+        
+        return m('div.pagination', [
+            m('button.pagination-btn', {
+                disabled: page === 1,
+                onclick: () => onPageChange(page - 1)
+            }, [
+                m('i.fas.fa-chevron-left')
+            ]),
+            pages.map(p => 
+                p.num === null ?
+                    m('span.pagination-ellipsis', p.label) :
+                    m('button.pagination-btn', {
+                        class: p.num === page ? 'active' : '',
+                        onclick: () => onPageChange(p.num)
+                    }, p.label)
+            ),
+            m('button.pagination-btn', {
+                disabled: page === totalPages,
+                onclick: () => onPageChange(page + 1)
+            }, [
+                m('i.fas.fa-chevron-right')
+            ])
+        ]);
+    }
+};
+
 
 const Modal = {
     view(vnode) {
@@ -545,10 +618,7 @@ const MarkdownRenderer = {
     render(content, owner, repo) {
         if (!content) return '';
         
-        let html = content
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;');
+        let html = content;
         
         if (owner && repo) {
             html = html.replace(/#(\d+)/g, (match, number) => {
@@ -579,29 +649,105 @@ const MarkdownRenderer = {
         });
         
         html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (match, lang, code) => {
-            return `<pre class="code-block"><code class="language-${lang}">${code}</code></pre>`;
+            const escapedCode = code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            let highlightedCode = escapedCode;
+            
+            if (typeof hljs !== 'undefined' && lang) {
+                try {
+                    const langClass = lang.toLowerCase().replace(/[^a-z0-9]/g, '');
+                    if (hljs.getLanguage(langClass)) {
+                        highlightedCode = hljs.highlight(code, { language: langClass }).value;
+                    } else {
+                        highlightedCode = hljs.highlightAuto(code).value;
+                    }
+                } catch (e) {
+                    console.error('Highlight error:', e);
+                }
+            } else if (typeof hljs !== 'undefined') {
+                try {
+                    highlightedCode = hljs.highlightAuto(code).value;
+                } catch (e) {
+                    console.error('Auto-highlight error:', e);
+                }
+            }
+            
+            return `<pre class="code-block"><code class="language-${lang} hljs">${highlightedCode}</code></pre>`;
         });
         
         html = html.replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>');
         
         html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
         html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+        html = html.replace(/~~([^~]+)~~/g, '<del>$1</del>');
+        html = html.replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>');
         
+        html = html.replace(/^#### (.+)$/gm, '<h4>$1</h4>');
         html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
         html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
         html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
         
         html = html.replace(/^\- (.+)$/gm, '<li>$1</li>');
-        html = html.replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>');
+        html = html.replace(/^\* (.+)$/gm, '<li>$1</li>');
+        html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
+        html = html.replace(/(<li>.*<\/li>\n?)+/g, (match) => {
+            if (match.match(/^\d/)) {
+                return '<ol>' + match + '</ol>';
+            }
+            return '<ul>' + match + '</ul>';
+        });
         
-        html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
+        html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
         
-        html = html.replace(/\n\n/g, '</p><p>');
-        html = html.replace(/\n/g, '<br>');
-        html = '<p>' + html + '</p>';
+        html = html.replace(/\n---\n/g, '<hr>');
+        
+        const lines = html.split('\n');
+        let inParagraph = false;
+        let result = [];
+        
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            const trimmedLine = line.trim();
+            
+            if (trimmedLine === '') {
+                if (inParagraph) {
+                    result.push('</p>');
+                    inParagraph = false;
+                }
+                continue;
+            }
+            
+            if (/^<(h[1-6]|ul|ol|li|blockquote|pre|hr|div|table)/i.test(trimmedLine) ||
+                /^<\/?(h[1-6]|ul|ol|li|blockquote|pre|hr|div|table)/i.test(trimmedLine)) {
+                if (inParagraph) {
+                    result.push('</p>');
+                    inParagraph = false;
+                }
+                result.push(line);
+                continue;
+            }
+            
+            if (!inParagraph) {
+                result.push('<p>');
+                inParagraph = true;
+            }
+            
+            result.push(line);
+            if (i < lines.length - 1 && lines[i + 1].trim() !== '') {
+                result.push('<br>');
+            }
+        }
+        
+        if (inParagraph) {
+            result.push('</p>');
+        }
+        
+        html = result.join('\n');
+        
+        html = html.replace(/<p>\s*<\/p>/g, '');
+        html = html.replace(/<br>\s*<\/p>/g, '</p>');
         
         return html;
     }
 };
 
-export { Layout, TopBar, Sidebar, ProjectHeader, ProjectTabs, Loading, EmptyState, Modal, formatTime, ProjectCard, IssueItem, PRItem, MarkdownEditor, MarkdownRenderer };
+export { Layout, TopBar, Sidebar, ProjectHeader, ProjectTabs, Loading, EmptyState, Modal, formatTime, ProjectCard, IssueItem, PRItem, MarkdownEditor, MarkdownRenderer, Pagination };

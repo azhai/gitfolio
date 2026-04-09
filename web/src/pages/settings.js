@@ -1,5 +1,5 @@
 import { Layout, Loading, ProjectHeader, ProjectTabs, EmptyState } from '../components.js';
-import { RepositoryService, IssueService, PullRequestService } from '../api.js';
+import { RepositoryService, IssueService, PullRequestService, TaskService } from '../api.js';
 
 const SettingsPage = {
     oninit(vnode) {
@@ -8,6 +8,7 @@ const SettingsPage = {
         vnode.state.repo = null;
         vnode.state.issuesCount = 0;
         vnode.state.prsCount = 0;
+        vnode.state.tasksCount = 0;
         vnode.state.loading = true;
         vnode.state.activeSection = 'general';
         vnode.state.formData = {
@@ -22,11 +23,13 @@ const SettingsPage = {
         Promise.all([
             RepositoryService.get(owner, repo),
             IssueService.list(owner, repo, { state: 'all', per_page: 1000 }),
-            PullRequestService.list(owner, repo, { state: 'all', per_page: 1000 })
-        ]).then(([repoResult, issuesResult, prsResult]) => {
+            PullRequestService.list(owner, repo, { state: 'all', per_page: 1000 }),
+            TaskService.list(owner, repo, { per_page: 1 })
+        ]).then(([repoResult, issuesResult, prsResult, tasksResult]) => {
             vnode.state.repo = repoResult.data || repoResult;
             vnode.state.issuesCount = (issuesResult.data || issuesResult || []).filter(i => !i.is_closed).length;
             vnode.state.prsCount = (prsResult.data || prsResult || []).filter(p => !p.is_closed && !p.is_merged).length;
+            vnode.state.tasksCount = tasksResult.total || 0;
             vnode.state.formData = {
                 name: vnode.state.repo.name,
                 description: vnode.state.repo.description || '',
@@ -104,10 +107,11 @@ const SettingsPage = {
             m(ProjectHeader, { repo, owner }),
             m(ProjectTabs, { 
                 owner, 
-                repo: repo.name, 
+                repo: repo, 
                 issuesCount: vnode.state.issuesCount,
                 prsCount: vnode.state.prsCount,
-                activeTab: 'settings' 
+                tasksCount: vnode.state.tasksCount,
+                activeTab: 'settings'
             }),
             
             m('div.settings-page', [

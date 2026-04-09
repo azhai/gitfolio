@@ -1,5 +1,5 @@
 import { Layout, Loading, ProjectHeader, ProjectTabs, EmptyState, formatTime, MarkdownRenderer } from '../components.js';
-import { RepositoryService, IssueService, PullRequestService, API } from '../api.js';
+import { RepositoryService, IssueService, PullRequestService, TaskService, API } from '../api.js';
 
 const PRCommentService = {
     list(owner, repo, prNumber) {
@@ -8,6 +8,18 @@ const PRCommentService = {
     
     create(owner, repo, prNumber, data) {
         return API.post(`/${owner}/${repo}/pull_requests/${prNumber}/comments`, data);
+    }
+};
+
+const PRCommitsService = {
+    list(owner, repo, prNumber, params = {}) {
+        return API.get(`/${owner}/${repo}/pull_requests/${prNumber}/commits`, params);
+    }
+};
+
+const PRFilesService = {
+    list(owner, repo, prNumber) {
+        return API.get(`/${owner}/${repo}/pull_requests/${prNumber}/files`);
     }
 };
 
@@ -37,32 +49,19 @@ const PullRequestDetail = {
         vnode.state.loading = true;
         vnode.state.issuesCount = 0;
         vnode.state.prsCount = 0;
+        vnode.state.tasksCount = 0;
         vnode.state.editMode = false;
         vnode.state.editTitle = '';
         vnode.state.editBody = '';
         vnode.state.newComment = '';
         vnode.state.submitting = false;
-        
-        Promise.all([
-            RepositoryService.get(owner, repo),
-            PullRequestService.get(owner, repo, number),
-            IssueService.list(owner, repo, { state: 'all', per_page: 1000 }),
-            PullRequestService.list(owner, repo, { state: 'all', per_page: 1000 })
-        ]).then(([repoResult, prResult, issuesResult, prsResult]) => {
-            vnode.state.repo = repoResult.data || repoResult;
-            vnode.state.pr = prResult.data || prResult;
-            vnode.state.issuesCount = (issuesResult.data || issuesResult || []).filter(i => !i.is_closed).length;
-            vnode.state.prsCount = (prsResult.data || prsResult || []).filter(p => !p.is_closed && !p.is_merged).length;
-            vnode.state.editTitle = vnode.state.pr.title;
-            vnode.state.editBody = vnode.state.pr.body || '';
-            vnode.state.loading = false;
-            vnode.state.loadComments();
-            m.redraw();
-        }).catch(error => {
-            console.error('Failed to load pull request:', error);
-            vnode.state.loading = false;
-            m.redraw();
-        });
+        vnode.state.activeTab = 'conversation';
+        vnode.state.commits = [];
+        vnode.state.commitsTotal = 0;
+        vnode.state.files = [];
+        vnode.state.totalAdditions = 0;
+        vnode.state.totalDeletions = 0;
+        vnode.state.expandedFiles = new Set();
         
         vnode.state.loadComments = function() {
             PRCommentService.list(owner, repo, number).then(result => {
@@ -72,6 +71,55 @@ const PullRequestDetail = {
                 vnode.state.comments = [];
             });
         };
+        
+        vnode.state.loadCommits = function() {
+            PRCommitsService.list(owner, repo, number).then(result => {
+                vnode.state.commits = result.commits || [];
+                vnode.state.commitsTotal = result.total || 0;
+                m.redraw();
+            }).catch(() => {
+                vnode.state.commits = [];
+                vnode.state.commitsTotal = 0;
+            });
+        };
+        
+        vnode.state.loadFiles = function() {
+            PRFilesService.list(owner, repo, number).then(result => {
+                vnode.state.files = result.files || [];
+                vnode.state.totalAdditions = result.total_additions || 0;
+                vnode.state.totalDeletions = result.total_deletions || 0;
+                m.redraw();
+            }).catch(() => {
+                vnode.state.files = [];
+                vnode.state.totalAdditions = 0;
+                vnode.state.totalDeletions = 0;
+            });
+        };
+        
+        Promise.all([
+            RepositoryService.get(owner, repo),
+            PullRequestService.get(owner, repo, number),
+            IssueService.list(owner, repo, { state: 'all', per_page: 1000 }),
+            PullRequestService.list(owner, repo, { state: 'all', per_page: 1000 }),
+            TaskService.list(owner, repo, { per_page: 1 })
+        ]).then(([repoResult, prResult, issuesResult, prsResult, tasksResult]) => {
+            vnode.state.repo = repoResult.data || repoResult;
+            vnode.state.pr = prResult.data || prResult;
+            vnode.state.issuesCount = (issuesResult.data || issuesResult || []).filter(i => !i.is_closed).length;
+            vnode.state.prsCount = (prsResult.data || prsResult || []).filter(p => !p.is_closed && !p.is_merged).length;
+            vnode.state.tasksCount = tasksResult.total || 0;
+            vnode.state.editTitle = vnode.state.pr.title;
+            vnode.state.editBody = vnode.state.pr.body || '';
+            vnode.state.loading = false;
+            vnode.state.loadComments();
+            vnode.state.loadCommits();
+            vnode.state.loadFiles();
+            m.redraw();
+        }).catch(error => {
+            console.error('Failed to load pull request:', error);
+            vnode.state.loading = false;
+            m.redraw();
+        });
     },
     
     handleSave: function(vnode) {
@@ -183,8 +231,54 @@ const PullRequestDetail = {
         });
     },
     
+    renderDiff: function(patch) {
+        if (!patch) return '';
+        
+        let html = patch
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+        
+        const lines = html.split('\n');
+        let result = [];
+        let inHunk = false;
+        
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            
+            if (line.startsWith('@@')) {
+                inHunk = true;
+                result.push(`<div class="diff-hunk-header">${line}</div>`);
+                continue;
+            }
+            
+            if (line.startsWith('diff --git') || 
+                line.startsWith('index ') || 
+                line.startsWith('--- ') || 
+                line.startsWith('+++ ')) {
+                inHunk = false;
+                result.push(`<div class="diff-file-header">${line}</div>`);
+                continue;
+            }
+            
+            if (!inHunk) continue;
+            
+            if (line.startsWith('+') && !line.startsWith('+++')) {
+                result.push(`<div class="diff-line diff-addition">${line.substring(1)}</div>`);
+            } else if (line.startsWith('-') && !line.startsWith('---')) {
+                result.push(`<div class="diff-line diff-deletion">${line.substring(1)}</div>`);
+            } else if (line === '\\ No newline at end of file') {
+                continue;
+            } else {
+                result.push(`<div class="diff-line diff-context">${line.substring(1)}</div>`);
+            }
+        }
+        
+        return result.join('');
+    },
+    
     view(vnode) {
-        const { repo, pr, comments, loading, editMode, editTitle, editBody, newComment, submitting } = vnode.state;
+        const { repo, pr, comments, loading, editMode, editTitle, editBody, newComment, submitting, activeTab, commits, commitsTotal, files, totalAdditions, totalDeletions } = vnode.state;
         const { owner, repo: repoName, number } = vnode.attrs;
         
         if (loading) {
@@ -208,7 +302,7 @@ const PullRequestDetail = {
         return m(Layout, [
             m(ProjectHeader, {
                 owner: owner,
-                repo: repo.name,
+                repo: repo,
                 description: repo.description,
                 stars: repo.stars_count,
                 forks: repo.forks_count,
@@ -217,9 +311,10 @@ const PullRequestDetail = {
             
             m(ProjectTabs, {
                 owner: owner,
-                repo: repo.name,
+                repo: repo,
                 issuesCount: vnode.state.issuesCount,
                 prsCount: vnode.state.prsCount,
+                tasksCount: vnode.state.tasksCount,
                 activeTab: 'prs'
             }),
             
@@ -250,7 +345,34 @@ const PullRequestDetail = {
                     ])
                 ]),
                 
-                m('div.pr-detail-body', [
+                m('div.pr-tabs', [
+                    m('button.pr-tab-btn', {
+                        class: activeTab === 'conversation' ? 'active' : '',
+                        onclick: () => { vnode.state.activeTab = 'conversation'; }
+                    }, [
+                        m('i.fas.fa-comments'),
+                        ' 对话',
+                        comments.length > 0 ? m('span.tab-count', comments.length) : ''
+                    ]),
+                    m('button.pr-tab-btn', {
+                        class: activeTab === 'commits' ? 'active' : '',
+                        onclick: () => { vnode.state.activeTab = 'commits'; }
+                    }, [
+                        m('i.fas.fa-code-commit'),
+                        ' Commits',
+                        commitsTotal > 0 ? m('span.tab-count', commitsTotal) : ''
+                    ]),
+                    m('button.pr-tab-btn', {
+                        class: activeTab === 'files' ? 'active' : '',
+                        onclick: () => { vnode.state.activeTab = 'files'; }
+                    }, [
+                        m('i.fas.fa-file-code'),
+                        ' Files changed',
+                        files.length > 0 ? m('span.tab-count', `${totalAdditions}+ ${totalDeletions}-`) : ''
+                    ])
+                ]),
+                
+                activeTab === 'conversation' && m('div.pr-conversation-tab', [
                     m('div.pr-main', [
                         m('div.pr-description', [
                             editMode ? [
@@ -340,6 +462,73 @@ const PullRequestDetail = {
                             m('p', '暂无标签')
                         ])
                     ])
+                ]),
+                
+                activeTab === 'commits' && m('div.pr-commits-tab', [
+                    m('div.commits-list-header', [
+                        m('h3', `Commits (${commitsTotal})`)
+                    ]),
+                    commits.length === 0 ?
+                        m('p.no-commits', '暂无提交') :
+                        m('div.commits-list', commits.map(commit =>
+                            m('div.commit-item', [
+                                m('div.commit-hash', [
+                                    m('code', commit.short_hash),
+                                    m('span.commit-message', commit.message)
+                                ]),
+                                m('div.commit-meta', [
+                                    m('span.commit-author', commit.author),
+                                    m('span', ' · '),
+                                    m('span.commit-date', formatTime(commit.date))
+                                ])
+                            ])
+                        ))
+                ]),
+                
+                activeTab === 'files' && m('div.pr-files-tab', [
+                    m('div.files-stats-bar', [
+                        m('span.stat-additions', [
+                            m('i.fas.fa-plus'),
+                            ` ${totalAdditions} additions`
+                        ]),
+                        m('span.stat-deletions', [
+                            m('i.fas.fa-minus'),
+                            ` ${totalDeletions} deletions`
+                        ]),
+                        m('span.stat-files-count', `${files.length} files changed`)
+                    ]),
+                    files.length === 0 ?
+                        m('p.no-files', '暂无文件变更') :
+                        m('div.files-list', files.map((file, index) => {
+                            const isExpanded = vnode.state.expandedFiles.has(index);
+                            
+                            return m('div.file-item', [
+                                m('div.file-header', {
+                                    onclick: () => {
+                                        if (isExpanded) {
+                                            vnode.state.expandedFiles.delete(index);
+                                        } else {
+                                            vnode.state.expandedFiles.add(index);
+                                        }
+                                    }
+                                }, [
+                                    m(`i.fas.file-icon.${file.status === 'added' ? 'fa-plus' : file.status === 'deleted' ? 'fa-minus' : 'fa-pen'}`, {
+                                        class: file.status
+                                    }),
+                                    m('i.fas.file-chevron', {
+                                        class: isExpanded ? 'fa-chevron-down' : 'fa-chevron-right'
+                                    }),
+                                    m('span.file-name', file.filename),
+                                    m('span.file-stats', [
+                                        file.additions > 0 ? m('span.additions', `+${file.additions}`) : '',
+                                        file.deletions > 0 ? m('span.deletions', `-${file.deletions}`) : ''
+                                    ])
+                                ]),
+                                isExpanded && file.patch && m('div.file-diff', {
+                                    innerHTML: PullRequestDetail.renderDiff(file.patch)
+                                })
+                            ]);
+                        }))
                 ])
             ])
         ]);

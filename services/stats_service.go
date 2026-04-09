@@ -14,7 +14,7 @@ func NewStatsService(db *models.Database) *StatsService {
 	return &StatsService{db: db}
 }
 
-func (s *StatsService) UpdateRepositoryStats(repoID int64) error {
+func (s *StatsService) UpdateRepositoryStats(repoID int64, owner, name string) error {
 	stats, err := s.getOrCreateStats(repoID)
 	if err != nil {
 		return err
@@ -26,7 +26,10 @@ func (s *StatsService) UpdateRepositoryStats(repoID int64) error {
 	closedPRs, _ := s.db.PullRequest.Select().Where("repository_id = ? AND is_closed = ? AND is_merged = ?", repoID, true, false).Count("*")
 	mergedPRs, _ := s.db.PullRequest.Select().Where("repository_id = ? AND is_merged = ?", repoID, true).Count("*")
 	contributors, _ := s.db.Contributor.Select().Where("repository_id = ?", repoID).Count("*")
-	tags, _ := s.db.Release.Select().Where("repository_id = ?", repoID).Count("*")
+
+	gitSvc := NewGitService()
+	commitsCount, _ := gitSvc.GetCommitCount(owner, name, "")
+	tagsCount, _ := gitSvc.GetTagCount(owner, name)
 
 	stats.OpenIssuesCount = int(openIssues)
 	stats.ClosedIssuesCount = int(closedIssues)
@@ -34,7 +37,8 @@ func (s *StatsService) UpdateRepositoryStats(repoID int64) error {
 	stats.ClosedPRsCount = int(closedPRs)
 	stats.MergedPRsCount = int(mergedPRs)
 	stats.ContributorsCount = int(contributors)
-	stats.TagsCount = int(tags)
+	stats.CommitsCount = commitsCount
+	stats.TagsCount = tagsCount
 	stats.UpdatedAt = time.Now()
 
 	return s.db.RepositoryStats.Save().One(stats)

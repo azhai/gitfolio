@@ -11,23 +11,29 @@ const TaskDetail = {
         vnode.state.loading = true;
         vnode.state.prsCount = 0;
         vnode.state.issuesCount = 0;
+        vnode.state.tasksCount = 0;
         vnode.state.editMode = false;
         vnode.state.editData = {};
         vnode.state.showIssueSelector = false;
         vnode.state.selectedIssueId = '';
+        vnode.state.uploadingFiles = false;
+        vnode.state.uploadProgress = 0;
+        vnode.state.dragOver = false;
         
         Promise.all([
             RepositoryService.get(owner, repo),
             TaskService.get(owner, repo, id),
             PullRequestService.list(owner, repo, { state: 'all', per_page: 1000 }),
-            IssueService.list(owner, repo, { state: 'all', per_page: 1000 })
-        ]).then(([repoResult, taskResult, prsResult, issuesResult]) => {
+            IssueService.list(owner, repo, { state: 'all', per_page: 1000 }),
+            TaskService.list(owner, repo, { per_page: 1 })
+        ]).then(([repoResult, taskResult, prsResult, issuesResult, tasksResult]) => {
             vnode.state.repo = repoResult.data || repoResult;
             vnode.state.task = taskResult.data || taskResult;
             const prData = prsResult.data || prsResult;
             vnode.state.prsCount = Array.isArray(prData) ? prData.filter(p => !p.is_closed && !p.is_merged).length : 0;
             const issuesData = issuesResult.data || issuesResult;
             vnode.state.issuesCount = Array.isArray(issuesData) ? issuesData.filter(i => !i.is_closed).length : 0;
+            vnode.state.tasksCount = tasksResult.total || 0;
             vnode.state.allIssues = Array.isArray(issuesData) ? issuesData : [];
             vnode.state.loading = false;
             m.redraw();
@@ -122,6 +128,102 @@ const TaskDetail = {
         });
     },
     
+    handleFileUpload: function(vnode, event) {
+        const files = event.target.files;
+        if (!files || files.length === 0) return;
+        
+        TaskDetail.uploadFiles(vnode, Array.from(files));
+        event.target.value = '';
+    },
+    
+    handleDropUpload: function(vnode, event) {
+        event.preventDefault();
+        event.stopPropagation();
+        vnode.state.dragOver = false;
+        
+        const files = event.dataTransfer.files;
+        if (!files || files.length === 0) return;
+        
+        TaskDetail.uploadFiles(vnode, Array.from(files));
+    },
+    
+    handleDragOver: function(vnode, event) {
+        event.preventDefault();
+        event.stopPropagation();
+        vnode.state.dragOver = true;
+    },
+    
+    handleDragLeave: function(vnode, event) {
+        event.preventDefault();
+        event.stopPropagation();
+        vnode.state.dragOver = false;
+    },
+    
+    uploadFiles: function(vnode, files) {
+        const { owner, repo, id } = vnode.attrs;
+        
+        if (vnode.state.uploadingFiles) {
+            alert('正在上传中，请等待完成');
+            return;
+        }
+        
+        const maxSize = 10 * 1024 * 1024; // 10MB
+        const oversizedFiles = files.filter(f => f.size > maxSize);
+        if (oversizedFiles.length > 0) {
+            alert(`以下文件超过10MB限制：${oversizedFiles.map(f => f.name).join(', ')}`);
+            return;
+        }
+        
+        vnode.state.uploadingFiles = true;
+        vnode.state.uploadProgress = 0;
+        m.redraw();
+        
+        const uploadPromises = files.map((file, index) => {
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            return TaskService.uploadAttachment(owner, repo, id, formData).then(result => {
+                vnode.state.uploadProgress = ((index + 1) / files.length) * 100;
+                m.redraw();
+                return result.data || result;
+            });
+        });
+        
+        Promise.all(uploadPromises).then(results => {
+            if (!vnode.state.task.attachments) {
+                vnode.state.task.attachments = [];
+            }
+            
+            results.forEach(attachment => {
+                vnode.state.task.attachments.push(attachment);
+            });
+            
+            vnode.state.uploadingFiles = false;
+            vnode.state.uploadProgress = 100;
+            m.redraw();
+        }).catch(error => {
+            console.error('Upload error:', error);
+            alert('上传失败: ' + (error.response?.data?.error || error.message || '未知错误'));
+            vnode.state.uploadingFiles = false;
+            m.redraw();
+        });
+    },
+    
+    handleDeleteAttachment: function(vnode, attachmentId) {
+        const { owner, repo, id } = vnode.attrs;
+        
+        if (!confirm('确定要删除此附件吗？')) {
+            return;
+        }
+        
+        TaskService.deleteAttachment(owner, repo, id, attachmentId).then(() => {
+            vnode.state.task.attachments = vnode.state.task.attachments.filter(a => a.id !== attachmentId);
+            m.redraw();
+        }).catch(error => {
+            alert('删除失败: ' + (error.message || '未知错误'));
+        });
+    },
+    
     view(vnode) {
         const { repo, task, loading, editMode, editData } = vnode.state;
         const { owner, repo: repoName, id } = vnode.attrs;
@@ -168,7 +270,7 @@ const TaskDetail = {
             m('div.task-detail-page', [
                 m(ProjectHeader, {
                     owner: owner,
-                    repo: repo.name,
+                    repo: repo,
                     description: repo.description,
                     stars: repo.stars_count,
                     forks: repo.forks_count,
@@ -177,9 +279,10 @@ const TaskDetail = {
                 
                 m(ProjectTabs, {
                     owner: owner,
-                    repo: repo.name,
+                    repo: repo,
                     issuesCount: vnode.state.issuesCount,
                     prsCount: vnode.state.prsCount,
+                    tasksCount: vnode.state.tasksCount,
                     activeTab: 'tasks'
                 }),
                 
@@ -268,16 +371,59 @@ const TaskDetail = {
                                 ))
                             ]) : null,
                             
-                            task.attachments && task.attachments.length > 0 ? m('div.task-attachments', [
-                                m('h3', '附件'),
-                                m('div.attachment-list', task.attachments.map(att => 
-                                    m('div.attachment-item', [
-                                        m('i.fas.fa-file'),
-                                        m('a', { href: att.file_path, target: '_blank' }, att.file_name),
-                                        m('span.attachment-size', `(${formatFileSize(att.file_size)})`)
-                                    ])
-                                ))
-                            ]) : null,
+                            m('div.task-attachments', [
+                                m('h3', [
+                                    '附件',
+                                    task.attachments ? ` (${task.attachments.length})` : ''
+                                ]),
+                                
+                                m('div.upload-area', {
+                                    class: vnode.state.dragOver ? 'drag-over' : '',
+                                    ondragover: (e) => TaskDetail.handleDragOver(vnode, e),
+                                    ondragleave: (e) => TaskDetail.handleDragLeave(vnode, e),
+                                    ondrop: (e) => TaskDetail.handleDropUpload(vnode, e)
+                                }, [
+                                    m('i.fas.fa-cloud-upload-alt'),
+                                    m('p', '拖拽文件到此处或'),
+                                    m('label.upload-btn', [
+                                        m('input[type=file]', {
+                                            multiple: true,
+                                            accept: '*/*',
+                                            style: { display: 'none' },
+                                            onchange: (e) => TaskDetail.handleFileUpload(vnode, e)
+                                        }),
+                                        '选择文件'
+                                    ]),
+                                    m('span.hint', '（单个文件最大 10MB，支持多选）')
+                                ]),
+                                
+                                vnode.state.uploadingFiles ? m('div.upload-progress', [
+                                    m('div.progress-bar', {
+                                        style: { width: vnode.state.uploadProgress + '%' }
+                                    }),
+                                    m('span', `上传中... ${Math.round(vnode.state.uploadProgress)}%`)
+                                ]) : null,
+                                
+                                task.attachments && task.attachments.length > 0 ? 
+                                    m('div.attachment-list', task.attachments.map(att => 
+                                        m('div.attachment-item', [
+                                            m('div.attachment-icon', getFileIcon(att.file_type)),
+                                            m('div.attachment-info', [
+                                                m('a.attachment-name', { 
+                                                    href: att.file_path, 
+                                                    target: '_blank',
+                                                    title: att.file_name
+                                                }, att.file_name),
+                                                m('span.attachment-meta', formatFileSize(att.file_size))
+                                            ]),
+                                            m('button.btn.btn-sm.btn-danger.attachment-delete', {
+                                                onclick: () => TaskDetail.handleDeleteAttachment(vnode, att.id),
+                                                title: '删除附件'
+                                            }, [m('i.fas.fa-trash')])
+                                        ])
+                                    )) :
+                                    m('p.no-attachments', '暂无附件')
+                            ]),
                             
                             task.issues && task.issues.length > 0 ? m('div.task-issues', [
                                 m('h3', '关联Issues'),
@@ -431,6 +577,21 @@ function formatFileSize(bytes) {
     if (bytes < 1024) return bytes + ' B';
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+function getFileIcon(fileType) {
+    if (!fileType) return m('i.fas.fa-file');
+    
+    if (fileType.startsWith('image/')) return m('i.fas.fa-file-image', { style: { color: '#4CAF50' } });
+    if (fileType === 'application/pdf') return m('i.fas.fa-file-pdf', { style: { color: '#F44336' } });
+    if (fileType.includes('word') || fileType.includes('document')) return m('i.fas.fa-file-word', { style: { color: '#2196F3' } });
+    if (fileType.includes('excel') || fileType.includes('sheet')) return m('i.fas.fa-file-excel', { style: { color: '#4CAF50' } });
+    if (fileType.includes('zip') || fileType.includes('rar') || fileType.includes('archive')) return m('i.fas.fa-file-archive', { style: { color: '#FF9800' } });
+    if (fileType.includes('text') || fileType.includes('plain')) return m('i.fas.fa-file-alt', { style: { color: '#607D8B' } });
+    if (fileType.includes('video')) return m('i.fas.fa-file-video', { style: { color: '#9C27B0' } });
+    if (fileType.includes('audio')) return m('i.fas.fa-file-audio', { style: { color: '#E91E63' } });
+    
+    return m('i.fas.fa-file');
 }
 
 export { TaskDetail };

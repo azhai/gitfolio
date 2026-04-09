@@ -23,7 +23,7 @@ echo "Adding project modals..."
 sed '/^import /d; /^export /d' src/project-modals.js >> app-spa.js
 
 echo "Adding pages..."
-for file in dashboard projects project-detail issues issue-detail new-issue pull-requests pr-detail new-pr tasks task-detail new-task releases-stats settings create-project migrate-project login groups activities milestones snippets; do
+for file in dashboard projects project-detail issues issue-detail new-issue pull-requests pr-detail new-pr tasks task-detail new-task releases-stats settings create-project migrate-project login groups activities milestones snippets commits user-management; do
     echo "Processing $file.js..."
     sed '/^import /d; /^export /d' "src/pages/$file.js" >> app-spa.js
 done

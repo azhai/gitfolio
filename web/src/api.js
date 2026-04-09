@@ -141,8 +141,19 @@ const UserService = {
         return API.post('/users', data);
     },
     
-    update(id, data) {
-        return API.put(`/users/${id}`, data);
+    update(username, data) {
+        return API.put(`/users/${username}`, data);
+    },
+    
+    uploadAvatar(username, formData) {
+        return m.request({
+            method: 'POST',
+            url: `${API_BASE_URL}/users/${username}/avatar`,
+            data: formData,
+            headers: {
+                'Authorization': `Bearer ${Auth.getToken()}`
+            }
+        });
     },
     
     delete(id) {
@@ -181,19 +192,47 @@ const RepositoryService = {
     },
 
     getTree(owner, repo, params = {}) {
-        return API.get(`/${owner}/${repo}/tree`, params);
+        const { path, ...queryParams } = params;
+        const url = path ? `/${owner}/${repo}/tree/${path}` : `/${owner}/${repo}/tree`;
+        return API.get(url, queryParams);
     },
 
     getFile(owner, repo, params = {}) {
-        return API.get(`/${owner}/${repo}/file`, params);
+        const { path, ...queryParams } = params;
+        const url = path ? `/${owner}/${repo}/file/${path}` : `/${owner}/${repo}/file`;
+        return API.get(url, queryParams);
     },
 
     getBranches(owner, repo) {
         return API.get(`/${owner}/${repo}/branches`);
     },
     
+    getTags(owner, repo) {
+        return API.get(`/${owner}/${repo}/tags`);
+    },
+    
+    getCommits(owner, repo, params = {}) {
+        return API.get(`/${owner}/${repo}/commits`, params);
+    },
+    
+    getLastCommit(owner, repo, ref = 'HEAD') {
+        return API.get(`/${owner}/${repo}/last-commit`, { ref });
+    },
+    
     getContributors(owner, repo) {
         return API.get(`/${owner}/${repo}/contributors`);
+    },
+    
+    getCodeStats(owner, repo) {
+        return API.get(`/${owner}/${repo}/code-stats`);
+    },
+    
+    getCommitActivity(owner, repo, days = 30) {
+        return API.get(`/${owner}/${repo}/commit-activity`, { days });
+    },
+    
+    rebase(owner, repo, data) {
+        return API.post(`/${owner}/${repo}/rebase`, data);
     }
 };
 
@@ -221,6 +260,20 @@ const IssueService = {
 const LabelService = {
     list(owner, repo) {
         return API.get(`/${owner}/${repo}/labels`);
+    }
+};
+
+const ReleaseService = {
+    list(owner, repo) {
+        return API.get(`/${owner}/${repo}/releases`);
+    },
+    
+    get(owner, repo, tag) {
+        return API.get(`/${owner}/${repo}/releases/${tag}`);
+    },
+    
+    sync(owner, repo) {
+        return API.post(`/${owner}/${repo}/releases/sync`);
     }
 };
 
@@ -306,6 +359,33 @@ const GroupService = {
 
     create(data) {
         return API.post('/groups', data);
+    },
+    
+    update(name, data) {
+        return API.put(`/groups/${name}`, data);
+    },
+    
+    uploadAvatar(name, formData) {
+        return m.request({
+            method: 'POST',
+            url: `${API_BASE_URL}/groups/${name}/avatar`,
+            data: formData,
+            headers: {
+                'Authorization': `Bearer ${Auth.getToken()}`
+            }
+        });
+    },
+    
+    getMembers(name) {
+        return API.get(`/groups/${name}/members`);
+    },
+    
+    addMember(name, data) {
+        return API.post(`/groups/${name}/members`, data);
+    },
+    
+    removeMember(name, username) {
+        return API.delete(`/groups/${name}/members/${username}`);
     }
 };
 

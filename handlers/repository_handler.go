@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -17,11 +18,12 @@ import (
 )
 
 type CreateRepositoryRequest struct {
-	Name        string `json:"name" validate:"required,min=1,max=255"`
-	Description string `json:"description"`
-	Homepage    string `json:"homepage"`
-	IsPrivate   bool   `json:"is_private"`
-	CloneURL    string `json:"clone_url"`
+	Name          string `json:"name" validate:"required,min=1,max=255"`
+	Description   string `json:"description"`
+	Homepage      string `json:"homepage"`
+	IsPrivate     bool   `json:"is_private"`
+	DefaultBranch string `json:"default_branch"`
+	CloneURL      string `json:"clone_url"`
 }
 
 type UpdateRepositoryRequest struct {
@@ -152,6 +154,10 @@ func CreateRepository(c fiber.Ctx) error {
 		DefaultBranch: "main",
 	}
 
+	if req.DefaultBranch != "" {
+		repo.DefaultBranch = req.DefaultBranch
+	}
+
 	if req.CloneURL != "" {
 		repo.IsMirror = true
 		repo.MirrorURL = req.CloneURL
@@ -178,6 +184,14 @@ func CreateRepository(c fiber.Ctx) error {
 		}
 
 		repo.LocalPath = localPath
+	} else {
+		gitSvc := services.NewGitService()
+		if err := gitSvc.InitRepository(ownerUser.Username, repo); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": fmt.Sprintf("Failed to initialize repository: %v", err),
+			})
+		}
+		repo.LocalPath = filepath.Join(config.AppConfig.Repository.Root, ownerUser.Username, req.Name+".git")
 	}
 
 	err = db.Repository.Insert().One(repo)
@@ -544,7 +558,10 @@ func SyncPushRepository(c fiber.Ctx) error {
 }
 
 func GetRepositoryTree(c fiber.Ctx) error {
-	path := c.Query("path", "")
+	path := c.Params("*", "")
+	if path == "" {
+		path = c.Query("path", "")
+	}
 	ref := c.Query("ref", "HEAD")
 
 	result, err := helpers.GetOwnerAndRepoWithPrivateAccessFromParams(c)
@@ -577,7 +594,10 @@ func GetRepositoryTree(c fiber.Ctx) error {
 }
 
 func GetRepositoryFile(c fiber.Ctx) error {
-	path := c.Query("path", "")
+	path := c.Params("*", "")
+	if path == "" {
+		path = c.Query("path", "")
+	}
 	ref := c.Query("ref", "HEAD")
 
 	result, err := helpers.GetOwnerAndRepoWithPrivateAccessFromParams(c)
@@ -621,6 +641,116 @@ func GetRepositoryBranches(c fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"branches": branches})
 }
 
+func GetRepositoryTags(c fiber.Ctx) error {
+	result, err := helpers.GetOwnerAndRepoWithPrivateAccessFromParams(c)
+	if err != nil {
+		return err
+	}
+
+	if result.Repo.LocalPath == "" {
+		return c.Status(fiber.StatusOK).JSON(fiber.Map{"tags": []string{}})
+	}
+
+	gitSvc := services.NewGitService()
+	tags, err := gitSvc.GetAllTags(result.Owner.Username, result.Repo.Name)
+	if err != nil {
+		return c.Status(fiber.StatusOK).JSON(fiber.Map{"tags": []string{}})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{"tags": tags})
+}
+
+func GetRepositoryLastCommit(c fiber.Ctx) error {
+	result, err := helpers.GetOwnerAndRepoWithPrivateAccessFromParams(c)
+	if err != nil {
+		return err
+	}
+
+	if result.Repo.LocalPath == "" {
+		return c.Status(fiber.StatusOK).JSON(fiber.Map{
+			"message": "",
+			"time":    "",
+			"author":  "",
+		})
+	}
+
+	ref := c.Query("ref", "HEAD")
+
+	gitSvc := services.NewGitService()
+	message, time, author, err := gitSvc.GetLastCommitInfo(result.Owner.Username, result.Repo.Name, ref)
+	if err != nil {
+		return c.Status(fiber.StatusOK).JSON(fiber.Map{
+			"message": "",
+			"time":    "",
+			"author":  "",
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"message": message,
+		"time":    time,
+		"author":  author,
+	})
+}
+
+func GetRepositoryCommits(c fiber.Ctx) error {
+	result, err := helpers.GetOwnerAndRepoWithPrivateAccessFromParams(c)
+	if err != nil {
+		return err
+	}
+
+	if result.Repo.LocalPath == "" {
+		return c.Status(fiber.StatusOK).JSON(fiber.Map{
+			"commits":  []interface{}{},
+			"total":    0,
+			"page":     1,
+			"per_page": 30,
+		})
+	}
+
+	ref := c.Query("ref", "HEAD")
+	pageStr := c.Query("page", "1")
+	perPageStr := c.Query("per_page", "30")
+	allBranches := c.Query("all", "false") == "true"
+
+	page, err := strconv.Atoi(pageStr)
+	if err != nil || page < 1 {
+		page = 1
+	}
+
+	perPage, err := strconv.Atoi(perPageStr)
+	if err != nil || perPage < 1 || perPage > 100 {
+		perPage = 30
+	}
+
+	gitSvc := services.NewGitService()
+
+	var commits interface{}
+	var total int
+
+	if allBranches {
+		commits, total, err = gitSvc.GetCommitGraph(result.Owner.Username, result.Repo.Name, page, perPage)
+	} else {
+		commits, total, err = gitSvc.GetCommitList(result.Owner.Username, result.Repo.Name, ref, page, perPage)
+	}
+
+	if err != nil {
+		return c.Status(fiber.StatusOK).JSON(fiber.Map{
+			"commits":  []interface{}{},
+			"total":    0,
+			"page":     page,
+			"per_page": perPage,
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"commits":  commits,
+		"total":    total,
+		"page":     page,
+		"per_page": perPage,
+	})
+}
+
 func GetRepositoryContributors(c fiber.Ctx) error {
 	result, err := helpers.GetOwnerAndRepoWithPrivateAccessFromParams(c)
 	if err != nil {
@@ -651,4 +781,94 @@ func GetRepositoryContributors(c fiber.Ctx) error {
 	}
 
 	return c.Status(fiber.StatusOK).JSON(responses)
+}
+
+func RefreshRepositoryStats(c fiber.Ctx) error {
+	result, err := helpers.RequireOwnerAndRepoFromParams(c)
+	if err != nil {
+		return err
+	}
+
+	statsSvc := services.NewStatsService(models.GetDB())
+	if err := statsSvc.UpdateRepositoryStats(result.Repo.ID, result.Owner.Username, result.Repo.Name); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to refresh stats"})
+	}
+
+	stats, _ := statsSvc.GetRepositoryStats(result.Repo.ID)
+	return c.Status(fiber.StatusOK).JSON(stats)
+}
+
+func GetCodeStats(c fiber.Ctx) error {
+	result, err := helpers.RequireOwnerAndRepoFromParams(c)
+	if err != nil {
+		return err
+	}
+
+	gitSvc := services.NewGitService()
+	stats, err := gitSvc.GetCodeStats(result.Owner.Username, result.Repo.Name)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to get code stats: " + err.Error()})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(stats)
+}
+
+func GetCommitActivity(c fiber.Ctx) error {
+	result, err := helpers.RequireOwnerAndRepoFromParams(c)
+	if err != nil {
+		return err
+	}
+
+	days := 30
+	if daysParam := c.Query("days"); daysParam != "" {
+		if parsed, err := strconv.Atoi(daysParam); err == nil && parsed > 0 && parsed <= 365 {
+			days = parsed
+		}
+	}
+
+	gitSvc := services.NewGitService()
+	activity, err := gitSvc.GetCommitActivity(result.Owner.Username, result.Repo.Name, days)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to get commit activity: " + err.Error()})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"activity": activity,
+		"days":     days,
+	})
+}
+
+func RebaseCommits(c fiber.Ctx) error {
+	result, err := helpers.RequireOwnerAndRepoFromParams(c)
+	if err != nil {
+		return err
+	}
+
+	userID := middleware.GetCurrentUserID(c)
+	if userID == 0 {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
+	}
+
+	var req struct {
+		Commits []string `json:"commits"`
+	}
+
+	if err := c.Bind().JSON(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	if len(req.Commits) == 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "No commits specified"})
+	}
+
+	gitSvc := services.NewGitService()
+	err = gitSvc.RebaseCommits(result.Owner.Username, result.Repo.Name, req.Commits)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to rebase commits: " + err.Error()})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"message": "Commits rebased successfully",
+		"count":   len(req.Commits),
+	})
 }

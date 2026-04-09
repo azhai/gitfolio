@@ -126,6 +126,59 @@ func CreateGroup(c fiber.Ctx) error {
 	return c.Status(fiber.StatusCreated).JSON(ToGroupResponse(group, 1))
 }
 
+func UpdateGroup(c fiber.Ctx) error {
+	userID := middleware.GetCurrentUserID(c)
+	name := c.Params("name")
+
+	var req struct {
+		DisplayName string `json:"display_name"`
+		Description string `json:"description"`
+		Website     string `json:"website"`
+		Location    string `json:"location"`
+		Avatar      string `json:"avatar"`
+	}
+
+	if err := c.Bind().JSON(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	db := models.GetDB()
+
+	group, err := db.Group.Select().Where("name = ?", name).One()
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Group not found"})
+	}
+
+	member, err := db.GroupMember.Select().Where("group_id = ? AND user_id = ?", group.ID, userID).One()
+	if err != nil || (member.Role != "owner" && member.Role != "admin") {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Only group owners or admins can update group info"})
+	}
+
+	if req.DisplayName != "" {
+		group.DisplayName = req.DisplayName
+	}
+	if req.Description != "" {
+		group.Description = req.Description
+	}
+	if req.Website != "" {
+		group.Website = req.Website
+	}
+	if req.Location != "" {
+		group.Location = req.Location
+	}
+	if req.Avatar != "" {
+		group.Avatar = req.Avatar
+	}
+
+	err = db.Group.Save().One(group)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update group"})
+	}
+
+	membersCount, _ := db.GroupMember.Select().Where("group_id = ?", group.ID).Count("")
+	return c.Status(fiber.StatusOK).JSON(ToGroupResponse(group, int(membersCount)))
+}
+
 type ActivityResponse struct {
 	ID           int64  `json:"id"`
 	UserID       *int64 `json:"user_id"`

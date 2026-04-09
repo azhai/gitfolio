@@ -7,6 +7,7 @@ import (
 	"github.com/azhai/gitfolio/helpers"
 	"github.com/azhai/gitfolio/middleware"
 	"github.com/azhai/gitfolio/models"
+	"github.com/azhai/gitfolio/services"
 	"github.com/gofiber/fiber/v3"
 )
 
@@ -202,8 +203,45 @@ func ListPullRequests(c fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch merge requests"})
 	}
 
+	contributorIDs := make(map[int64]bool)
+	for _, mr := range mrs {
+		if mr.AuthorID != 0 {
+			contributorIDs[mr.AuthorID] = true
+		}
+		if mr.AssigneeID != nil && *mr.AssigneeID != 0 {
+			contributorIDs[*mr.AssigneeID] = true
+		}
+	}
+
+	contributorsMap := make(map[int64]*models.Contributor)
+	for contributorID := range contributorIDs {
+		contrib, err := db.Contributor.Select().Where("id = ?", contributorID).One()
+		if err == nil {
+			contributorsMap[contributorID] = contrib
+		}
+	}
+
+	var response []*PRResponse
+	response = make([]*PRResponse, 0, len(mrs))
+	for _, mr := range mrs {
+		authorContrib := contributorsMap[mr.AuthorID]
+		if authorContrib == nil {
+			authorContrib = &models.Contributor{Name: "Unknown"}
+		}
+
+		var assigneeContrib *models.Contributor
+		if mr.AssigneeID != nil {
+			assigneeContrib = contributorsMap[*mr.AssigneeID]
+		}
+
+		commentsCount := getPRCommentsCount(db, mr.ID)
+		filesCount := getPRFilesCount(db, mr.ID)
+
+		response = append(response, ToPRResponse(mr, authorContrib, assigneeContrib, commentsCount, filesCount))
+	}
+
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"data":     mrs,
+		"data":     response,
 		"page":     page,
 		"per_page": perPage,
 	})
@@ -431,5 +469,93 @@ func ReopenPullRequest(c fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
 		"message": "Merge request reopened successfully",
 		"mr":      ToPRResponse(mr, authorContrib, assigneeContrib, commentsCount, filesCount),
+	})
+}
+
+func GetPRCommits(c fiber.Ctx) error {
+	prNumber, _ := strconv.Atoi(c.Params("number"))
+	page, _ := strconv.Atoi(c.Query("page", "1"))
+	perPage, _ := strconv.Atoi(c.Query("per_page", "30"))
+
+	result, err := helpers.GetOwnerAndRepoWithPrivateAccessFromParams(c)
+	if err != nil {
+		return err
+	}
+
+	db := models.GetDB()
+
+	mr, err := db.PullRequest.Select().Where("repository_id = ? AND number = ?", result.Repo.ID, prNumber).One()
+	if err != nil || mr == nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Pull request not found"})
+	}
+
+	if mr.SourceBranch == "" || mr.TargetBranch == "" {
+		return c.Status(fiber.StatusOK).JSON(fiber.Map{
+			"commits":  []interface{}{},
+			"total":    0,
+			"page":     page,
+			"per_page": perPage,
+		})
+	}
+
+	gitSvc := services.NewGitService()
+	commits, total, err := gitSvc.GetPRCommits(
+		result.Owner.Username,
+		result.Repo.Name,
+		mr.SourceBranch,
+		mr.TargetBranch,
+		page,
+		perPage,
+	)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to get PR commits"})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"commits":  commits,
+		"total":    total,
+		"page":     page,
+		"per_page": perPage,
+	})
+}
+
+func GetPRFiles(c fiber.Ctx) error {
+	prNumber, _ := strconv.Atoi(c.Params("number"))
+
+	result, err := helpers.GetOwnerAndRepoWithPrivateAccessFromParams(c)
+	if err != nil {
+		return err
+	}
+
+	db := models.GetDB()
+
+	mr, err := db.PullRequest.Select().Where("repository_id = ? AND number = ?", result.Repo.ID, prNumber).One()
+	if err != nil || mr == nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Pull request not found"})
+	}
+
+	if mr.SourceBranch == "" || mr.TargetBranch == "" {
+		return c.Status(fiber.StatusOK).JSON(fiber.Map{
+			"files":           []interface{}{},
+			"total_additions": 0,
+			"total_deletions": 0,
+		})
+	}
+
+	gitSvc := services.NewGitService()
+	files, additions, deletions, err := gitSvc.GetPRFiles(
+		result.Owner.Username,
+		result.Repo.Name,
+		mr.SourceBranch,
+		mr.TargetBranch,
+	)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to get PR files"})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"files":           files,
+		"total_additions": additions,
+		"total_deletions": deletions,
 	})
 }

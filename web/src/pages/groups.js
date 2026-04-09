@@ -1,5 +1,5 @@
 import { Layout, Loading, EmptyState } from '../components.js';
-import { GroupService } from '../api.js';
+import { GroupService, UserService, API, Auth } from '../api.js';
 
 const Groups = {
     oninit(vnode) {
@@ -63,10 +63,28 @@ const GroupDetail = {
     oninit(vnode) {
         const { name } = vnode.attrs;
         vnode.state.group = null;
+        vnode.state.currentUser = null;
+        vnode.state.members = [];
         vnode.state.loading = true;
+        vnode.state.editing = false;
+        vnode.state.editForm = {};
+        vnode.state.activeTab = 'overview';
+        vnode.state.showAddMember = false;
+        vnode.state.newMemberUsername = '';
+        vnode.state.newMemberRole = 'member';
 
-        GroupService.get(name).then(result => {
-            vnode.state.group = result;
+        GroupDetail.loadGroup(vnode, name);
+    },
+
+    loadGroup(vnode, name) {
+        Promise.all([
+            GroupService.get(name),
+            API.get('/user/me'),
+            GroupService.getMembers(name)
+        ]).then(([groupResult, userResult, membersResult]) => {
+            vnode.state.group = groupResult;
+            vnode.state.currentUser = userResult;
+            vnode.state.members = membersResult.data || [];
             vnode.state.loading = false;
             m.redraw();
         }).catch(() => {
@@ -75,8 +93,111 @@ const GroupDetail = {
         });
     },
 
+    canEdit(vnode) {
+        const { currentUser, group } = vnode.state;
+        if (!currentUser || !group) return false;
+        if (currentUser.is_admin) return true;
+        const member = vnode.state.members.find(m => m.user.id === currentUser.id);
+        return member && (member.role === 'owner' || member.role === 'admin');
+    },
+
+    startEdit(vnode) {
+        const { group } = vnode.state;
+        vnode.state.editing = true;
+        vnode.state.editForm = {
+            display_name: group.display_name || '',
+            description: group.description || '',
+            website: group.website || '',
+            location: group.location || ''
+        };
+    },
+
+    cancelEdit(vnode) {
+        vnode.state.editing = false;
+        vnode.state.editForm = {};
+    },
+
+    saveEdit(vnode) {
+        const { name } = vnode.attrs;
+        vnode.state.saving = true;
+        
+        GroupService.update(name, vnode.state.editForm).then(result => {
+            vnode.state.group = result;
+            vnode.state.editing = false;
+            vnode.state.saving = false;
+            m.redraw();
+        }).catch(error => {
+            vnode.state.saving = false;
+            alert('保存失败: ' + (error.message || '未知错误'));
+            m.redraw();
+        });
+    },
+
+    handleAvatarUpload(vnode, e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const formData = new FormData();
+        formData.append('avatar', file);
+
+        const { name } = vnode.attrs;
+        vnode.state.uploadingAvatar = true;
+
+        GroupService.uploadAvatar(name, formData).then(result => {
+            vnode.state.group = result;
+            vnode.state.uploadingAvatar = false;
+            m.redraw();
+        }).catch(error => {
+            vnode.state.uploadingAvatar = false;
+            alert('上传失败: ' + (error.message || '未知错误'));
+            m.redraw();
+        });
+    },
+
+    addMember(vnode) {
+        const { name } = vnode.attrs;
+        const { newMemberUsername, newMemberRole } = vnode.state;
+
+        if (!newMemberUsername) {
+            alert('请输入用户名');
+            return;
+        }
+
+        vnode.state.addingMember = true;
+
+        GroupService.addMember(name, {
+            username: newMemberUsername,
+            role: newMemberRole
+        }).then(() => {
+            vnode.state.showAddMember = false;
+            vnode.state.newMemberUsername = '';
+            vnode.state.newMemberRole = 'member';
+            vnode.state.addingMember = false;
+            GroupDetail.loadGroup(vnode, name);
+        }).catch(error => {
+            vnode.state.addingMember = false;
+            alert('添加成员失败: ' + (error.message || '未知错误'));
+            m.redraw();
+        });
+    },
+
+    removeMember(vnode, username) {
+        if (!confirm(`确定要移除成员 ${username} 吗？`)) {
+            return;
+        }
+
+        const { name } = vnode.attrs;
+
+        GroupService.removeMember(name, username).then(() => {
+            GroupDetail.loadGroup(vnode, name);
+        }).catch(error => {
+            alert('移除成员失败: ' + (error.message || '未知错误'));
+            m.redraw();
+        });
+    },
+
     view(vnode) {
-        const { group, loading } = vnode.state;
+        const { group, loading, editing, editForm, saving, activeTab, members, currentUser, showAddMember, newMemberUsername, newMemberRole, uploadingAvatar, addingMember } = vnode.state;
 
         if (loading) {
             return m(Layout, m(Loading));
@@ -89,35 +210,159 @@ const GroupDetail = {
         return m(Layout, [
             m('div.group-detail-page', [
                 m('div.group-header', [
-                    m('div.group-avatar-large', [
+                    m('div.group-avatar-large', {
+                        style: { position: 'relative' }
+                    }, [
                         group.avatar 
                             ? m('img', { src: group.avatar, alt: group.name })
-                            : m('div.avatar-placeholder', group.display_name ? group.display_name[0].toUpperCase() : group.name[0].toUpperCase())
+                            : m('div.avatar-placeholder', group.display_name ? group.display_name[0].toUpperCase() : group.name[0].toUpperCase()),
+                        GroupDetail.canEdit(vnode) ? m('div.avatar-upload-overlay', {
+                            onclick: () => document.getElementById('avatar-input').click()
+                        }, [
+                            m('i.fas.fa-camera'),
+                            m('input#avatar-input', {
+                                type: 'file',
+                                accept: 'image/*',
+                                style: { display: 'none' },
+                                onchange: e => GroupDetail.handleAvatarUpload(vnode, e)
+                            })
+                        ]) : null,
+                        uploadingAvatar ? m('div.avatar-uploading', [
+                            m('i.fas.fa-spinner.fa-spin')
+                        ]) : null
                     ]),
                     m('div.group-info', [
-                        m('h1', group.display_name || group.name),
-                        group.description ? m('p.group-description', group.description) : null,
-                        m('div.group-meta', [
-                            m('span', [m('i.fas.fa-users'), ` ${group.members_count || 0} 成员`]),
-                            group.location ? m('span', [m('i.fas.fa-map-marker-alt'), ` ${group.location}`]) : null,
-                            group.website ? m('a', { href: group.website, target: '_blank' }, [m('i.fas.fa-globe'), ' 网站']) : null
-                        ])
+                        editing ? [
+                            m('div.form-group', [
+                                m('input.form-input', {
+                                    type: 'text',
+                                    value: editForm.display_name,
+                                    oninput: e => { editForm.display_name = e.target.value; },
+                                    placeholder: '显示名称'
+                                })
+                            ]),
+                            m('div.form-group', [
+                                m('textarea.form-input', {
+                                    value: editForm.description,
+                                    oninput: e => { editForm.description = e.target.value; },
+                                    placeholder: '团队描述',
+                                    rows: 2
+                                })
+                            ]),
+                            m('div.form-group', [
+                                m('input.form-input', {
+                                    type: 'url',
+                                    value: editForm.website,
+                                    oninput: e => { editForm.website = e.target.value; },
+                                    placeholder: '网站'
+                                })
+                            ]),
+                            m('div.form-group', [
+                                m('input.form-input', {
+                                    type: 'text',
+                                    value: editForm.location,
+                                    oninput: e => { editForm.location = e.target.value; },
+                                    placeholder: '位置'
+                                })
+                            ]),
+                            m('div.form-actions', [
+                                m('button.btn.btn-primary', {
+                                    onclick: () => GroupDetail.saveEdit(vnode),
+                                    disabled: saving
+                                }, saving ? '保存中...' : '保存'),
+                                m('button.btn', {
+                                    onclick: () => GroupDetail.cancelEdit(vnode)
+                                }, '取消')
+                            ])
+                        ] : [
+                            m('h1', group.display_name || group.name),
+                            group.description ? m('p.group-description', group.description) : null,
+                            m('div.group-meta', [
+                                m('span', [m('i.fas.fa-users'), ` ${members.length} 成员`]),
+                                group.location ? m('span', [m('i.fas.fa-map-marker-alt'), ` ${group.location}`]) : null,
+                                group.website ? m('a', { href: group.website, target: '_blank' }, [m('i.fas.fa-globe'), ' 网站']) : null
+                            ]),
+                            GroupDetail.canEdit(vnode) ? m('button.btn.btn-secondary', {
+                                onclick: () => GroupDetail.startEdit(vnode),
+                                style: { marginTop: '10px' }
+                            }, [m('i.fas.fa-edit'), ' 编辑团队信息']) : null
+                        ]
                     ])
                 ]),
 
                 m('div.group-tabs', [
-                    m('a.tab.active', { href: '#' }, '概览'),
-                    m('a.tab', { href: '#' }, '成员'),
+                    m('a.tab' + (activeTab === 'overview' ? '.active' : ''), {
+                        onclick: () => { vnode.state.activeTab = 'overview'; }
+                    }, '概览'),
+                    m('a.tab' + (activeTab === 'members' ? '.active' : ''), {
+                        onclick: () => { vnode.state.activeTab = 'members'; }
+                    }, '成员'),
                     m('a.tab', { href: '#' }, '项目'),
                     m('a.tab', { href: '#' }, '设置')
                 ]),
 
                 m('div.group-content', [
-                    m('div.info-section', [
-                        m('h3', '团队信息'),
-                        m('div.info-row', [m('strong', '名称: '), group.name]),
-                        m('div.info-row', [m('strong', '创建时间: '), group.created_at])
-                    ])
+                    activeTab === 'overview' ? [
+                        m('div.info-section', [
+                            m('h3', '团队信息'),
+                            m('div.info-row', [m('strong', '名称: '), group.name]),
+                            m('div.info-row', [m('strong', '创建时间: '), group.created_at])
+                        ])
+                    ] : activeTab === 'members' ? [
+                        m('div.members-section', [
+                            m('div.members-header', [
+                                m('h3', '团队成员'),
+                                GroupDetail.canEdit(vnode) ? m('button.btn.btn-primary', {
+                                    onclick: () => { vnode.state.showAddMember = !showAddMember; }
+                                }, [m('i.fas.fa-plus'), ' 添加成员']) : null
+                            ]),
+                            showAddMember ? m('div.add-member-form', [
+                                m('div.form-row', [
+                                    m('input.form-input', {
+                                        type: 'text',
+                                        placeholder: '用户名',
+                                        value: newMemberUsername,
+                                        oninput: e => { vnode.state.newMemberUsername = e.target.value; }
+                                    }),
+                                    m('select.form-input', {
+                                        value: newMemberRole,
+                                        onchange: e => { vnode.state.newMemberRole = e.target.value; }
+                                    }, [
+                                        m('option', { value: 'member' }, '成员'),
+                                        m('option', { value: 'admin' }, '管理员')
+                                    ]),
+                                    m('button.btn.btn-primary', {
+                                        onclick: () => GroupDetail.addMember(vnode),
+                                        disabled: addingMember
+                                    }, addingMember ? '添加中...' : '添加'),
+                                    m('button.btn', {
+                                        onclick: () => { vnode.state.showAddMember = false; }
+                                    }, '取消')
+                                ])
+                            ]) : null,
+                            m('div.members-list', members.map(member => 
+                                m('div.member-card', [
+                                    m('div.member-avatar', [
+                                        member.user.avatar 
+                                            ? m('img', { src: member.user.avatar, alt: member.user.username })
+                                            : m('div.avatar-placeholder', member.user.username[0].toUpperCase())
+                                    ]),
+                                    m('div.member-info', [
+                                        m('div.member-header', [
+                                            m('h4.member-name', member.user.full_name || member.user.username),
+                                            m('span.member-role', member.role === 'owner' ? '所有者' : member.role === 'admin' ? '管理员' : '成员')
+                                        ]),
+                                        m('p.member-email', member.user.email)
+                                    ]),
+                                    GroupDetail.canEdit(vnode) && member.role !== 'owner' ? m('div.member-actions', [
+                                        m('button.btn.btn-danger.btn-sm', {
+                                            onclick: () => GroupDetail.removeMember(vnode, member.user.username)
+                                        }, [m('i.fas.fa-times'), ' 移除'])
+                                    ]) : null
+                                ])
+                            ))
+                        ])
+                    ] : null
                 ])
             ])
         ]);
@@ -133,41 +378,45 @@ const NewGroup = {
             website: '',
             location: ''
         };
-        vnode.state.submitting = false;
+        vnode.state.creating = false;
     },
 
-    submit(vnode) {
-        if (!vnode.state.form.name) {
+    create(vnode) {
+        const { form } = vnode.state;
+
+        if (!form.name) {
             alert('请输入团队名称');
             return;
         }
 
-        vnode.state.submitting = true;
-        GroupService.create(vnode.state.form).then(result => {
+        vnode.state.creating = true;
+
+        GroupService.create(form).then(result => {
+            vnode.state.creating = false;
             m.route.set(`/groups/${result.name}`);
         }).catch(error => {
-            vnode.state.submitting = false;
+            vnode.state.creating = false;
             alert('创建失败: ' + (error.message || '未知错误'));
             m.redraw();
         });
     },
 
     view(vnode) {
-        const { form, submitting } = vnode.state;
+        const { form, creating } = vnode.state;
 
         return m(Layout, [
             m('div.page-header', [
-                m('h1', [m('i.fas.fa-users'), ' 新建团队'])
+                m('h1', [m('i.fas.fa-plus'), ' 新建团队'])
             ]),
 
-            m('div.form-container', [
+            m('div.new-group-form', [
                 m('div.form-group', [
                     m('label', '团队名称 *'),
                     m('input.form-input', {
                         type: 'text',
                         value: form.name,
                         oninput: e => { form.name = e.target.value; },
-                        placeholder: '例如: my-group'
+                        placeholder: '团队唯一标识（英文字母、数字、下划线）'
                     })
                 ]),
 
@@ -177,7 +426,7 @@ const NewGroup = {
                         type: 'text',
                         value: form.display_name,
                         oninput: e => { form.display_name = e.target.value; },
-                        placeholder: '例如: 我的团队'
+                        placeholder: '团队显示名称'
                     })
                 ]),
 
@@ -207,15 +456,15 @@ const NewGroup = {
                         type: 'text',
                         value: form.location,
                         oninput: e => { form.location = e.target.value; },
-                        placeholder: '例如: 北京'
+                        placeholder: '城市, 国家'
                     })
                 ]),
 
                 m('div.form-actions', [
                     m('button.btn.btn-primary', {
-                        onclick: () => NewGroup.submit(vnode),
-                        disabled: submitting
-                    }, submitting ? '创建中...' : '创建团队'),
+                        onclick: () => NewGroup.create(vnode),
+                        disabled: creating
+                    }, creating ? '创建中...' : '创建团队'),
                     m('button.btn', {
                         onclick: () => m.route.set('/groups')
                     }, '取消')

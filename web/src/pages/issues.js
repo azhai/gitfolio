@@ -1,5 +1,5 @@
 import { Layout, Loading, ProjectHeader, ProjectTabs, EmptyState, IssueItem } from '../components.js';
-import { RepositoryService, IssueService, PullRequestService, LabelService } from '../api.js';
+import { RepositoryService, IssueService, PullRequestService, TaskService, LabelService } from '../api.js';
 
 const IssueList = {
     oninit(vnode) {
@@ -12,17 +12,20 @@ const IssueList = {
         vnode.state.filter = 'open';
         vnode.state.labelFilter = '';
         vnode.state.prsCount = 0;
+        vnode.state.tasksCount = 0;
         
         Promise.all([
             RepositoryService.get(owner, repo),
             IssueService.list(owner, repo, { per_page: 1000 }),
             PullRequestService.list(owner, repo, { per_page: 1000 }),
+            TaskService.list(owner, repo, { per_page: 1 }),
             LabelService.list(owner, repo)
-        ]).then(([repoResult, issuesResult, prsResult, labelsResult]) => {
+        ]).then(([repoResult, issuesResult, prsResult, tasksResult, labelsResult]) => {
             vnode.state.repo = repoResult.data || repoResult;
             vnode.state.issues = issuesResult.data || issuesResult || [];
             vnode.state.labels = labelsResult || [];
             vnode.state.prsCount = (prsResult.data || prsResult || []).filter(p => !p.is_closed && !p.is_merged).length;
+            vnode.state.tasksCount = tasksResult.total || 0;
             vnode.state.loading = false;
             m.redraw();
         }).catch(error => {
@@ -62,7 +65,7 @@ const IssueList = {
         
         return m(Layout, [
             m(ProjectHeader, { repo, owner }),
-            m(ProjectTabs, { owner, repo: repo.name, activeTab: 'issues', issuesCount: openCount, prsCount: vnode.state.prsCount }),
+            m(ProjectTabs, { owner, repo: repo, activeTab: 'issues', issuesCount: openCount, prsCount: vnode.state.prsCount, tasksCount: vnode.state.tasksCount }),
             
             m('div.issues-page', [
                 m('div.issues-header', [

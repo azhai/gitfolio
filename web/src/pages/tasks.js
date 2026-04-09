@@ -12,6 +12,7 @@ const TaskList = {
         vnode.state.priorityFilter = '';
         vnode.state.prsCount = 0;
         vnode.state.issuesCount = 0;
+        vnode.state.tasksCount = 0;
         
         Promise.all([
             RepositoryService.get(owner, repo),
@@ -22,6 +23,7 @@ const TaskList = {
             vnode.state.repo = repoResult.data || repoResult;
             const taskData = tasksResult.data || tasksResult;
             vnode.state.tasks = Array.isArray(taskData) ? taskData : [];
+            vnode.state.tasksCount = tasksResult.total || vnode.state.tasks.length;
             const prData = prsResult.data || prsResult;
             vnode.state.prsCount = Array.isArray(prData) ? prData.filter(p => !p.is_closed && !p.is_merged).length : 0;
             const issuesData = issuesResult.data || issuesResult;
@@ -82,7 +84,7 @@ const TaskList = {
         
         return m(Layout, [
             m(ProjectHeader, { repo, owner }),
-            m(ProjectTabs, { owner, repo: repo.name, activeTab: 'tasks', issuesCount: vnode.state.issuesCount, prsCount: vnode.state.prsCount }),
+            m(ProjectTabs, { owner, repo: repo, activeTab: 'tasks', issuesCount: vnode.state.issuesCount, prsCount: vnode.state.prsCount, tasksCount: vnode.state.tasksCount }),
             
             m('div.tasks-page', [
                 m('div.tasks-header', [

@@ -1,5 +1,5 @@
 import { Layout, Loading, ProjectHeader, ProjectTabs, MarkdownEditor } from '../components.js';
-import { RepositoryService, PullRequestService, IssueService } from '../api.js';
+import { RepositoryService, PullRequestService, IssueService, TaskService } from '../api.js';
 
 const NewPullRequest = {
     oninit(vnode) {
@@ -10,6 +10,7 @@ const NewPullRequest = {
         vnode.state.submitting = false;
         vnode.state.prsCount = 0;
         vnode.state.issuesCount = 0;
+        vnode.state.tasksCount = 0;
         vnode.state.branches = ['main', 'develop'];
         vnode.state.formData = {
             title: '',
@@ -21,11 +22,13 @@ const NewPullRequest = {
         Promise.all([
             RepositoryService.get(owner, repo),
             IssueService.list(owner, repo, { state: 'all', per_page: 1000 }),
-            PullRequestService.list(owner, repo, { state: 'all', per_page: 1000 })
-        ]).then(([repoResult, issuesResult, prsResult]) => {
+            PullRequestService.list(owner, repo, { state: 'all', per_page: 1000 }),
+            TaskService.list(owner, repo, { per_page: 1 })
+        ]).then(([repoResult, issuesResult, prsResult, tasksResult]) => {
             vnode.state.repo = repoResult.data || repoResult;
             vnode.state.issuesCount = (issuesResult.data || issuesResult || []).filter(i => !i.is_closed).length;
             vnode.state.prsCount = (prsResult.data || prsResult || []).filter(p => !p.is_closed && !p.is_merged).length;
+            vnode.state.tasksCount = tasksResult.total || 0;
             vnode.state.loading = false;
             m.redraw();
         }).catch(error => {
@@ -78,7 +81,7 @@ const NewPullRequest = {
         return m(Layout, [
             m(ProjectHeader, {
                 owner: owner,
-                repo: repo.name,
+                repo: repo,
                 description: repo.description,
                 stars: repo.stars_count,
                 forks: repo.forks_count,
@@ -87,9 +90,10 @@ const NewPullRequest = {
             
             m(ProjectTabs, {
                 owner: owner,
-                repo: repo.name,
+                repo: repo,
                 issuesCount: issuesCount,
                 prsCount: prsCount,
+                tasksCount: vnode.state.tasksCount,
                 activeTab: 'prs'
             }),
             

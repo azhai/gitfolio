@@ -8,6 +8,7 @@ import (
 	"github.com/azhai/gitfolio/middleware"
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/cors"
+	"github.com/gofiber/fiber/v3/middleware/static"
 )
 
 func SetupRouter() *fiber.App {
@@ -30,6 +31,8 @@ func SetupRouter() *fiber.App {
 	app.Get("/static/styles.css", func(c fiber.Ctx) error {
 		return c.SendFile("./web/styles.css")
 	})
+
+	app.Get("/uploads/*", static.New("./uploads"))
 
 	app.Get("/static/vendor/*", func(c fiber.Ctx) error {
 		path := c.Params("*")
@@ -73,6 +76,8 @@ func setupAPIRoutes(app *fiber.App) {
 
 	api.Get("/users/:username", middleware.OptionalAuth(), handlers.GetUser)
 	api.Get("/users/:username/repos", middleware.OptionalAuth(), handlers.GetUserRepositories)
+	api.Put("/users/:username", middleware.AuthMiddleware(), handlers.UpdateUserByUsername)
+	api.Post("/users/:username/avatar", middleware.AuthMiddleware(), handlers.UploadUserAvatar)
 
 	api.Get("/repos", middleware.OptionalAuth(), handlers.ListRepositories)
 	api.Post("/repos", middleware.AuthMiddleware(), handlers.CreateRepository)
@@ -81,6 +86,11 @@ func setupAPIRoutes(app *fiber.App) {
 	api.Get("/groups", handlers.ListGroups)
 	api.Post("/groups", middleware.AuthMiddleware(), handlers.CreateGroup)
 	api.Get("/groups/:name", handlers.GetGroup)
+	api.Put("/groups/:name", middleware.AuthMiddleware(), handlers.UpdateGroup)
+	api.Post("/groups/:name/avatar", middleware.AuthMiddleware(), handlers.UploadGroupAvatar)
+	api.Get("/groups/:name/members", handlers.ListGroupMembers)
+	api.Post("/groups/:name/members", middleware.AuthMiddleware(), handlers.AddGroupMember)
+	api.Delete("/groups/:name/members/:username", middleware.AuthMiddleware(), handlers.RemoveGroupMember)
 
 	api.Get("/activities", handlers.ListActivities)
 	api.Post("/activities", middleware.AuthMiddleware(), handlers.CreateActivity)
@@ -115,9 +125,19 @@ func setupRepositoryRoutes(api fiber.Router) {
 	repo.Post("/sync/push", middleware.AuthMiddleware(), handlers.SyncPushRepository)
 
 	repo.Get("/tree", middleware.OptionalAuth(), handlers.GetRepositoryTree)
+	repo.Get("/tree/*", middleware.OptionalAuth(), handlers.GetRepositoryTree)
 	repo.Get("/file", middleware.OptionalAuth(), handlers.GetRepositoryFile)
+	repo.Get("/file/*", middleware.OptionalAuth(), handlers.GetRepositoryFile)
 	repo.Get("/branches", middleware.OptionalAuth(), handlers.GetRepositoryBranches)
+	repo.Get("/tags", middleware.OptionalAuth(), handlers.GetRepositoryTags)
+	repo.Get("/commits", middleware.OptionalAuth(), handlers.GetRepositoryCommits)
+	repo.Get("/last-commit", middleware.OptionalAuth(), handlers.GetRepositoryLastCommit)
 	repo.Get("/contributors", middleware.OptionalAuth(), handlers.GetRepositoryContributors)
+	repo.Post("/refresh-stats", middleware.AuthMiddleware(), handlers.RefreshRepositoryStats)
+	repo.Get("/code-stats", middleware.OptionalAuth(), handlers.GetCodeStats)
+	repo.Get("/commit-activity", middleware.OptionalAuth(), handlers.GetCommitActivity)
+
+	repo.Post("/rebase", middleware.AuthMiddleware(), handlers.RebaseCommits)
 
 	repo.Post("/star", middleware.AuthMiddleware(), handlers.StarRepository)
 	repo.Delete("/star", middleware.AuthMiddleware(), handlers.UnstarRepository)
@@ -134,9 +154,15 @@ func setupRepositoryRoutes(api fiber.Router) {
 
 	repo.Get("/labels", handlers.ListLabels)
 
+	repo.Get("/releases", handlers.ListReleases)
+	repo.Get("/releases/:tag", handlers.GetRelease)
+	repo.Post("/releases/sync", middleware.AuthMiddleware(), handlers.SyncReleases)
+
 	repo.Get("/pull_requests", handlers.ListPullRequests)
 	repo.Post("/pull_requests", middleware.AuthMiddleware(), handlers.CreatePullRequest)
 	repo.Get("/pull_requests/:number", handlers.GetPullRequest)
+	repo.Get("/pull_requests/:number/commits", handlers.GetPRCommits)
+	repo.Get("/pull_requests/:number/files", handlers.GetPRFiles)
 	repo.Put("/pull_requests/:number", middleware.AuthMiddleware(), handlers.UpdatePullRequest)
 	repo.Post("/pull_requests/:number/merge", middleware.AuthMiddleware(), handlers.MergePullRequest)
 	repo.Post("/pull_requests/:number/close", middleware.AuthMiddleware(), handlers.ClosePullRequest)
