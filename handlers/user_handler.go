@@ -9,17 +9,20 @@ import (
 	"github.com/gofiber/fiber/v3"
 )
 
+// RegisterRequest 注册请求
 type RegisterRequest struct {
 	Username string `json:"username" validate:"required,min=3,max=64"`
 	Email    string `json:"email" validate:"required,email"`
 	Password string `json:"password" validate:"required,min=6"`
 }
 
+// LoginRequest 登录请求
 type LoginRequest struct {
 	Username string `json:"username" validate:"required"`
 	Password string `json:"password" validate:"required"`
 }
 
+// UpdateUserRequest 更新用户信息请求
 type UpdateUserRequest struct {
 	FullName string `json:"full_name"`
 	Bio      string `json:"bio"`
@@ -27,6 +30,7 @@ type UpdateUserRequest struct {
 	Location string `json:"location"`
 }
 
+// UserResponse 用户信息响应
 type UserResponse struct {
 	ID        int64  `json:"id"`
 	Username  string `json:"username"`
@@ -43,6 +47,7 @@ type UserResponse struct {
 	UpdatedAt string `json:"updated_at"`
 }
 
+// ToUserResponse 将用户模型转换为 API 响应，无头像时使用占位图
 func ToUserResponse(user *models.User) *UserResponse {
 	avatarURL := user.Avatar
 	if avatarURL == "" {
@@ -65,6 +70,7 @@ func ToUserResponse(user *models.User) *UserResponse {
 	}
 }
 
+// Register 注册新用户，返回用户信息和 JWT 令牌
 func Register(c fiber.Ctx) error {
 	var req RegisterRequest
 	if err := c.Bind().JSON(&req); err != nil {
@@ -108,6 +114,7 @@ func Register(c fiber.Ctx) error {
 	})
 }
 
+// Login 用户登录，验证凭据后返回 JWT 令牌
 func Login(c fiber.Ctx) error {
 	var req LoginRequest
 	if err := c.Bind().JSON(&req); err != nil {
@@ -140,6 +147,7 @@ func Login(c fiber.Ctx) error {
 	})
 }
 
+// GetCurrentUser 获取当前登录用户信息
 func GetCurrentUser(c fiber.Ctx) error {
 	userID := middleware.GetCurrentUserID(c)
 	if userID == 0 {
@@ -156,6 +164,7 @@ func GetCurrentUser(c fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(ToUserResponse(userModel))
 }
 
+// GetUser 根据用户名获取用户公开信息
 func GetUser(c fiber.Ctx) error {
 	username := c.Params("username")
 
@@ -169,6 +178,7 @@ func GetUser(c fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(ToUserResponse(userModel))
 }
 
+// UpdateUser 更新当前登录用户的个人信息
 func UpdateUser(c fiber.Ctx) error {
 	userID := middleware.GetCurrentUserID(c)
 	var req UpdateUserRequest
@@ -205,6 +215,7 @@ func UpdateUser(c fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(ToUserResponse(userModel))
 }
 
+// UpdateUserByUsername 管理员根据用户名更新用户信息
 func UpdateUserByUsername(c fiber.Ctx) error {
 	currentUserID := middleware.GetCurrentUserID(c)
 	targetUsername := c.Params("username")
@@ -269,6 +280,7 @@ func UpdateUserByUsername(c fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(ToUserResponse(targetUser))
 }
 
+// GetUserRepositories 获取指定用户的仓库列表，非本人仅返回公开仓库
 func GetUserRepositories(c fiber.Ctx) error {
 	username := c.Params("username")
 	page, _ := strconv.Atoi(c.Query("page", strconv.Itoa(config.DefaultPage)))
@@ -298,6 +310,65 @@ func GetUserRepositories(c fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(repos)
 }
 
+// ListUsers 获取所有用户列表
+func ListUsers(c fiber.Ctx) error {
+	db := models.GetDB()
+
+	users, err := db.User.Select().All()
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch users"})
+	}
+
+	response := make([]*UserResponse, 0)
+	for _, user := range users {
+		response = append(response, ToUserResponse(user))
+	}
+
+	return c.Status(fiber.StatusOK).JSON(response)
+}
+
+// ChangePasswordRequest 修改密码请求
+type ChangePasswordRequest struct {
+	OldPassword string `json:"old_password" validate:"required"`
+	NewPassword string `json:"new_password" validate:"required,min=6"`
+}
+
+// ChangePassword 修改当前用户密码
+func ChangePassword(c fiber.Ctx) error {
+	userID := middleware.GetCurrentUserID(c)
+	if userID == 0 {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Not authenticated"})
+	}
+
+	var req ChangePasswordRequest
+	if err := c.Bind().JSON(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	db := models.GetDB()
+
+	userModel, err := db.User.Select().Where("id = ?", userID).One()
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "User not found"})
+	}
+
+	if !userModel.CheckPassword(req.OldPassword) {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Current password is incorrect"})
+	}
+
+	if err := userModel.SetPassword(req.NewPassword); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update password"})
+	}
+
+	err = db.User.Save().One(userModel)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to save user"})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Password changed successfully"})
+}
+
+// Logout 用户登出
 func Logout(c fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Logged out successfully"})
 }

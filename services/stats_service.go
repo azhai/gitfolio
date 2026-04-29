@@ -31,6 +31,19 @@ func (s *StatsService) UpdateRepositoryStats(repoID int64, owner, name string) e
 	commitsCount, _ := gitSvc.GetCommitCount(owner, name, "")
 	tagsCount, _ := gitSvc.GetTagCount(owner, name)
 
+	if commitsCount > 0 {
+		_, commitTimeStr, _, err := gitSvc.GetLastCommitInfo(owner, name, "")
+		if err == nil && commitTimeStr != "" {
+			if commitTime, err := time.Parse("2006-01-02 15:04:05 -0700", commitTimeStr); err == nil {
+				repo, repoErr := s.db.Repository.Select().Where("id = ?", repoID).One()
+				if repoErr == nil {
+					repo.LastCommitAt = &commitTime
+					s.db.Repository.Save().One(repo)
+				}
+			}
+		}
+	}
+
 	stats.OpenIssuesCount = int(openIssues)
 	stats.ClosedIssuesCount = int(closedIssues)
 	stats.OpenPRsCount = int(openPRs)

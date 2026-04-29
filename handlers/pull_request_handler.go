@@ -2,12 +2,14 @@ package handlers
 
 import (
 	"strconv"
+	"time"
 
 	"github.com/azhai/gitfolio/config"
 	"github.com/azhai/gitfolio/helpers"
 	"github.com/azhai/gitfolio/middleware"
 	"github.com/azhai/gitfolio/models"
 	"github.com/azhai/gitfolio/services"
+	"github.com/azhai/goent"
 	"github.com/gofiber/fiber/v3"
 )
 
@@ -79,13 +81,66 @@ func ToPRResponse(mr *models.PullRequest, author *models.Contributor, assignee *
 	return response
 }
 
-func getPRCommentsCount(db *models.Database, prID int64) int {
-	count, _ := db.Comment.Select().Where("pull_request_id = ?", prID).Count("*")
-	return int(count)
+// buildPRResponse 构建 PR 响应，自动查询贡献者和评论数
+func buildPRResponse(db *models.Database, mr *models.PullRequest) *PRResponse {
+	authorContrib := helpers.GetContributor(db, mr.AuthorID)
+
+	var assigneeContrib *models.Contributor
+	if mr.AssigneeID != nil {
+		assigneeContrib, _ = db.Contributor.Select().Where("id = ?", *mr.AssigneeID).One()
+	}
+
+	commentsCount, _ := db.Comment.Select().Filter(
+		goent.Equals(db.Comment.Field("pull_request_id"), mr.ID),
+	).Count("id")
+
+	return ToPRResponse(mr, authorContrib, assigneeContrib, int(commentsCount), 0)
 }
 
-func getPRFilesCount(db *models.Database, prID int64) int {
-	return 0
+// findPRByNumber 根据仓库 ID 和 PR 编号查找 PR
+func findPRByNumber(db *models.Database, repoID int64, number int) (*models.PullRequest, error) {
+	return db.PullRequest.Select().Where("repository_id = ? AND number = ?", repoID, number).One()
+}
+
+// checkPRAccess 检查当前用户是否有权限修改 PR（作者或仓库所有者）
+func checkPRAccess(c fiber.Ctx, mr *models.PullRequest, repoOwnerID int64) error {
+	userID := middleware.GetCurrentUserID(c)
+	if mr.AuthorID != userID && repoOwnerID != userID {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Access denied"})
+	}
+	return nil
+}
+
+func autoTransitionLinkedTasks(db *models.Database, prID int64, userID int64) {
+	links, err := db.TaskPullRequest.Select().Where("pull_request_id = ?", prID).All()
+	if err != nil || len(links) == 0 {
+		return
+	}
+
+	for _, link := range links {
+		task, err := db.Task.Select().Where("id = ?", link.TaskID).One()
+		if err != nil || task == nil {
+			continue
+		}
+
+		if task.Status != "progress" && task.Status != "review" {
+			continue
+		}
+
+		transition := &models.TaskTransition{
+			TaskID:     task.ID,
+			FromStatus: task.Status,
+			ToStatus:   "review",
+			UserID:     userID,
+			Comment:    "Auto-transitioned: linked PR was merged",
+		}
+		db.TaskTransition.Insert().One(transition)
+
+		task.Status = "review"
+		now := time.Now()
+		task.LastHandledAt = &now
+		db.Task.Save().One(task)
+	}
 }
 
 func CreatePullRequest(c fiber.Ctx) error {
@@ -143,37 +198,16 @@ func GetPullRequest(c fiber.Ctx) error {
 
 	db := models.GetDB()
 
-	mr, err := db.PullRequest.Select().Where("repository_id = ? AND number = ?", result.Repo.ID, mrNumber).One()
+	mr, err := findPRByNumber(db, result.Repo.ID, mrNumber)
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Merge request not found"})
 	}
 
-	if mr == nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Merge request not found"})
-	}
-
-	authorContrib, _ := db.Contributor.Select().Where("id = ?", mr.AuthorID).One()
-	if authorContrib == nil {
-		authorContrib = &models.Contributor{Name: "Unknown"}
-	}
-
-	var assigneeContrib *models.Contributor
-	if mr.AssigneeID != nil {
-		assigneeContrib, _ = db.Contributor.Select().Where("id = ?", *mr.AssigneeID).One()
-	}
-
-	commentsCount := getPRCommentsCount(db, mr.ID)
-	filesCount := getPRFilesCount(db, mr.ID)
-
-	return c.Status(fiber.StatusOK).JSON(ToPRResponse(mr, authorContrib, assigneeContrib, commentsCount, filesCount))
+	return c.Status(fiber.StatusOK).JSON(buildPRResponse(db, mr))
 }
 
 func ListPullRequests(c fiber.Ctx) error {
-	page, _ := strconv.Atoi(c.Query("page", strconv.Itoa(config.DefaultPage)))
-	perPage, _ := strconv.Atoi(c.Query("per_page", strconv.Itoa(config.DefaultPerPage)))
-	if perPage > config.MaxPerPage {
-		perPage = config.MaxPerPage
-	}
+	pagination := helpers.GetPagination(c)
 	state := c.Query("state", config.PRStatusOpen)
 
 	result, err := helpers.GetOwnerAndRepoWithPrivateAccessFromParams(c)
@@ -198,28 +232,19 @@ func ListPullRequests(c fiber.Ctx) error {
 		query = query.Where("is_merged = ?", true)
 	}
 
-	mrs, err := query.Skip((page - 1) * perPage).Take(perPage).All()
+	mrs, err := query.Skip(helpers.GetOffset(pagination.Page, pagination.PerPage)).Take(pagination.PerPage).All()
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch merge requests"})
 	}
 
-	contributorIDs := make(map[int64]bool)
-	for _, mr := range mrs {
-		if mr.AuthorID != 0 {
-			contributorIDs[mr.AuthorID] = true
-		}
-		if mr.AssigneeID != nil && *mr.AssigneeID != 0 {
-			contributorIDs[*mr.AssigneeID] = true
-		}
-	}
+	contributorIDs := helpers.CollectPRContributorIDs(mrs)
+	contributorsMap := helpers.BatchGetContributors(db, contributorIDs)
 
-	contributorsMap := make(map[int64]*models.Contributor)
-	for contributorID := range contributorIDs {
-		contrib, err := db.Contributor.Select().Where("id = ?", contributorID).One()
-		if err == nil {
-			contributorsMap[contributorID] = contrib
-		}
+	var prIDs []int64
+	for _, mr := range mrs {
+		prIDs = append(prIDs, mr.ID)
 	}
+	commentsCountMap := helpers.BatchGetCommentsCount(db, prIDs, "pull_request")
 
 	var response []*PRResponse
 	response = make([]*PRResponse, 0, len(mrs))
@@ -234,22 +259,19 @@ func ListPullRequests(c fiber.Ctx) error {
 			assigneeContrib = contributorsMap[*mr.AssigneeID]
 		}
 
-		commentsCount := getPRCommentsCount(db, mr.ID)
-		filesCount := getPRFilesCount(db, mr.ID)
-
-		response = append(response, ToPRResponse(mr, authorContrib, assigneeContrib, commentsCount, filesCount))
+		commentsCount := commentsCountMap[mr.ID]
+		response = append(response, ToPRResponse(mr, authorContrib, assigneeContrib, commentsCount, 0))
 	}
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
 		"data":     response,
-		"page":     page,
-		"per_page": perPage,
+		"page":     pagination.Page,
+		"per_page": pagination.PerPage,
 	})
 }
 
 func UpdatePullRequest(c fiber.Ctx) error {
 	mrNumber, _ := strconv.Atoi(c.Params("number"))
-	userID := middleware.GetCurrentUserID(c)
 
 	var req UpdatePullRequestRequest
 	if err := c.Bind().JSON(&req); err != nil {
@@ -263,13 +285,13 @@ func UpdatePullRequest(c fiber.Ctx) error {
 
 	db := models.GetDB()
 
-	mr, err := db.PullRequest.Select().Where("repository_id = ? AND number = ?", result.Repo.ID, mrNumber).One()
+	mr, err := findPRByNumber(db, result.Repo.ID, mrNumber)
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Merge request not found"})
 	}
 
-	if mr.AuthorID != userID && result.Repo.OwnerID != userID {
-		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Access denied"})
+	if err := checkPRAccess(c, mr, result.Repo.OwnerID); err != nil {
+		return err
 	}
 
 	if req.Title != "" {
@@ -302,19 +324,7 @@ func UpdatePullRequest(c fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update merge request"})
 	}
 
-	authorContrib, _ := db.Contributor.Select().Where("id = ?", mr.AuthorID).One()
-	if authorContrib == nil {
-		authorContrib = &models.Contributor{Name: "Unknown"}
-	}
-	var assigneeContrib *models.Contributor
-	if mr.AssigneeID != nil {
-		assigneeContrib, _ = db.Contributor.Select().Where("id = ?", *mr.AssigneeID).One()
-	}
-
-	commentsCount := getPRCommentsCount(db, mr.ID)
-	filesCount := getPRFilesCount(db, mr.ID)
-
-	return c.Status(fiber.StatusOK).JSON(ToPRResponse(mr, authorContrib, assigneeContrib, commentsCount, filesCount))
+	return c.Status(fiber.StatusOK).JSON(buildPRResponse(db, mr))
 }
 
 func MergePullRequest(c fiber.Ctx) error {
@@ -328,7 +338,7 @@ func MergePullRequest(c fiber.Ctx) error {
 
 	db := models.GetDB()
 
-	mr, err := db.PullRequest.Select().Where("repository_id = ? AND number = ?", result.Repo.ID, mrNumber).One()
+	mr, err := findPRByNumber(db, result.Repo.ID, mrNumber)
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Merge request not found"})
 	}
@@ -350,27 +360,16 @@ func MergePullRequest(c fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to merge"})
 	}
 
-	authorContrib, _ := db.Contributor.Select().Where("id = ?", mr.AuthorID).One()
-	if authorContrib == nil {
-		authorContrib = &models.Contributor{Name: "Unknown"}
-	}
-	var assigneeContrib *models.Contributor
-	if mr.AssigneeID != nil {
-		assigneeContrib, _ = db.Contributor.Select().Where("id = ?", *mr.AssigneeID).One()
-	}
-
-	commentsCount := getPRCommentsCount(db, mr.ID)
-	filesCount := getPRFilesCount(db, mr.ID)
+	autoTransitionLinkedTasks(db, mr.ID, userID)
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
 		"message": "Merge request merged successfully",
-		"mr":      ToPRResponse(mr, authorContrib, assigneeContrib, commentsCount, filesCount),
+		"mr":      buildPRResponse(db, mr),
 	})
 }
 
 func ClosePullRequest(c fiber.Ctx) error {
 	mrNumber, _ := strconv.Atoi(c.Params("number"))
-	userID := middleware.GetCurrentUserID(c)
 
 	result, err := helpers.GetOwnerAndRepoWithPrivateAccessFromParams(c)
 	if err != nil {
@@ -379,13 +378,13 @@ func ClosePullRequest(c fiber.Ctx) error {
 
 	db := models.GetDB()
 
-	mr, err := db.PullRequest.Select().Where("repository_id = ? AND number = ?", result.Repo.ID, mrNumber).One()
+	mr, err := findPRByNumber(db, result.Repo.ID, mrNumber)
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Merge request not found"})
 	}
 
-	if mr.AuthorID != userID && result.Repo.OwnerID != userID {
-		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Access denied"})
+	if err := checkPRAccess(c, mr, result.Repo.OwnerID); err != nil {
+		return err
 	}
 
 	if mr.IsClosed {
@@ -400,27 +399,14 @@ func ClosePullRequest(c fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to close merge request"})
 	}
 
-	authorContrib, _ := db.Contributor.Select().Where("id = ?", mr.AuthorID).One()
-	if authorContrib == nil {
-		authorContrib = &models.Contributor{Name: "Unknown"}
-	}
-	var assigneeContrib *models.Contributor
-	if mr.AssigneeID != nil {
-		assigneeContrib, _ = db.Contributor.Select().Where("id = ?", *mr.AssigneeID).One()
-	}
-
-	commentsCount := getPRCommentsCount(db, mr.ID)
-	filesCount := getPRFilesCount(db, mr.ID)
-
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
 		"message": "Merge request closed successfully",
-		"mr":      ToPRResponse(mr, authorContrib, assigneeContrib, commentsCount, filesCount),
+		"mr":      buildPRResponse(db, mr),
 	})
 }
 
 func ReopenPullRequest(c fiber.Ctx) error {
 	mrNumber, _ := strconv.Atoi(c.Params("number"))
-	userID := middleware.GetCurrentUserID(c)
 
 	result, err := helpers.GetOwnerAndRepoWithPrivateAccessFromParams(c)
 	if err != nil {
@@ -429,13 +415,13 @@ func ReopenPullRequest(c fiber.Ctx) error {
 
 	db := models.GetDB()
 
-	mr, err := db.PullRequest.Select().Where("repository_id = ? AND number = ?", result.Repo.ID, mrNumber).One()
+	mr, err := findPRByNumber(db, result.Repo.ID, mrNumber)
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Merge request not found"})
 	}
 
-	if mr.AuthorID != userID && result.Repo.OwnerID != userID {
-		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Access denied"})
+	if err := checkPRAccess(c, mr, result.Repo.OwnerID); err != nil {
+		return err
 	}
 
 	if !mr.IsClosed {
@@ -454,21 +440,9 @@ func ReopenPullRequest(c fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to reopen merge request"})
 	}
 
-	authorContrib, _ := db.Contributor.Select().Where("id = ?", mr.AuthorID).One()
-	if authorContrib == nil {
-		authorContrib = &models.Contributor{Name: "Unknown"}
-	}
-	var assigneeContrib *models.Contributor
-	if mr.AssigneeID != nil {
-		assigneeContrib, _ = db.Contributor.Select().Where("id = ?", *mr.AssigneeID).One()
-	}
-
-	commentsCount := getPRCommentsCount(db, mr.ID)
-	filesCount := getPRFilesCount(db, mr.ID)
-
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
 		"message": "Merge request reopened successfully",
-		"mr":      ToPRResponse(mr, authorContrib, assigneeContrib, commentsCount, filesCount),
+		"mr":      buildPRResponse(db, mr),
 	})
 }
 
@@ -484,7 +458,7 @@ func GetPRCommits(c fiber.Ctx) error {
 
 	db := models.GetDB()
 
-	mr, err := db.PullRequest.Select().Where("repository_id = ? AND number = ?", result.Repo.ID, prNumber).One()
+	mr, err := findPRByNumber(db, result.Repo.ID, prNumber)
 	if err != nil || mr == nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Pull request not found"})
 	}
@@ -500,12 +474,9 @@ func GetPRCommits(c fiber.Ctx) error {
 
 	gitSvc := services.NewGitService()
 	commits, total, err := gitSvc.GetPRCommits(
-		result.Owner.Username,
-		result.Repo.Name,
-		mr.SourceBranch,
-		mr.TargetBranch,
-		page,
-		perPage,
+		result.Owner.Username, result.Repo.Name,
+		mr.SourceBranch, mr.TargetBranch,
+		page, perPage,
 	)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to get PR commits"})
@@ -529,7 +500,7 @@ func GetPRFiles(c fiber.Ctx) error {
 
 	db := models.GetDB()
 
-	mr, err := db.PullRequest.Select().Where("repository_id = ? AND number = ?", result.Repo.ID, prNumber).One()
+	mr, err := findPRByNumber(db, result.Repo.ID, prNumber)
 	if err != nil || mr == nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Pull request not found"})
 	}
@@ -544,10 +515,8 @@ func GetPRFiles(c fiber.Ctx) error {
 
 	gitSvc := services.NewGitService()
 	files, additions, deletions, err := gitSvc.GetPRFiles(
-		result.Owner.Username,
-		result.Repo.Name,
-		mr.SourceBranch,
-		mr.TargetBranch,
+		result.Owner.Username, result.Repo.Name,
+		mr.SourceBranch, mr.TargetBranch,
 	)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to get PR files"})

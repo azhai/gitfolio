@@ -77,8 +77,8 @@ const CreateProjectModal = {
                             }),
                             m('div.project-type-content', [
                                 m('i.fas.fa-code-branch'),
-                                m('strong', '持有项目'),
-                                m('span', '从本地创建并推送到远程')
+                                m('strong', '本地项目'),
+                                m('span', '在本地创建和管理代码')
                             ])
                         ]),
                         m('label.project-type-option', {

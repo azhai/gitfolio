@@ -1,0 +1,1147 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GitFolio 用户手册</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Caveat:wght@400;600;700&family=Nunito:wght@400;600;700&display=swap');
+
+:root {
+    --paper: #fefcf3;
+    --ink: #2d2d2d;
+    --pencil: #666;
+    --highlight: #ffe066;
+    --blue: #5b9bd5;
+    --green: #7bc67e;
+    --orange: #f4a261;
+    --red: #e76f51;
+    --purple: #9b72cf;
+    --doodle-border: 2.5px solid var(--ink);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    font-family: 'Nunito', sans-serif;
+    background: var(--paper);
+    color: var(--ink);
+    line-height: 1.7;
+    background-image:
+        radial-gradient(circle, rgba(0,0,0,0.03) 1px, transparent 1px);
+    background-size: 24px 24px;
+}
+
+.hand { font-family: 'Caveat', cursive; }
+
+.page-wrapper {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 40px 30px 80px;
+}
+
+.cover {
+    text-align: center;
+    padding: 50px 20px 30px;
+    margin-bottom: 36px;
+    position: relative;
+}
+
+.cover h1 {
+    font-family: 'Caveat', cursive;
+    font-size: 56px;
+    font-weight: 700;
+    color: var(--ink);
+    position: relative;
+    display: inline-block;
+}
+
+.cover h1::after {
+    content: '';
+    position: absolute;
+    bottom: 4px;
+    left: -8px;
+    right: -8px;
+    height: 16px;
+    background: var(--highlight);
+    z-index: -1;
+    transform: rotate(-1deg);
+    border-radius: 4px;
+}
+
+.cover .subtitle {
+    font-family: 'Caveat', cursive;
+    font-size: 24px;
+    color: var(--pencil);
+    margin-top: 12px;
+}
+
+.toc {
+    background: white;
+    border: var(--doodle-border);
+    border-radius: 16px;
+    padding: 24px 32px;
+    margin-bottom: 40px;
+    transform: rotate(-0.3deg);
+    box-shadow: 4px 4px 0 rgba(0,0,0,0.08);
+}
+
+.toc h2 {
+    font-family: 'Caveat', cursive;
+    font-size: 28px;
+    margin-bottom: 16px;
+    border-bottom: 2px dashed var(--ink);
+    padding-bottom: 8px;
+}
+
+.toc ol {
+    padding-left: 24px;
+}
+
+.toc li {
+    margin-bottom: 6px;
+    font-size: 16px;
+}
+
+.toc a {
+    color: var(--ink);
+    text-decoration: none;
+    border-bottom: 1.5px dashed var(--blue);
+}
+
+.toc a:hover {
+    background: var(--highlight);
+}
+
+.chapter {
+    margin-bottom: 48px;
+    page-break-inside: avoid;
+}
+
+.chapter-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 20px;
+}
+
+.chapter-num {
+    font-family: 'Caveat', cursive;
+    font-size: 48px;
+    font-weight: 700;
+    color: var(--blue);
+    line-height: 1;
+    min-width: 56px;
+    text-align: center;
+}
+
+.chapter-title {
+    font-family: 'Caveat', cursive;
+    font-size: 32px;
+    font-weight: 700;
+    position: relative;
+    display: inline-block;
+}
+
+.chapter-title::after {
+    content: '';
+    position: absolute;
+    bottom: 2px;
+    left: -4px;
+    right: -4px;
+    height: 10px;
+    background: var(--highlight);
+    z-index: -1;
+    opacity: 0.6;
+    border-radius: 3px;
+}
+
+.note-card {
+    background: white;
+    border: var(--doodle-border);
+    border-radius: 14px;
+    padding: 20px 24px;
+    margin-bottom: 20px;
+    position: relative;
+    box-shadow: 3px 3px 0 rgba(0,0,0,0.06);
+}
+
+.note-card.blue { border-left: 6px solid var(--blue); }
+.note-card.green { border-left: 6px solid var(--green); }
+.note-card.orange { border-left: 6px solid var(--orange); }
+.note-card.red { border-left: 6px solid var(--red); }
+.note-card.purple { border-left: 6px solid var(--purple); }
+
+.note-card h3 {
+    font-family: 'Caveat', cursive;
+    font-size: 22px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.note-card p, .note-card li {
+    font-size: 15px;
+    color: #444;
+}
+
+.note-card ul {
+    padding-left: 20px;
+    margin-top: 6px;
+}
+
+.note-card li {
+    margin-bottom: 4px;
+}
+
+.note-card li::marker {
+    content: '✏️ ';
+}
+
+.step-list {
+    list-style: none;
+    padding: 0;
+    counter-reset: step;
+}
+
+.step-list li {
+    counter-increment: step;
+    padding: 8px 0 8px 44px;
+    position: relative;
+    font-size: 15px;
+    border-bottom: 1px dashed #e0e0e0;
+}
+
+.step-list li:last-child {
+    border-bottom: none;
+}
+
+.step-list li::before {
+    content: counter(step);
+    position: absolute;
+    left: 0;
+    top: 6px;
+    width: 30px;
+    height: 30px;
+    background: var(--blue);
+    color: white;
+    border-radius: 50%;
+    font-family: 'Caveat', cursive;
+    font-size: 18px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.step-list.green li::before { background: var(--green); }
+.step-list.orange li::before { background: var(--orange); }
+.step-list.purple li::before { background: var(--purple); }
+
+.tip-box {
+    background: #fffbe6;
+    border: 2px dashed var(--orange);
+    border-radius: 12px;
+    padding: 14px 18px;
+    margin: 16px 0;
+    font-size: 14px;
+}
+
+.tip-box::before {
+    content: '💡 ';
+    font-size: 18px;
+}
+
+.kbd {
+    display: inline-block;
+    padding: 2px 8px;
+    background: #f0f0f0;
+    border: 1.5px solid #ccc;
+    border-radius: 6px;
+    font-family: monospace;
+    font-size: 13px;
+    box-shadow: 1px 1px 0 #999;
+}
+
+.api-path {
+    font-family: monospace;
+    background: #f5f5f5;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 13px;
+    border: 1px solid #ddd;
+}
+
+.flow-diagram {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 16px;
+    margin: 12px 0;
+}
+
+.flow-node {
+    background: white;
+    border: 2px solid var(--ink);
+    border-radius: 12px;
+    padding: 8px 16px;
+    font-family: 'Caveat', cursive;
+    font-size: 18px;
+    font-weight: 600;
+    text-align: center;
+    min-width: 80px;
+}
+
+.flow-node.highlight {
+    background: var(--highlight);
+}
+
+.flow-node.green { border-color: var(--green); background: #e8f5e9; }
+.flow-node.blue { border-color: var(--blue); background: #e3f2fd; }
+.flow-node.orange { border-color: var(--orange); background: #fff3e0; }
+.flow-node.red { border-color: var(--red); background: #fbe9e7; }
+
+.flow-arrow {
+    font-size: 20px;
+    color: var(--pencil);
+}
+
+.status-badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.status-badge.draft { background: #e0e0e0; color: #666; }
+.status-badge.progress { background: #e3f2fd; color: #1565c0; }
+.status-badge.review { background: #fff3e0; color: #e65100; }
+.status-badge.done { background: #e8f5e9; color: #2e7d32; }
+
+.emoji-icon {
+    font-size: 24px;
+    vertical-align: middle;
+}
+
+.illustration {
+    text-align: center;
+    margin: 16px 0;
+    padding: 12px;
+    background: rgba(255,255,255,0.6);
+    border-radius: 16px;
+    border: 2px dashed #ddd;
+}
+
+.illustration svg {
+    max-width: 100%;
+    height: auto;
+}
+
+.illustration-caption {
+    font-family: 'Caveat', cursive;
+    font-size: 16px;
+    color: var(--pencil);
+    margin-top: 6px;
+}
+
+.screen-sketch {
+    background: white;
+    border: 2.5px solid var(--ink);
+    border-radius: 12px;
+    overflow: hidden;
+    margin: 12px 0;
+    box-shadow: 4px 4px 0 rgba(0,0,0,0.08);
+}
+
+.screen-sketch .sketch-titlebar {
+    background: #e8e8e8;
+    padding: 4px 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    border-bottom: 2px solid var(--ink);
+}
+
+.screen-sketch .sketch-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 1.5px solid var(--ink);
+}
+
+.screen-sketch .sketch-dot.r { background: #e76f51; }
+.screen-sketch .sketch-dot.y { background: #f4a261; }
+.screen-sketch .sketch-dot.g { background: #7bc67e; }
+
+.screen-sketch .sketch-body {
+    padding: 12px;
+    font-size: 13px;
+    min-height: 60px;
+}
+
+.screen-sketch .sketch-sidebar {
+    display: inline-block;
+    width: 120px;
+    background: #303030;
+    color: white;
+    padding: 8px;
+    border-radius: 0 8px 8px 0;
+    font-size: 12px;
+    vertical-align: top;
+    min-height: 80px;
+}
+
+.screen-sketch .sketch-sidebar div {
+    padding: 3px 6px;
+    border-radius: 4px;
+    margin-bottom: 2px;
+}
+
+.screen-sketch .sketch-sidebar .active {
+    background: rgba(255,255,255,0.15);
+}
+
+.screen-sketch .sketch-main {
+    display: inline-block;
+    width: calc(100% - 130px);
+    padding: 8px;
+    vertical-align: top;
+    font-size: 12px;
+}
+
+.sketch-row {
+    display: flex;
+    align-items: center;
+    padding: 4px 8px;
+    border-bottom: 1px dashed #ddd;
+    gap: 8px;
+}
+
+.sketch-row:last-child { border-bottom: none; }
+
+.sketch-badge {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.sketch-input {
+    border: 1.5px solid #bbb;
+    border-radius: 6px;
+    padding: 3px 8px;
+    background: #fafafa;
+    font-size: 12px;
+    display: inline-block;
+    min-width: 60px;
+}
+
+.sketch-btn {
+    display: inline-block;
+    padding: 3px 12px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    border: 1.5px solid var(--ink);
+}
+
+.sketch-btn.primary { background: var(--blue); color: white; border-color: var(--blue); }
+.sketch-btn.green { background: var(--green); color: white; border-color: var(--green); }
+
+.doodle-divider {
+    text-align: center;
+    margin: 24px 0;
+    color: var(--pencil);
+    font-size: 20px;
+    letter-spacing: 12px;
+}
+
+.footer {
+    text-align: center;
+    padding: 40px 0 20px;
+    border-top: 2px dashed #ccc;
+    margin-top: 40px;
+}
+
+.footer p {
+    font-family: 'Caveat', cursive;
+    font-size: 20px;
+    color: var(--pencil);
+}
+
+@media (max-width: 640px) {
+    .page-wrapper { padding: 20px 16px 60px; }
+    .cover h1 { font-size: 40px; }
+    .chapter-title { font-size: 26px; }
+    .chapter-num { font-size: 36px; min-width: 44px; }
+    .flow-diagram { flex-direction: column; }
+    .flow-arrow { transform: rotate(90deg); }
+    .screen-sketch .sketch-sidebar { width: 80px; }
+    .screen-sketch .sketch-main { width: calc(100% - 90px); }
+}
+</style>
+</head>
+<body>
+<div class="page-wrapper">
+
+<div class="cover">
+    <div class="illustration">
+        <svg width="200" height="120" viewBox="0 0 200 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M40 90 C40 90, 20 60, 50 40 C80 20, 100 50, 100 50 C100 50, 120 20, 150 40 C180 60, 160 90, 160 90" stroke="#2d2d2d" stroke-width="2.5" stroke-linecap="round" fill="none" stroke-dasharray="0"/>
+            <circle cx="50" cy="40" r="12" fill="#7bc67e" stroke="#2d2d2d" stroke-width="2"/>
+            <circle cx="100" cy="50" r="12" fill="#5b9bd5" stroke="#2d2d2d" stroke-width="2"/>
+            <circle cx="150" cy="40" r="12" fill="#f4a261" stroke="#2d2d2d" stroke-width="2"/>
+            <text x="50" y="44" text-anchor="middle" fill="white" font-size="14" font-weight="bold">G</text>
+            <text x="100" y="54" text-anchor="middle" fill="white" font-size="14" font-weight="bold">F</text>
+            <text x="150" y="44" text-anchor="middle" fill="white" font-size="14" font-weight="bold">✦</text>
+            <path d="M62 40 L88 50" stroke="#2d2d2d" stroke-width="2" stroke-linecap="round"/>
+            <path d="M112 50 L138 40" stroke="#2d2d2d" stroke-width="2" stroke-linecap="round"/>
+            <path d="M30 95 Q100 110 170 95" stroke="#2d2d2d" stroke-width="2" stroke-linecap="round" fill="none"/>
+            <text x="100" y="108" text-anchor="middle" fill="#666" font-family="Caveat, cursive" font-size="14">git push → deploy</text>
+        </svg>
+    </div>
+    <h1>GitFolio 用户手册</h1>
+    <p class="subtitle">轻量级 Git 仓库管理 · 简洁实用指南</p>
+</div>
+
+<div class="toc">
+    <h2>📖 目录</h2>
+    <ol>
+        <li><a href="#ch1">快速开始 — 注册与登录</a></li>
+        <li><a href="#ch2">创建与管理仓库</a></li>
+        <li><a href="#ch3">浏览代码与文件</a></li>
+        <li><a href="#ch4">Issue 跟踪</a></li>
+        <li><a href="#ch5">Pull Request 协作</a></li>
+        <li><a href="#ch6">任务管理</a></li>
+        <li><a href="#ch7">提交关联与自动流转</a></li>
+        <li><a href="#ch8">团队与组织</a></li>
+    </ol>
+</div>
+
+<div class="chapter" id="ch1">
+    <div class="chapter-header">
+        <span class="chapter-num">1</span>
+        <span class="chapter-title">快速开始 — 注册与登录</span>
+    </div>
+
+    <div class="illustration">
+        <svg width="320" height="140" viewBox="0 0 320 140" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="60" y="10" width="200" height="120" rx="12" fill="white" stroke="#2d2d2d" stroke-width="2.5"/>
+            <rect x="60" y="10" width="200" height="28" rx="12" fill="#e8e8e8" stroke="#2d2d2d" stroke-width="2.5"/>
+            <circle cx="76" cy="24" r="5" fill="#e76f51" stroke="#2d2d2d" stroke-width="1.5"/>
+            <circle cx="90" cy="24" r="5" fill="#f4a261" stroke="#2d2d2d" stroke-width="1.5"/>
+            <circle cx="104" cy="24" r="5" fill="#7bc67e" stroke="#2d2d2d" stroke-width="1.5"/>
+            <text x="160" y="28" text-anchor="middle" fill="#666" font-family="Caveat, cursive" font-size="14">GitFolio</text>
+            <rect x="90" y="50" width="140" height="18" rx="6" fill="#f5f5f5" stroke="#bbb" stroke-width="1.5"/>
+            <text x="100" y="63" fill="#999" font-size="11">👤 用户名</text>
+            <rect x="90" y="74" width="140" height="18" rx="6" fill="#f5f5f5" stroke="#bbb" stroke-width="1.5"/>
+            <text x="100" y="87" fill="#999" font-size="11">🔑 密码</text>
+            <rect x="110" y="100" width="100" height="22" rx="8" fill="#5b9bd5" stroke="#2d2d2d" stroke-width="1.5"/>
+            <text x="160" y="115" text-anchor="middle" fill="white" font-size="12" font-weight="bold">登 录</text>
+        </svg>
+        <div class="illustration-caption">登录页面示意</div>
+    </div>
+
+    <div class="note-card blue">
+        <h3>🔐 注册新账号</h3>
+        <ol class="step-list">
+            <li>打开 GitFolio 首页，点击「注册」</li>
+            <li>填写用户名、邮箱和密码</li>
+            <li>点击「创建账号」完成注册</li>
+        </ol>
+    </div>
+
+    <div class="note-card green">
+        <h3>🔑 登录系统</h3>
+        <ol class="step-list green">
+            <li>在登录页输入用户名和密码</li>
+            <li>点击「登录」进入仪表盘</li>
+            <li>登录后可在右上角头像菜单中修改个人资料</li>
+        </ol>
+    </div>
+
+    <div class="tip-box">首次登录后建议先完善个人资料，上传头像方便团队识别。</div>
+</div>
+
+<div class="doodle-divider">~ ~ ~</div>
+
+<div class="chapter" id="ch2">
+    <div class="chapter-header">
+        <span class="chapter-num">2</span>
+        <span class="chapter-title">创建与管理仓库</span>
+    </div>
+
+    <div class="illustration">
+        <svg width="400" height="160" viewBox="0 0 400 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="20" y="10" width="170" height="140" rx="10" fill="white" stroke="#2d2d2d" stroke-width="2.5"/>
+            <rect x="20" y="10" width="170" height="24" rx="10" fill="#5b9bd5" stroke="#2d2d2d" stroke-width="2.5"/>
+            <text x="105" y="27" text-anchor="middle" fill="white" font-size="12" font-weight="bold">📦 新建仓库</text>
+            <rect x="35" y="44" width="140" height="16" rx="4" fill="#f5f5f5" stroke="#bbb" stroke-width="1"/>
+            <text x="45" y="55" fill="#999" font-size="10">仓库名称</text>
+            <rect x="35" y="66" width="140" height="16" rx="4" fill="#f5f5f5" stroke="#bbb" stroke-width="1"/>
+            <text x="45" y="77" fill="#999" font-size="10">描述（可选）</text>
+            <rect x="35" y="88" width="60" height="16" rx="8" fill="#7bc67e" stroke="#2d2d2d" stroke-width="1"/>
+            <text x="65" y="99" text-anchor="middle" fill="white" font-size="10">公开</text>
+            <rect x="100" y="88" width="60" height="16" rx="8" fill="#e0e0e0" stroke="#2d2d2d" stroke-width="1"/>
+            <text x="130" y="99" text-anchor="middle" fill="#666" font-size="10">私有</text>
+            <rect x="55" y="114" width="100" height="22" rx="8" fill="#5b9bd5" stroke="#2d2d2d" stroke-width="1.5"/>
+            <text x="105" y="129" text-anchor="middle" fill="white" font-size="11" font-weight="bold">创建项目</text>
+
+            <path d="M200 80 L220 80" stroke="#2d2d2d" stroke-width="2" stroke-linecap="round"/>
+            <path d="M215 75 L220 80 L215 85" stroke="#2d2d2d" stroke-width="2" stroke-linecap="round" fill="none"/>
+
+            <rect x="230" y="10" width="150" height="140" rx="10" fill="white" stroke="#2d2d2d" stroke-width="2.5"/>
+            <rect x="230" y="10" width="150" height="24" rx="10" fill="#f4a261" stroke="#2d2d2d" stroke-width="2.5"/>
+            <text x="305" y="27" text-anchor="middle" fill="white" font-size="12" font-weight="bold">🔄 迁移项目</text>
+            <rect x="245" y="44" width="120" height="16" rx="4" fill="#f5f5f5" stroke="#bbb" stroke-width="1"/>
+            <text x="255" y="55" fill="#999" font-size="10">GitHub 仓库 URL</text>
+            <text x="245" y="78" fill="#666" font-size="10">✅ 导入代码</text>
+            <text x="245" y="94" fill="#666" font-size="10">✅ 导入 Issue</text>
+            <text x="245" y="110" fill="#666" font-size="10">✅ 导入标签</text>
+            <rect x="265" y="120" width="80" height="20" rx="8" fill="#f4a261" stroke="#2d2d2d" stroke-width="1.5"/>
+            <text x="305" y="134" text-anchor="middle" fill="white" font-size="11" font-weight="bold">开始迁移</text>
+        </svg>
+        <div class="illustration-caption">创建仓库 vs 迁移项目</div>
+    </div>
+
+    <div class="note-card blue">
+        <h3>📦 创建新仓库</h3>
+        <ol class="step-list">
+            <li>点击左侧导航栏「项目」或仪表盘的「新建项目」</li>
+            <li>填写仓库名称（如 <span class="api-path">my-app</span>）</li>
+            <li>选择可见性：公开 / 私有</li>
+            <li>可选：添加描述、初始化 README</li>
+            <li>点击「创建项目」</li>
+        </ol>
+    </div>
+
+    <div class="note-card orange">
+        <h3>🔄 从 GitHub 导入</h3>
+        <ol class="step-list orange">
+            <li>点击「迁移项目」</li>
+            <li>输入 GitHub 仓库 URL</li>
+            <li>系统自动拉取代码和元数据</li>
+        </ol>
+    </div>
+
+    <div class="note-card green">
+        <h3>⚙️ 仓库设置</h3>
+        <ul>
+            <li>修改名称、描述和可见性</li>
+            <li>管理仓库成员权限</li>
+            <li>配置 Webhook</li>
+            <li>删除仓库（需二次确认）</li>
+        </ul>
+    </div>
+</div>
+
+<div class="doodle-divider">✿ ✿ ✿</div>
+
+<div class="chapter" id="ch3">
+    <div class="chapter-header">
+        <span class="chapter-num">3</span>
+        <span class="chapter-title">浏览代码与文件</span>
+    </div>
+
+    <div class="screen-sketch">
+        <div class="sketch-titlebar">
+            <span class="sketch-dot r"></span>
+            <span class="sketch-dot y"></span>
+            <span class="sketch-dot g"></span>
+            <span style="margin-left:8px; font-family:Caveat,cursive; font-size:14px; color:#666;">ryan / my-app</span>
+        </div>
+        <div style="display:flex;">
+            <div class="sketch-sidebar">
+                <div class="active">📂 代码</div>
+                <div>📋 Issues</div>
+                <div>🔀 PRs</div>
+                <div>✅ Tasks</div>
+                <div>⚙️ 设置</div>
+            </div>
+            <div class="sketch-main">
+                <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+                    <span class="sketch-btn" style="background:#f5f5f5;">🌿 main ▾</span>
+                    <span style="flex:1;"></span>
+                    <span style="color:#999; font-size:11px;">最后提交: 2小时前</span>
+                </div>
+                <div class="sketch-row">
+                    <span>📁</span><span>src/</span><span style="flex:1"></span><span style="color:#999; font-size:10px;">init project</span>
+                </div>
+                <div class="sketch-row">
+                    <span>📁</span><span>docs/</span><span style="flex:1"></span><span style="color:#999; font-size:10px;">add docs</span>
+                </div>
+                <div class="sketch-row">
+                    <span>📄</span><span>README.md</span><span style="flex:1"></span><span style="color:#999; font-size:10px;">update readme</span>
+                </div>
+                <div class="sketch-row">
+                    <span>📄</span><span>package.json</span><span style="flex:1"></span><span style="color:#999; font-size:10px;">v1.0.0</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="note-card blue">
+        <h3>📂 文件浏览器</h3>
+        <ul>
+            <li>进入仓库后默认显示文件列表</li>
+            <li>点击文件夹进入子目录，点击文件查看内容</li>
+            <li>文件列表显示最近提交信息和时间</li>
+            <li>README.md 自动渲染在文件列表下方</li>
+        </ul>
+    </div>
+
+    <div class="note-card purple">
+        <h3>📝 查看提交历史</h3>
+        <ul>
+            <li>点击「提交」标签查看完整提交记录</li>
+            <li>点击某个提交查看详细差异</li>
+            <li>支持按分支筛选提交</li>
+            <li>提交详情页显示变更文件和 diff</li>
+        </ul>
+    </div>
+
+    <div class="illustration">
+        <svg width="360" height="100" viewBox="0 0 360 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="40" cy="50" r="16" fill="#7bc67e" stroke="#2d2d2d" stroke-width="2"/>
+            <text x="40" y="55" text-anchor="middle" fill="white" font-size="11" font-weight="bold">a1b2</text>
+            <line x1="56" y1="50" x2="94" y2="50" stroke="#2d2d2d" stroke-width="2"/>
+            <circle cx="110" cy="50" r="16" fill="#5b9bd5" stroke="#2d2d2d" stroke-width="2"/>
+            <text x="110" y="55" text-anchor="middle" fill="white" font-size="11" font-weight="bold">c3d4</text>
+            <line x1="126" y1="50" x2="164" y2="50" stroke="#2d2d2d" stroke-width="2"/>
+            <circle cx="180" cy="50" r="16" fill="#f4a261" stroke="#2d2d2d" stroke-width="2"/>
+            <text x="180" y="55" text-anchor="middle" fill="white" font-size="11" font-weight="bold">e5f6</text>
+            <line x1="196" y1="50" x2="234" y2="50" stroke="#2d2d2d" stroke-width="2"/>
+            <circle cx="250" cy="50" r="16" fill="#9b72cf" stroke="#2d2d2d" stroke-width="2"/>
+            <text x="250" y="55" text-anchor="middle" fill="white" font-size="11" font-weight="bold">g7h8</text>
+            <line x1="266" y1="50" x2="304" y2="50" stroke="#2d2d2d" stroke-width="2"/>
+            <circle cx="320" cy="50" r="16" fill="#e76f51" stroke="#2d2d2d" stroke-width="2"/>
+            <text x="320" y="55" text-anchor="middle" fill="white" font-size="11" font-weight="bold">i9j0</text>
+            <text x="40" y="82" text-anchor="middle" fill="#666" font-family="Caveat, cursive" font-size="12">init</text>
+            <text x="110" y="82" text-anchor="middle" fill="#666" font-family="Caveat, cursive" font-size="12">add login</text>
+            <text x="180" y="82" text-anchor="middle" fill="#666" font-family="Caveat, cursive" font-size="12">fix bug</text>
+            <text x="250" y="82" text-anchor="middle" fill="#666" font-family="Caveat, cursive" font-size="12">refactor</text>
+            <text x="320" y="82" text-anchor="middle" fill="#666" font-family="Caveat, cursive" font-size="12">release</text>
+            <text x="180" y="16" text-anchor="middle" fill="#2d2d2d" font-family="Caveat, cursive" font-size="16">提交历史时间线</text>
+        </svg>
+    </div>
+
+    <div class="note-card green">
+        <h3>🌿 分支与标签</h3>
+        <ul>
+            <li>「分支」标签页列出所有分支</li>
+            <li>「标签」标签页列出所有版本标签</li>
+            <li>切换分支查看不同版本的代码</li>
+        </ul>
+    </div>
+
+    <div class="tip-box">在文件浏览器中，点击提交信息的 hash 值可以快速跳转到该提交的详情页。</div>
+</div>
+
+<div class="doodle-divider">— ★ —</div>
+
+<div class="chapter" id="ch4">
+    <div class="chapter-header">
+        <span class="chapter-num">4</span>
+        <span class="chapter-title">Issue 跟踪</span>
+    </div>
+
+    <div class="flow-diagram">
+        <span class="flow-node green">🟢 Open</span>
+        <span class="flow-arrow">→</span>
+        <span class="flow-node">💬 讨论</span>
+        <span class="flow-arrow">→</span>
+        <span class="flow-node red">🔴 Closed</span>
+    </div>
+
+    <div class="screen-sketch">
+        <div class="sketch-titlebar">
+            <span class="sketch-dot r"></span>
+            <span class="sketch-dot y"></span>
+            <span class="sketch-dot g"></span>
+            <span style="margin-left:8px; font-family:Caveat,cursive; font-size:14px; color:#666;">Issues · ryan/my-app</span>
+        </div>
+        <div class="sketch-body" style="padding:8px 12px;">
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+                <span class="sketch-btn primary" style="font-size:11px;">+ 新建 Issue</span>
+                <span class="sketch-input" style="flex:1; font-size:11px;">🔍 搜索 Issue...</span>
+                <span class="sketch-badge" style="background:#e8f5e9; color:#2e7d32;">bug</span>
+                <span class="sketch-badge" style="background:#e3f2fd; color:#1565c0;">feature</span>
+            </div>
+            <div class="sketch-row">
+                <span style="color:#7bc67e;">●</span>
+                <span style="font-weight:600;">登录页面样式错乱</span>
+                <span class="sketch-badge" style="background:#fbe9e7; color:#c91c00;">bug</span>
+                <span style="flex:1"></span>
+                <span style="color:#999; font-size:10px;">#12 · 3小时前</span>
+            </div>
+            <div class="sketch-row">
+                <span style="color:#7bc67e;">●</span>
+                <span style="font-weight:600;">增加头像上传功能</span>
+                <span class="sketch-badge" style="background:#e3f2fd; color:#1565c0;">feature</span>
+                <span style="flex:1"></span>
+                <span style="color:#999; font-size:10px;">#11 · 1天前</span>
+            </div>
+            <div class="sketch-row">
+                <span style="color:#e76f51;">●</span>
+                <span style="font-weight:600; color:#999;">修复 README 链接</span>
+                <span style="flex:1"></span>
+                <span style="color:#999; font-size:10px;">#10 · 已关闭</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="note-card blue">
+        <h3>📋 创建 Issue</h3>
+        <ol class="step-list">
+            <li>进入仓库，点击「Issues」标签</li>
+            <li>点击「新建 Issue」按钮</li>
+            <li>填写标题和描述（支持 Markdown）</li>
+            <li>可选：添加标签、指派人、关联里程碑</li>
+            <li>点击「提交」</li>
+        </ol>
+    </div>
+
+    <div class="note-card orange">
+        <h3>🏷️ 标签管理</h3>
+        <ul>
+            <li>系统预置常用标签：bug、feature、enhancement 等</li>
+            <li>可自定义标签名称和颜色</li>
+            <li>在 Issue 列表页可按标签筛选</li>
+        </ul>
+    </div>
+
+    <div class="note-card green">
+        <h3>💬 评论与互动</h3>
+        <ul>
+            <li>在 Issue 详情页底部添加评论</li>
+            <li>评论支持 Markdown 格式</li>
+            <li>可引用其他 Issue：<span class="api-path">#123</span></li>
+        </ul>
+    </div>
+</div>
+
+<div class="doodle-divider">~ ♦ ~</div>
+
+<div class="chapter" id="ch5">
+    <div class="chapter-header">
+        <span class="chapter-num">5</span>
+        <span class="chapter-title">Pull Request 协作</span>
+    </div>
+
+    <div class="flow-diagram">
+        <span class="flow-node green">🟢 Open</span>
+        <span class="flow-arrow">→</span>
+        <span class="flow-node blue">🔍 Review</span>
+        <span class="flow-arrow">→</span>
+        <span class="flow-node highlight">✅ Merged</span>
+        <span class="flow-arrow">/</span>
+        <span class="flow-node red">❌ Closed</span>
+    </div>
+
+    <div class="illustration">
+        <svg width="380" height="160" viewBox="0 0 380 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <line x1="60" y1="30" x2="60" y2="140" stroke="#7bc67e" stroke-width="3" stroke-linecap="round"/>
+            <line x1="320" y1="30" x2="320" y2="140" stroke="#5b9bd5" stroke-width="3" stroke-linecap="round"/>
+            <circle cx="60" cy="30" r="8" fill="#7bc67e" stroke="#2d2d2d" stroke-width="2"/>
+            <circle cx="320" cy="30" r="8" fill="#5b9bd5" stroke="#2d2d2d" stroke-width="2"/>
+            <circle cx="60" cy="80" r="8" fill="#7bc67e" stroke="#2d2d2d" stroke-width="2"/>
+            <circle cx="320" cy="80" r="8" fill="#5b9bd5" stroke="#2d2d2d" stroke-width="2"/>
+            <circle cx="60" cy="130" r="8" fill="#7bc67e" stroke="#2d2d2d" stroke-width="2"/>
+            <circle cx="320" cy="130" r="8" fill="#5b9bd5" stroke="#2d2d2d" stroke-width="2"/>
+            <text x="60" y="18" text-anchor="middle" fill="#7bc67e" font-family="Caveat, cursive" font-size="14" font-weight="bold">main</text>
+            <text x="320" y="18" text-anchor="middle" fill="#5b9bd5" font-family="Caveat, cursive" font-size="14" font-weight="bold">feature</text>
+            <path d="M320 80 C280 80, 200 80, 160 80 C120 80, 80 80, 60 80" stroke="#f4a261" stroke-width="2.5" stroke-dasharray="6 4" fill="none"/>
+            <circle cx="190" cy="80" r="14" fill="#f4a261" stroke="#2d2d2d" stroke-width="2"/>
+            <text x="190" y="84" text-anchor="middle" fill="white" font-size="16">🔀</text>
+            <text x="190" y="110" text-anchor="middle" fill="#666" font-family="Caveat, cursive" font-size="14">Pull Request</text>
+            <path d="M175 80 L68 80" stroke="#2d2d2d" stroke-width="1.5" fill="none" marker-end="url(#arrowhead)"/>
+            <defs><marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0 0 L8 3 L0 6 Z" fill="#2d2d2d"/></marker></defs>
+        </svg>
+        <div class="illustration-caption">PR 合并流程：feature 分支 → main 分支</div>
+    </div>
+
+    <div class="note-card blue">
+        <h3>🔀 创建 PR</h3>
+        <ol class="step-list">
+            <li>点击「Pull Requests」→「新建 PR」</li>
+            <li>选择源分支和目标分支</li>
+            <li>填写标题和描述</li>
+            <li>可选：关联 Issue、指派审查人、添加标签</li>
+            <li>点击「创建 Pull Request」</li>
+        </ol>
+    </div>
+
+    <div class="note-card purple">
+        <h3>👀 审查与合并</h3>
+        <ul>
+            <li>查看 PR 的文件变更和 diff</li>
+            <li>在代码行添加评论</li>
+            <li>仓库所有者可点击「合并」完成合并</li>
+            <li>合并后关联的任务自动流转到 Review 状态</li>
+        </ul>
+    </div>
+
+    <div class="tip-box">PR 合并时，系统会自动检查关联的任务并将其状态流转为 Review，无需手动更新。</div>
+</div>
+
+<div class="doodle-divider">✎ ✎ ✎</div>
+
+<div class="chapter" id="ch6">
+    <div class="chapter-header">
+        <span class="chapter-num">6</span>
+        <span class="chapter-title">任务管理</span>
+    </div>
+
+    <div class="flow-diagram">
+        <span class="flow-node">📝 Draft</span>
+        <span class="flow-arrow">→</span>
+        <span class="flow-node blue">🚧 Progress</span>
+        <span class="flow-arrow">→</span>
+        <span class="flow-node orange">👀 Review</span>
+        <span class="flow-arrow">→</span>
+        <span class="flow-node green">✅ Done</span>
+    </div>
+
+    <div class="screen-sketch">
+        <div class="sketch-titlebar">
+            <span class="sketch-dot r"></span>
+            <span class="sketch-dot y"></span>
+            <span class="sketch-dot g"></span>
+            <span style="margin-left:8px; font-family:Caveat,cursive; font-size:14px; color:#666;">Tasks · ryan/my-app</span>
+        </div>
+        <div class="sketch-body" style="padding:8px 12px;">
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+                <span class="sketch-btn green" style="font-size:11px;">+ 新建任务</span>
+                <span style="flex:1"></span>
+                <span class="status-badge draft">Draft</span>
+                <span class="status-badge progress">Progress</span>
+                <span class="status-badge review">Review</span>
+                <span class="status-badge done">Done</span>
+            </div>
+            <div class="sketch-row">
+                <span class="sketch-badge" style="background:#e3f2fd; color:#1565c0;">Progress</span>
+                <span style="font-weight:600;">实现用户登录接口</span>
+                <span style="color:#e76f51;">★★★</span><span style="color:#ddd;">★★</span>
+                <span style="flex:1"></span>
+                <span style="color:#999; font-size:10px;">#3</span>
+            </div>
+            <div class="sketch-row">
+                <span class="sketch-badge" style="background:#e0e0e0; color:#666;">Draft</span>
+                <span>设计数据库表结构</span>
+                <span style="color:#e76f51;">★★</span><span style="color:#ddd;">★★★</span>
+                <span style="flex:1"></span>
+                <span style="color:#999; font-size:10px;">#2</span>
+            </div>
+            <div class="sketch-row">
+                <span class="sketch-badge" style="background:#e8f5e9; color:#2e7d32;">Done</span>
+                <span style="color:#999; text-decoration:line-through;">搭建项目框架</span>
+                <span style="color:#e76f51;">★</span><span style="color:#ddd;">★★★★</span>
+                <span style="flex:1"></span>
+                <span style="color:#999; font-size:10px;">#1</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="note-card blue">
+        <h3>📋 创建任务</h3>
+        <ol class="step-list">
+            <li>进入仓库，点击「Tasks」标签</li>
+            <li>点击「新建任务」</li>
+            <li>填写标题、描述、优先级（1-5）</li>
+            <li>可选：设置排期、关联 Issue</li>
+            <li>点击「创建」</li>
+        </ol>
+    </div>
+
+    <div class="note-card orange">
+        <h3>⏱️ 时间追踪</h3>
+        <ol class="step-list orange">
+            <li>在任务详情页点击「开始计时」</li>
+            <li>工作完成后点击「停止计时」</li>
+            <li>查看时间记录和汇总统计</li>
+        </ol>
+    </div>
+
+    <div class="illustration">
+        <svg width="280" height="80" viewBox="0 0 280 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="40" cy="40" r="30" fill="white" stroke="#2d2d2d" stroke-width="2.5"/>
+            <line x1="40" y1="40" x2="40" y2="20" stroke="#2d2d2d" stroke-width="2" stroke-linecap="round"/>
+            <line x1="40" y1="40" x2="55" y2="40" stroke="#e76f51" stroke-width="2" stroke-linecap="round"/>
+            <circle cx="40" cy="40" r="3" fill="#2d2d2d"/>
+            <text x="90" y="30" fill="#2d2d2d" font-family="Caveat, cursive" font-size="16" font-weight="bold">⏱️ 时间追踪</text>
+            <text x="90" y="50" fill="#666" font-size="12">已用时: 2h 35m</text>
+            <text x="90" y="68" fill="#999" font-size="11">预估: 4h · 剩余: 1h 25m</text>
+            <rect x="200" y="52" width="60" height="8" rx="4" fill="#e0e0e0"/>
+            <rect x="200" y="52" width="38" height="8" rx="4" fill="#7bc67e"/>
+        </svg>
+    </div>
+
+    <div class="note-card purple">
+        <h3>🔗 关联管理</h3>
+        <ul>
+            <li>关联 PR：将任务与代码变更关联</li>
+            <li>关联 Issue：将任务与需求/缺陷关联</li>
+            <li>查看关联提交：了解代码进展</li>
+            <li>添加评论和附件</li>
+        </ul>
+    </div>
+
+    <div class="note-card green">
+        <h3>🔄 状态流转</h3>
+        <ul>
+            <li>手动流转：点击「状态流转」选择目标状态</li>
+            <li>自动流转：PR 合并时关联任务自动变为 Review</li>
+            <li>查看流转历史：了解状态变更记录</li>
+        </ul>
+        <div style="margin-top:8px;">
+            <span class="status-badge draft">Draft</span>
+            <span class="status-badge progress">Progress</span>
+            <span class="status-badge review">Review</span>
+            <span class="status-badge done">Done</span>
+        </div>
+    </div>
+</div>
+
+<div class="doodle-divider">— ✦ —</div>
+
+<div class="chapter" id="ch7">
+    <div class="chapter-header">
+        <span class="chapter-num">7</span>
+        <span class="chapter-title">提交关联与自动流转</span>
+    </div>
+
+    <div class="illustration">
+        <svg width="400" height="130" viewBox="0 0 400 130" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="10" y="10" width="380" height="110" rx="10" fill="white" stroke="#2d2d2d" stroke-width="2" stroke-dasharray="6 3"/>
+            <text x="200" y="30" text-anchor="middle" fill="#2d2d2d" font-family="Caveat, cursive" font-size="16" font-weight="bold">提交消息示例</text>
+            <rect x="25" y="40" width="350" height="30" rx="6" fill="#f5f5f5" stroke="#bbb" stroke-width="1"/>
+            <text x="35" y="60" fill="#2d2d2d" font-family="monospace" font-size="12">feat: add avatar upload</text>
+            <rect x="25" y="76" width="350" height="34" rx="6" fill="#fffbe6" stroke="#f4a261" stroke-width="1"/>
+            <text x="35" y="92" fill="#2d2d2d" font-family="monospace" font-size="11">Fixes #42</text>
+            <text x="35" y="106" fill="#2d2d2d" font-family="monospace" font-size="11">Task: #7</text>
+            <line x1="130" y1="92" x2="160" y2="92" stroke="#5b9bd5" stroke-width="1.5" stroke-dasharray="4 2"/>
+            <line x1="130" y1="106" x2="160" y2="106" stroke="#9b72cf" stroke-width="1.5" stroke-dasharray="4 2"/>
+            <rect x="160" y="82" width="70" height="20" rx="8" fill="#5b9bd5" stroke="#2d2d2d" stroke-width="1"/>
+            <text x="195" y="96" text-anchor="middle" fill="white" font-size="10" font-weight="bold">→ Issue #42</text>
+            <rect x="160" y="98" width="60" height="20" rx="8" fill="#9b72cf" stroke="#2d2d2d" stroke-width="1"/>
+            <text x="190" y="112" text-anchor="middle" fill="white" font-size="10" font-weight="bold">→ Task #7</text>
+            <path d="M240 92 L280 70" stroke="#7bc67e" stroke-width="2" stroke-linecap="round"/>
+            <rect x="270" y="50" width="90" height="40" rx="8" fill="#e8f5e9" stroke="#7bc67e" stroke-width="1.5"/>
+            <text x="315" y="68" text-anchor="middle" fill="#2e7d32" font-size="10" font-weight="bold">✅ 自动关闭</text>
+            <text x="315" y="82" text-anchor="middle" fill="#2e7d32" font-size="10" font-weight="bold">Issue #42</text>
+        </svg>
+        <div class="illustration-caption">提交消息中的关联语法与自动流转效果</div>
+    </div>
+
+    <div class="note-card blue">
+        <h3>🔗 提交消息中的关联语法</h3>
+        <p>在提交消息中使用特殊关键词，系统会自动创建关联：</p>
+        <ul>
+            <li><span class="api-path">Fixes #123</span> — 关联并自动关闭 Issue #123</li>
+            <li><span class="api-path">Closes #456</span> — 同上，关闭 Issue</li>
+            <li><span class="api-path">Resolves #789</span> — 关联 Issue</li>
+            <li><span class="api-path">References #42</span> — 仅引用，不关闭</li>
+            <li><span class="api-path">Task: #5</span> — 关联任务 #5</li>
+            <li><span class="api-path">PR #10</span> — 关联 PR #10</li>
+        </ul>
+    </div>
+
+    <div class="note-card orange">
+        <h3>⚡ 自动流转规则</h3>
+        <ul>
+            <li>提交消息含 <span class="api-path">Closes #123</span> → Issue #123 自动关闭</li>
+            <li>PR 合并 → 关联任务自动流转到 Review 状态</li>
+            <li>所有关联记录可在提交详情页查看</li>
+        </ul>
+    </div>
+
+    <div class="tip-box">示例提交消息：<span class="api-path">feat: add user avatar upload, Fixes #42, Task: #7</span> — 这将同时关联 Issue #42 和 Task #7。</div>
+</div>
+
+<div class="doodle-divider">❋ ❋ ❋</div>
+
+<div class="chapter" id="ch8">
+    <div class="chapter-header">
+        <span class="chapter-num">8</span>
+        <span class="chapter-title">团队与组织</span>
+    </div>
+
+    <div class="illustration">
+        <svg width="340" height="120" viewBox="0 0 340 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="170" cy="40" r="24" fill="#5b9bd5" stroke="#2d2d2d" stroke-width="2"/>
+            <text x="170" y="45" text-anchor="middle" fill="white" font-size="18">👑</text>
+            <text x="170" y="80" text-anchor="middle" fill="#2d2d2d" font-family="Caveat, cursive" font-size="14" font-weight="bold">团队管理员</text>
+            <circle cx="60" cy="100" r="16" fill="#7bc67e" stroke="#2d2d2d" stroke-width="2"/>
+            <text x="60" y="105" text-anchor="middle" fill="white" font-size="12">A</text>
+            <circle cx="120" cy="100" r="16" fill="#f4a261" stroke="#2d2d2d" stroke-width="2"/>
+            <text x="120" y="105" text-anchor="middle" fill="white" font-size="12">B</text>
+            <circle cx="180" cy="100" r="16" fill="#9b72cf" stroke="#2d2d2d" stroke-width="2"/>
+            <text x="180" y="105" text-anchor="middle" fill="white" font-size="12">C</text>
+            <circle cx="240" cy="100" r="16" fill="#e76f51" stroke="#2d2d2d" stroke-width="2"/>
+            <text x="240" y="105" text-anchor="middle" fill="white" font-size="12">D</text>
+            <circle cx="300" cy="100" r="16" fill="#ddd" stroke="#2d2d2d" stroke-width="2" stroke-dasharray="4 2"/>
+            <text x="300" y="105" text-anchor="middle" fill="#999" font-size="14">+</text>
+            <line x1="170" y1="64" x2="60" y2="84" stroke="#ccc" stroke-width="1.5" stroke-dasharray="4 2"/>
+            <line x1="170" y1="64" x2="120" y2="84" stroke="#ccc" stroke-width="1.5" stroke-dasharray="4 2"/>
+            <line x1="170" y1="64" x2="180" y2="84" stroke="#ccc" stroke-width="1.5" stroke-dasharray="4 2"/>
+            <line x1="170" y1="64" x2="240" y2="84" stroke="#ccc" stroke-width="1.5" stroke-dasharray="4 2"/>
+        </svg>
+        <div class="illustration-caption">团队结构示意</div>
+    </div>
+
+    <div class="note-card blue">
+        <h3>👥 创建团队</h3>
+        <ol class="step-list">
+            <li>点击左侧导航「团队」</li>
+            <li>点击「新建团队」</li>
+            <li>填写团队名称和描述</li>
+            <li>上传团队头像</li>
+        </ol>
+    </div>
+
+    <div class="note-card green">
+        <h3>🤝 管理成员</h3>
+        <ul>
+            <li>在团队详情页点击「添加成员」</li>
+            <li>输入用户名添加新成员</li>
+            <li>可移除不再需要的成员</li>
+        </ul>
+    </div>
+
+    <div class="note-card purple">
+        <h3>📊 其他功能</h3>
+        <ul>
+            <li><span class="emoji-icon">⭐</span> Star — 收藏感兴趣的仓库</li>
+            <li><span class="emoji-icon">👁️</span> Watch — 关注仓库动态</li>
+            <li><span class="emoji-icon">🏷️</span> 里程碑 — 管理版本计划</li>
+            <li><span class="emoji-icon">📋</span> 代码片段 — 保存常用代码</li>
+            <li><span class="emoji-icon">🚀</span> Release — 管理版本发布</li>
+        </ul>
+    </div>
+</div>
+
+<div class="doodle-divider">~ ~ ~</div>
+
+<div class="illustration" style="margin-top:20px;">
+    <svg width="300" height="80" viewBox="0 0 300 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M50 60 C50 60, 30 30, 60 20 C90 10, 110 35, 110 35 C110 35, 130 10, 160 20 C190 30, 170 60, 170 60" stroke="#2d2d2d" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+        <circle cx="60" cy="20" r="8" fill="#7bc67e" stroke="#2d2d2d" stroke-width="2"/>
+        <circle cx="110" cy="35" r="8" fill="#5b9bd5" stroke="#2d2d2d" stroke-width="2"/>
+        <circle cx="160" cy="20" r="8" fill="#f4a261" stroke="#2d2d2d" stroke-width="2"/>
+        <text x="150" y="70" fill="#666" font-family="Caveat, cursive" font-size="16">Happy Coding! 🎉</text>
+    </svg>
+</div>
+
+<div class="footer">
+    <p>🐱 GitFolio — 让代码管理更轻松</p>
+    <p style="font-size:16px; margin-top:8px; color:#999;">v1.0 · 2026</p>
+</div>
+
+</div>
+</body>
+</html>

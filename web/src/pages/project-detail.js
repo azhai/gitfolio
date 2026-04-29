@@ -96,6 +96,13 @@ const ProjectDetail = {
         vnode.state.showBranchMenu = false;
         vnode.state.activeTab = 'branches';
         vnode.state.lastCommit = null;
+        vnode.state.stagedFiles = [];
+        vnode.state.workingFiles = [];
+        vnode.state.untrackedFiles = [];
+        vnode.state.isNonMirrorRepo = false;
+        vnode.state.showCommitDialog = false;
+        vnode.state.commitMessage = '';
+        vnode.state.committing = false;
         
         const closeBranchMenu = (e) => {
             if (vnode.state.showBranchMenu) {
@@ -116,6 +123,10 @@ const ProjectDetail = {
         vnode.state.loadBranches = function() {
             RepositoryService.getBranches(owner, repo).then(result => {
                 vnode.state.branches = result.branches || [];
+                vnode.state.stagedFiles = result.staged_files || [];
+                vnode.state.workingFiles = result.working_files || [];
+                vnode.state.untrackedFiles = result.untracked_files || [];
+                vnode.state.isNonMirrorRepo = result.staged_files !== undefined;
                 m.redraw();
             }).catch(() => {});
         };
@@ -199,7 +210,7 @@ const ProjectDetail = {
     },
     
     view(vnode) {
-        const { repo, issuesCount, prsCount, loading, currentPath, currentBranch, branches, tags, treeEntries, fileContent, showBranchMenu, activeTab, lastCommit } = vnode.state;
+        const { repo, issuesCount, prsCount, loading, currentPath, currentBranch, branches, tags, treeEntries, fileContent, showBranchMenu, activeTab, lastCommit, stagedFiles, workingFiles, untrackedFiles, isNonMirrorRepo, showCommitDialog, commitMessage, committing } = vnode.state;
         const { owner, repo: repoName } = vnode.attrs;
         
         console.log('🎨 [view] Rendering...');
@@ -274,6 +285,42 @@ const ProjectDetail = {
                                         ]),
                                         m('div.branch-menu-list', [
                                             activeTab === 'branches' ? 
+                                                [
+                                                    isNonMirrorRepo ? m('div.branch-option virtual-branch', {
+                                                        class: currentBranch === '__staged__' ? 'active' : '',
+                                                        onclick: (e) => { 
+                                                            e.stopPropagation();
+                                                            vnode.state.currentBranch = '__staged__';
+                                                            vnode.state.currentPath = '';
+                                                            vnode.state.showBranchMenu = false;
+                                                            vnode.state.treeEntries = stagedFiles.map(f => ({ type: 'blob', name: f.split('/').pop(), path: f, size: 0 }));
+                                                            vnode.state.fileContent = null;
+                                                            m.redraw();
+                                                        }
+                                                    }, [
+                                                        m('i.fas.fa-check', { style: { visibility: currentBranch === '__staged__' ? 'visible' : 'hidden' } }),
+                                                        m('i.fas.fa-layer-group'),
+                                                        `暂存区 (${stagedFiles.length})`
+                                                    ]) : null,
+                                                    isNonMirrorRepo ? m('div.branch-option virtual-branch', {
+                                                        class: currentBranch === '__working__' ? 'active' : '',
+                                                        onclick: (e) => { 
+                                                            e.stopPropagation();
+                                                            vnode.state.currentBranch = '__working__';
+                                                            vnode.state.currentPath = '';
+                                                            vnode.state.showBranchMenu = false;
+                                                            const allWorking = [...(workingFiles || []), ...(untrackedFiles || [])];
+                                                            vnode.state.treeEntries = allWorking.map(f => ({ type: 'blob', name: f.split('/').pop(), path: f, size: 0 }));
+                                                            vnode.state.fileContent = null;
+                                                            m.redraw();
+                                                        }
+                                                    }, [
+                                                        m('i.fas.fa-check', { style: { visibility: currentBranch === '__working__' ? 'visible' : 'hidden' } }),
+                                                        m('i.fas.fa-edit'),
+                                                        `工作区 (${(workingFiles || []).length + (untrackedFiles || []).length})`
+                                                    ]) : null,
+                                                    isNonMirrorRepo ? m('div.branch-divider') : null,
+                                                ].concat(
                                                 branches.map(branch => 
                                                     m('div.branch-option', {
                                                         class: currentBranch === branch ? 'active' : '',
@@ -295,7 +342,7 @@ const ProjectDetail = {
                                                         m('i.fas.fa-check', { style: { visibility: currentBranch === branch ? 'visible' : 'hidden' } }),
                                                         branch
                                                     ])
-                                                ) :
+                                                )) :
                                                 tags.map(tag => 
                                                     m('div.branch-option', {
                                                         class: currentBranch === tag ? 'active' : '',
@@ -317,6 +364,15 @@ const ProjectDetail = {
                                     ]) : null
                                 ]),
                                 m('div.file-actions', [
+                                    isNonMirrorRepo && stagedFiles.length > 0 ? m('button.btn.btn-sm.btn-primary', {
+                                        onclick: () => {
+                                            vnode.state.showCommitDialog = true;
+                                            vnode.state.commitMessage = '';
+                                        }
+                                    }, [
+                                        m('i.fas.fa-check'),
+                                        ' 提交'
+                                    ]) : null,
                                     m('button.btn.btn-sm', [
                                         m('i.fas.fa-plus'),
                                         ' 添加文件'
@@ -359,11 +415,115 @@ const ProjectDetail = {
                                     }, fileContent)
                                 ])
                             ] : [
+                                currentBranch === '__staged__' ? m('div.virtual-branch-panel', [
+                                    m('div.virtual-branch-header', [
+                                        m('div.virtual-branch-title', [
+                                            m('i.fas.fa-layer-group'),
+                                            m('span', '暂存区'),
+                                            m('span.badge', stagedFiles.length)
+                                        ]),
+                                        stagedFiles.length > 0 ? m('button.btn.btn-sm.btn-primary', {
+                                            onclick: () => {
+                                                vnode.state.showCommitDialog = true;
+                                                vnode.state.commitMessage = '';
+                                            }
+                                        }, [m('i.fas.fa-check'), ' 提交变更']) : null
+                                    ]),
+                                    stagedFiles.length === 0 
+                                        ? m('div.virtual-branch-empty', '暂无已暂存的文件')
+                                        : m('div.file-list', stagedFiles.map(file => 
+                                            m('div.file-item virtual-file-item', [
+                                                m('span.file-icon', [m('i.fas.fa-file-code')]),
+                                                m('span.file-name', file),
+                                                m('span.file-actions-inline', [
+                                                    m('button.btn-icon', {
+                                                        title: '取消暂存',
+                                                        onclick: () => {
+                                                            RepositoryService.unstage(owner, repoName, { files: [file] }).then(result => {
+                                                                vnode.state.stagedFiles = result.staged_files || [];
+                                                                vnode.state.workingFiles = result.working_files || [];
+                                                                vnode.state.untrackedFiles = result.untracked_files || [];
+                                                                vnode.state.treeEntries = (result.staged_files || []).map(f => ({ type: 'blob', name: f.split('/').pop(), path: f, size: 0 }));
+                                                                m.redraw();
+                                                            });
+                                                        }
+                                                    }, m('i.fas.fa-minus'))
+                                                ])
+                                            ])
+                                        ))
+                                ]) :
+                                currentBranch === '__working__' ? m('div.virtual-branch-panel', [
+                                    m('div.virtual-branch-header', [
+                                        m('div.virtual-branch-title', [
+                                            m('i.fas.fa-edit'),
+                                            m('span', '工作区'),
+                                            m('span.badge', (workingFiles || []).length + (untrackedFiles || []).length)
+                                        ]),
+                                        (workingFiles || []).length + (untrackedFiles || []).length > 0 ? m('button.btn.btn-sm', {
+                                            onclick: () => {
+                                                RepositoryService.stage(owner, repoName, { files: [] }).then(result => {
+                                                    vnode.state.stagedFiles = result.staged_files || [];
+                                                    vnode.state.workingFiles = result.working_files || [];
+                                                    vnode.state.untrackedFiles = result.untracked_files || [];
+                                                    vnode.state.currentBranch = '__staged__';
+                                                    vnode.state.treeEntries = (result.staged_files || []).map(f => ({ type: 'blob', name: f.split('/').pop(), path: f, size: 0 }));
+                                                    m.redraw();
+                                                });
+                                            }
+                                        }, [m('i.fas.fa-plus'), ' 全部暂存']) : null
+                                    ]),
+                                    (workingFiles || []).length + (untrackedFiles || []).length === 0
+                                        ? m('div.virtual-branch-empty', '工作区很干净，没有未暂存的修改')
+                                        : m('div.file-list', [
+                                            ...(workingFiles || []).map(file => 
+                                                m('div.file-item virtual-file-item', [
+                                                    m('span.file-icon.modified', [m('i.fas.fa-file-code')]),
+                                                    m('span.file-name', file),
+                                                    m('span.file-status.modified', '已修改'),
+                                                    m('span.file-actions-inline', [
+                                                        m('button.btn-icon', {
+                                                            title: '暂存此文件',
+                                                            onclick: () => {
+                                                                RepositoryService.stage(owner, repoName, { files: [file] }).then(result => {
+                                                                    vnode.state.stagedFiles = result.staged_files || [];
+                                                                    vnode.state.workingFiles = result.working_files || [];
+                                                                    vnode.state.untrackedFiles = result.untracked_files || [];
+                                                                    const allWorking = [...(result.working_files || []), ...(result.untracked_files || [])];
+                                                                    vnode.state.treeEntries = allWorking.map(f => ({ type: 'blob', name: f.split('/').pop(), path: f, size: 0 }));
+                                                                    m.redraw();
+                                                                });
+                                                            }
+                                                        }, m('i.fas.fa-plus'))
+                                                    ])
+                                                ])
+                                            ),
+                                            ...(untrackedFiles || []).map(file => 
+                                                m('div.file-item virtual-file-item', [
+                                                    m('span.file-icon.untracked', [m('i.fas.fa-file-code')]),
+                                                    m('span.file-name', file),
+                                                    m('span.file-status.untracked', '未跟踪'),
+                                                    m('span.file-actions-inline', [
+                                                        m('button.btn-icon', {
+                                                            title: '暂存此文件',
+                                                            onclick: () => {
+                                                                RepositoryService.stage(owner, repoName, { files: [file] }).then(result => {
+                                                                    vnode.state.stagedFiles = result.staged_files || [];
+                                                                    vnode.state.workingFiles = result.working_files || [];
+                                                                    vnode.state.untrackedFiles = result.untracked_files || [];
+                                                                    const allWorking = [...(result.working_files || []), ...(result.untracked_files || [])];
+                                                                    vnode.state.treeEntries = allWorking.map(f => ({ type: 'blob', name: f.split('/').pop(), path: f, size: 0 }));
+                                                                    m.redraw();
+                                                                });
+                                                            }
+                                                        }, m('i.fas.fa-plus'))
+                                                    ])
+                                                ])
+                                            )
+                                        ])
+                                ]) :
                                 treeEntries.length === 0 
                                     ? m(EmptyState, { message: repo.local_path ? '此目录为空' : '仓库未初始化，请先同步代码', icon: 'fa-folder-open' })
                                     : (function() {
-                                        console.log('📁 [view] Rendering file list with', treeEntries.length, 'entries');
-                                        console.log('📁 [view] First entry:', treeEntries[0]);
                                         return m('div.file-list', treeEntries.map(entry => 
                                             m(TreeEntry, { 
                                                 entry, 
@@ -415,7 +575,77 @@ const ProjectDetail = {
                             ])
                         ])
                     ])
-                ])
+                ]),
+                showCommitDialog ? m('div.modal-overlay', {
+                    onclick: (e) => {
+                        if (e.target.classList.contains('modal-overlay')) {
+                            vnode.state.showCommitDialog = false;
+                            m.redraw();
+                        }
+                    }
+                }, m('div.modal.commit-dialog', [
+                    m('div.modal-header', [
+                        m('h3', [m('i.fas.fa-check'), ' 提交变更']),
+                        m('button.modal-close', {
+                            onclick: () => {
+                                vnode.state.showCommitDialog = false;
+                                m.redraw();
+                            }
+                        }, m('i.fas.fa-times'))
+                    ]),
+                    m('div.modal-body', [
+                        m('div.commit-files-summary', [
+                            m('span', `${stagedFiles.length} 个文件已暂存`)
+                        ]),
+                        m('div.commit-files-list', stagedFiles.map(file => 
+                            m('div.commit-file-item', [
+                                m('i.fas.fa-file-code'),
+                                m('span', file)
+                            ])
+                        )),
+                        m('div.form-group', [
+                            m('label', '提交信息'),
+                            m('textarea.commit-message-input', {
+                                placeholder: '输入提交信息...',
+                                value: commitMessage,
+                                oninput: (e) => {
+                                    vnode.state.commitMessage = e.target.value;
+                                }
+                            })
+                        ])
+                    ]),
+                    m('div.modal-footer', [
+                        m('button.btn', {
+                            onclick: () => {
+                                vnode.state.showCommitDialog = false;
+                                m.redraw();
+                            }
+                        }, '取消'),
+                        m('button.btn.btn-primary', {
+                            disabled: !commitMessage.trim() || committing,
+                            onclick: () => {
+                                if (!commitMessage.trim()) return;
+                                vnode.state.committing = true;
+                                m.redraw();
+                                RepositoryService.commit(owner, repoName, { message: commitMessage.trim() }).then(result => {
+                                    vnode.state.committing = false;
+                                    vnode.state.showCommitDialog = false;
+                                    vnode.state.stagedFiles = result.staged_files || [];
+                                    vnode.state.workingFiles = result.working_files || [];
+                                    vnode.state.untrackedFiles = result.untracked_files || [];
+                                    vnode.state.currentBranch = repo.default_branch || 'main';
+                                    vnode.state.loadTree();
+                                    vnode.state.loadBranches();
+                                    m.redraw();
+                                }).catch(err => {
+                                    vnode.state.committing = false;
+                                    alert('提交失败: ' + (err.message || '未知错误'));
+                                    m.redraw();
+                                });
+                            }
+                        }, committing ? '提交中...' : '确认提交')
+                    ])
+                ])) : null
             ])
         ]);
     }

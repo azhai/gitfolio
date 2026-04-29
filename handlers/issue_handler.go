@@ -7,6 +7,7 @@ import (
 	"github.com/azhai/gitfolio/helpers"
 	"github.com/azhai/gitfolio/middleware"
 	"github.com/azhai/gitfolio/models"
+	"github.com/azhai/goent"
 	"github.com/gofiber/fiber/v3"
 )
 
@@ -39,41 +40,24 @@ type CommentResponse struct {
 }
 
 type IssueResponse struct {
-	ID            int64   `json:"id"`
-	Number        int     `json:"number"`
-	Title         string  `json:"title"`
-	Body          string  `json:"body"`
-	RepositoryID  int64   `json:"repository_id"`
-	Author        string  `json:"author"`
-	AuthorID      int64   `json:"author_id"`
-	Assignee      string  `json:"assignee,omitempty"`
-	AssigneeID    *int64  `json:"assignee_id,omitempty"`
-	Labels        []Label `json:"labels"`
-	IsClosed      bool    `json:"is_closed"`
-	IsLocked      bool    `json:"is_locked"`
-	CommentsCount int     `json:"comments_count"`
-	CreatedAt     string  `json:"created_at"`
-	UpdatedAt     string  `json:"updated_at"`
+	ID            int64              `json:"id"`
+	Number        int                `json:"number"`
+	Title         string             `json:"title"`
+	Body          string             `json:"body"`
+	RepositoryID  int64              `json:"repository_id"`
+	Author        string             `json:"author"`
+	AuthorID      int64              `json:"author_id"`
+	Assignee      string             `json:"assignee,omitempty"`
+	AssigneeID    *int64             `json:"assignee_id,omitempty"`
+	Labels        []helpers.LabelInfo `json:"labels"`
+	IsClosed      bool               `json:"is_closed"`
+	IsLocked      bool               `json:"is_locked"`
+	CommentsCount int                `json:"comments_count"`
+	CreatedAt     string             `json:"created_at"`
+	UpdatedAt     string             `json:"updated_at"`
 }
 
-type Label struct {
-	ID          int64  `json:"id"`
-	Name        string `json:"name"`
-	Color       string `json:"color"`
-	Description string `json:"description,omitempty"`
-}
-
-var DefaultLabels = []struct {
-	Name        string
-	Color       string
-	Description string
-}{
-	{"Bug", "#d73a4a", "Something isn't working"},
-	{"Feat", "#a2eeef", "New feature or request"},
-	{"WIP", "#fbca04", "Work in progress"},
-}
-
-func ToIssueResponse(issue *models.Issue, author *models.Contributor, assignee *models.Contributor, labels []Label, commentsCount int) *IssueResponse {
+func ToIssueResponse(issue *models.Issue, author *models.Contributor, assignee *models.Contributor, labels []helpers.LabelInfo, commentsCount int) *IssueResponse {
 	response := &IssueResponse{
 		ID:            issue.ID,
 		Number:        issue.Number,
@@ -98,62 +82,6 @@ func ToIssueResponse(issue *models.Issue, author *models.Contributor, assignee *
 	return response
 }
 
-func getIssueLabels(db *models.Database, issueID int64) []Label {
-	issueLabels, err := db.IssueLabel.Select().Where("issue_id = ?", issueID).All()
-	if err != nil {
-		return []Label{}
-	}
-
-	var labelIDs []int64
-	for _, il := range issueLabels {
-		labelIDs = append(labelIDs, il.LabelID)
-	}
-
-	if len(labelIDs) == 0 {
-		return []Label{}
-	}
-
-	labels, err := db.Label.Select().Where("id IN (?)", labelIDs).All()
-	if err != nil {
-		return []Label{}
-	}
-
-	var result []Label
-	for _, l := range labels {
-		result = append(result, Label{
-			ID:          l.ID,
-			Name:        l.Name,
-			Color:       l.Color,
-			Description: l.Description,
-		})
-	}
-
-	return result
-}
-
-func getIssueCommentsCount(db *models.Database, issueID int64) int {
-	count, _ := db.Comment.Select().Where("issue_id = ?", issueID).Count("*")
-	return int(count)
-}
-
-func ensureDefaultLabels(db *models.Database, repoID int64) error {
-	for _, dl := range DefaultLabels {
-		count, _ := db.Label.Select().Where("repository_id = ? AND name = ?", repoID, dl.Name).Count("*")
-		if count == 0 {
-			newLabel := &models.Label{
-				Name:         dl.Name,
-				Color:        dl.Color,
-				Description:  dl.Description,
-				RepositoryID: repoID,
-			}
-			if err := db.Label.Insert().One(newLabel); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
 func CreateIssue(c fiber.Ctx) error {
 	userID := middleware.GetCurrentUserID(c)
 
@@ -169,29 +97,18 @@ func CreateIssue(c fiber.Ctx) error {
 
 	db := models.GetDB()
 
-	if err := ensureDefaultLabels(db, result.Repo.ID); err != nil {
+	if err := helpers.EnsureDefaultLabels(db, result.Repo.ID); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to ensure default labels"})
 	}
 
-	authorUser, err := db.User.Select().Where("id = ?", userID).One()
+	authorUser, err := db.User.Select().Filter(
+		goent.Equals(db.User.Field("id"), userID),
+	).One()
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Author not found"})
 	}
 
-	var authorContrib *models.Contributor
-	existingContribs, _ := db.Contributor.Select().Where("repository_id = ? AND name = ?", result.Repo.ID, authorUser.Username).All()
-	if len(existingContribs) > 0 {
-		authorContrib = existingContribs[0]
-	} else {
-		authorContrib = &models.Contributor{
-			Name:         authorUser.Username,
-			Email:        authorUser.Email,
-			Avatar:       authorUser.Avatar,
-			RepositoryID: result.Repo.ID,
-			CommitsCount: 0,
-		}
-		db.Contributor.Insert().One(authorContrib)
-	}
+	authorContrib := helpers.FindOrCreateContributor(db, result.Repo.ID, authorUser.Username, authorUser.Email, authorUser.Avatar)
 
 	var assigneeContrib *models.Contributor
 	issueModel := &models.Issue{
@@ -202,7 +119,12 @@ func CreateIssue(c fiber.Ctx) error {
 	}
 
 	if req.Assignee != "" {
-		assigneeContribs, _ := db.Contributor.Select().Where("repository_id = ? AND name = ?", result.Repo.ID, req.Assignee).All()
+		assigneeContribs, _ := db.Contributor.Select().Filter(
+			goent.And(
+				goent.Equals(db.Contributor.Field("repository_id"), result.Repo.ID),
+				goent.Equals(db.Contributor.Field("name"), req.Assignee),
+			),
+		).All()
 		if len(assigneeContribs) > 0 {
 			assigneeContrib = assigneeContribs[0]
 			issueModel.AssigneeID = &assigneeContrib.ID
@@ -214,25 +136,7 @@ func CreateIssue(c fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create issue"})
 	}
 
-	var labels []Label
-	if len(req.Labels) > 0 {
-		dbLabels, err := db.Label.Select().Where("repository_id = ? AND name IN (?)", result.Repo.ID, req.Labels).All()
-		if err == nil {
-			for _, l := range dbLabels {
-				issueLabel := &models.IssueLabel{
-					IssueID: issueModel.ID,
-					LabelID: l.ID,
-				}
-				db.IssueLabel.Insert().One(issueLabel)
-				labels = append(labels, Label{
-					ID:          l.ID,
-					Name:        l.Name,
-					Color:       l.Color,
-					Description: l.Description,
-				})
-			}
-		}
-	}
+	labels := helpers.AttachLabelsToIssue(db, result.Repo.ID, issueModel.ID, req.Labels)
 
 	return c.Status(fiber.StatusCreated).JSON(ToIssueResponse(issueModel, authorContrib, assigneeContrib, labels, 0))
 }
@@ -247,37 +151,33 @@ func GetIssue(c fiber.Ctx) error {
 
 	db := models.GetDB()
 
-	issueModel, err := db.Issue.Select().Where("repository_id = ? AND number = ?", result.Repo.ID, issueNumber).One()
+	issueModel, err := db.Issue.Select().Filter(
+		goent.And(
+			goent.Equals(db.Issue.Field("repository_id"), result.Repo.ID),
+			goent.Equals(db.Issue.Field("number"), issueNumber),
+		),
+	).One()
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Issue not found"})
 	}
 
-	if issueModel == nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Issue not found"})
-	}
-
-	authorContrib, err := db.Contributor.Select().Where("id = ?", issueModel.AuthorID).One()
-	if err != nil {
-		authorContrib = &models.Contributor{Name: "Unknown"}
-	}
+	authorContrib := helpers.GetContributor(db, issueModel.AuthorID)
 
 	var assigneeContrib *models.Contributor
 	if issueModel.AssigneeID != nil {
 		assigneeContrib, _ = db.Contributor.Select().Where("id = ?", *issueModel.AssigneeID).One()
 	}
 
-	labels := getIssueLabels(db, issueModel.ID)
-	commentsCount := getIssueCommentsCount(db, issueModel.ID)
+	labels := helpers.GetIssueLabels(db, issueModel.ID)
+	commentsCount, _ := db.Comment.Select().Filter(
+		goent.Equals(db.Comment.Field("issue_id"), issueModel.ID),
+	).Count("id")
 
-	return c.Status(fiber.StatusOK).JSON(ToIssueResponse(issueModel, authorContrib, assigneeContrib, labels, commentsCount))
+	return c.Status(fiber.StatusOK).JSON(ToIssueResponse(issueModel, authorContrib, assigneeContrib, labels, int(commentsCount)))
 }
 
 func ListIssues(c fiber.Ctx) error {
-	page, _ := strconv.Atoi(c.Query("page", strconv.Itoa(config.DefaultPage)))
-	perPage, _ := strconv.Atoi(c.Query("per_page", strconv.Itoa(config.DefaultPerPage)))
-	if perPage > config.MaxPerPage {
-		perPage = config.MaxPerPage
-	}
+	pagination := helpers.GetPagination(c)
 	state := c.Query("state", config.IssueStateOpen)
 	labelFilter := c.Query("label", "")
 
@@ -287,40 +187,31 @@ func ListIssues(c fiber.Ctx) error {
 	}
 
 	db := models.GetDB()
+	_ = helpers.EnsureDefaultLabels(db, result.Repo.ID)
 
-	if err := ensureDefaultLabels(db, result.Repo.ID); err != nil {
-	}
-
-	query := db.Issue.Select().Where("repository_id = ?", result.Repo.ID)
-
+	conds := []goent.Condition{goent.Equals(db.Issue.Field("repository_id"), result.Repo.ID)}
 	if state == "open" {
-		query = query.Where("is_closed = ?", false)
+		conds = append(conds, goent.Equals(db.Issue.Field("is_closed"), false))
 	} else if state == "closed" {
-		query = query.Where("is_closed = ?", true)
+		conds = append(conds, goent.Equals(db.Issue.Field("is_closed"), true))
 	}
 
-	issues, err := query.Skip((page - 1) * perPage).Take(perPage).All()
+	issues, err := db.Issue.Select().Filter(conds...).
+		Skip(helpers.GetOffset(pagination.Page, pagination.PerPage)).
+		Take(pagination.PerPage).All()
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch issues"})
 	}
 
-	contributorIDs := make(map[int64]bool)
-	for _, issue := range issues {
-		if issue.AuthorID != 0 {
-			contributorIDs[issue.AuthorID] = true
-		}
-		if issue.AssigneeID != nil && *issue.AssigneeID != 0 {
-			contributorIDs[*issue.AssigneeID] = true
-		}
-	}
+	contributorIDs := helpers.CollectContributorIDs(issues)
+	contributorsMap := helpers.BatchGetContributors(db, contributorIDs)
 
-	contributorsMap := make(map[int64]*models.Contributor)
-	for contributorID := range contributorIDs {
-		contrib, err := db.Contributor.Select().Where("id = ?", contributorID).One()
-		if err == nil {
-			contributorsMap[contributorID] = contrib
-		}
+	var issueIDs []int64
+	for _, issue := range issues {
+		issueIDs = append(issueIDs, issue.ID)
 	}
+	labelsMap := helpers.BatchGetIssueLabels(db, issueIDs)
+	commentsCountMap := helpers.BatchGetCommentsCount(db, issueIDs, "issue")
 
 	var response []*IssueResponse
 	response = make([]*IssueResponse, 0)
@@ -335,7 +226,10 @@ func ListIssues(c fiber.Ctx) error {
 			assigneeContrib = contributorsMap[*issue.AssigneeID]
 		}
 
-		labels := getIssueLabels(db, issue.ID)
+		labels := labelsMap[issue.ID]
+		if labels == nil {
+			labels = []helpers.LabelInfo{}
+		}
 
 		if labelFilter != "" {
 			hasLabel := false
@@ -350,14 +244,14 @@ func ListIssues(c fiber.Ctx) error {
 			}
 		}
 
-		commentsCount := getIssueCommentsCount(db, issue.ID)
+		commentsCount := commentsCountMap[issue.ID]
 		response = append(response, ToIssueResponse(issue, authorContrib, assigneeContrib, labels, commentsCount))
 	}
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
 		"data":     response,
-		"page":     page,
-		"per_page": perPage,
+		"page":     pagination.Page,
+		"per_page": pagination.PerPage,
 	})
 }
 
@@ -376,11 +270,14 @@ func UpdateIssue(c fiber.Ctx) error {
 	}
 
 	db := models.GetDB()
+	_ = helpers.EnsureDefaultLabels(db, result.Repo.ID)
 
-	if err := ensureDefaultLabels(db, result.Repo.ID); err != nil {
-	}
-
-	issueModel, err := db.Issue.Select().Where("repository_id = ? AND number = ?", result.Repo.ID, issueNumber).One()
+	issueModel, err := db.Issue.Select().Filter(
+		goent.And(
+			goent.Equals(db.Issue.Field("repository_id"), result.Repo.ID),
+			goent.Equals(db.Issue.Field("number"), issueNumber),
+		),
+	).One()
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Issue not found"})
 	}
@@ -399,7 +296,12 @@ func UpdateIssue(c fiber.Ctx) error {
 		issueModel.IsClosed = *req.IsClosed
 	}
 	if req.Assignee != "" {
-		assigneeContribs, _ := db.Contributor.Select().Where("repository_id = ? AND name = ?", result.Repo.ID, req.Assignee).All()
+		assigneeContribs, _ := db.Contributor.Select().Filter(
+			goent.And(
+				goent.Equals(db.Contributor.Field("repository_id"), result.Repo.ID),
+				goent.Equals(db.Contributor.Field("name"), req.Assignee),
+			),
+		).All()
 		if len(assigneeContribs) > 0 {
 			issueModel.AssigneeID = &assigneeContribs[0].ID
 		}
@@ -410,35 +312,25 @@ func UpdateIssue(c fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update issue"})
 	}
 
+	var labels []helpers.LabelInfo
 	if req.Labels != nil {
-		db.IssueLabel.Delete().Where("issue_id = ?", issueModel.ID).Exec()
-
-		if len(req.Labels) > 0 {
-			dbLabels, err := db.Label.Select().Where("repository_id = ? AND name IN (?)", result.Repo.ID, req.Labels).All()
-			if err == nil {
-				for _, l := range dbLabels {
-					issueLabel := &models.IssueLabel{
-						IssueID: issueModel.ID,
-						LabelID: l.ID,
-					}
-					db.IssueLabel.Insert().One(issueLabel)
-				}
-			}
-		}
+		labels = helpers.ReplaceIssueLabels(db, result.Repo.ID, issueModel.ID, req.Labels)
+	} else {
+		labels = helpers.GetIssueLabels(db, issueModel.ID)
 	}
 
-	authorContrib, _ := db.Contributor.Select().Where("id = ?", issueModel.AuthorID).One()
-	if authorContrib == nil {
-		authorContrib = &models.Contributor{Name: "Unknown"}
-	}
+	authorContrib := helpers.GetContributor(db, issueModel.AuthorID)
+
 	var assigneeContrib *models.Contributor
 	if issueModel.AssigneeID != nil {
 		assigneeContrib, _ = db.Contributor.Select().Where("id = ?", *issueModel.AssigneeID).One()
 	}
-	labels := getIssueLabels(db, issueModel.ID)
-	commentsCount := getIssueCommentsCount(db, issueModel.ID)
 
-	return c.Status(fiber.StatusOK).JSON(ToIssueResponse(issueModel, authorContrib, assigneeContrib, labels, commentsCount))
+	commentsCount, _ := db.Comment.Select().Filter(
+		goent.Equals(db.Comment.Field("issue_id"), issueModel.ID),
+	).Count("id")
+
+	return c.Status(fiber.StatusOK).JSON(ToIssueResponse(issueModel, authorContrib, assigneeContrib, labels, int(commentsCount)))
 }
 
 func CreateComment(c fiber.Ctx) error {
@@ -457,7 +349,12 @@ func CreateComment(c fiber.Ctx) error {
 
 	db := models.GetDB()
 
-	issueModel, err := db.Issue.Select().Where("repository_id = ? AND number = ?", result.Repo.ID, issueNumber).One()
+	issueModel, err := db.Issue.Select().Filter(
+		goent.And(
+			goent.Equals(db.Issue.Field("repository_id"), result.Repo.ID),
+			goent.Equals(db.Issue.Field("number"), issueNumber),
+		),
+	).One()
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Issue not found"})
 	}
@@ -465,19 +362,7 @@ func CreateComment(c fiber.Ctx) error {
 	authorUser, _ := db.User.Select().Where("id = ?", userID).One()
 	var authorContrib *models.Contributor
 	if authorUser != nil {
-		existingContribs, _ := db.Contributor.Select().Where("repository_id = ? AND name = ?", result.Repo.ID, authorUser.Username).All()
-		if len(existingContribs) > 0 {
-			authorContrib = existingContribs[0]
-		} else {
-			authorContrib = &models.Contributor{
-				Name:         authorUser.Username,
-				Email:        authorUser.Email,
-				Avatar:       authorUser.Avatar,
-				RepositoryID: result.Repo.ID,
-				CommitsCount: 0,
-			}
-			db.Contributor.Insert().One(authorContrib)
-		}
+		authorContrib = helpers.FindOrCreateContributor(db, result.Repo.ID, authorUser.Username, authorUser.Email, authorUser.Avatar)
 	}
 
 	issueID := issueModel.ID
@@ -512,30 +397,31 @@ func GetComments(c fiber.Ctx) error {
 
 	db := models.GetDB()
 
-	issueModel, err := db.Issue.Select().Where("repository_id = ? AND number = ?", result.Repo.ID, issueNumber).One()
+	issueModel, err := db.Issue.Select().Filter(
+		goent.And(
+			goent.Equals(db.Issue.Field("repository_id"), result.Repo.ID),
+			goent.Equals(db.Issue.Field("number"), issueNumber),
+		),
+	).One()
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Issue not found"})
 	}
 
-	comments, err := db.Comment.Select().Where("issue_id = ?", issueModel.ID).All()
+	comments, err := db.Comment.Select().Filter(
+		goent.Equals(db.Comment.Field("issue_id"), issueModel.ID),
+	).All()
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch comments"})
 	}
 
-	contributorIDs := make(map[int64]bool)
+	var contributorIDs []int64
 	for _, comment := range comments {
 		if comment.AuthorID != 0 {
-			contributorIDs[comment.AuthorID] = true
+			contributorIDs = append(contributorIDs, comment.AuthorID)
 		}
 	}
 
-	contributorsMap := make(map[int64]*models.Contributor)
-	for contributorID := range contributorIDs {
-		contrib, err := db.Contributor.Select().Where("id = ?", contributorID).One()
-		if err == nil {
-			contributorsMap[contributorID] = contrib
-		}
-	}
+	contributorsMap := helpers.BatchGetContributors(db, contributorIDs)
 
 	var response []*CommentResponse
 	response = make([]*CommentResponse, 0)
@@ -565,24 +451,19 @@ func ListLabels(c fiber.Ctx) error {
 	}
 
 	db := models.GetDB()
+	_ = helpers.EnsureDefaultLabels(db, result.Repo.ID)
 
-	if err := ensureDefaultLabels(db, result.Repo.ID); err != nil {
-	}
-
-	labels, err := db.Label.Select().Where("repository_id = ?", result.Repo.ID).All()
+	labels, err := db.Label.Select().Filter(
+		goent.Equals(db.Label.Field("repository_id"), result.Repo.ID),
+	).All()
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch labels"})
 	}
 
-	var response []Label
-	response = make([]Label, 0)
+	var response []helpers.LabelInfo
+	response = make([]helpers.LabelInfo, 0)
 	for _, l := range labels {
-		response = append(response, Label{
-			ID:          l.ID,
-			Name:        l.Name,
-			Color:       l.Color,
-			Description: l.Description,
-		})
+		response = append(response, helpers.ModelToLabelInfo(l))
 	}
 
 	return c.Status(fiber.StatusOK).JSON(response)

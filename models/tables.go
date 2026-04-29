@@ -35,6 +35,10 @@ type FolioSchema struct {
 	TaskAttachment   *goent.Table[TaskAttachment]
 	TaskSchedule     *goent.Table[TaskSchedule]
 	TaskIssue        *goent.Table[TaskIssue]
+	TaskTransition   *goent.Table[TaskTransition]
+	TaskPullRequest  *goent.Table[TaskPullRequest]
+	TaskTimeLog      *goent.Table[TaskTimeLog]
+	CommitReference  *goent.Table[CommitReference]
 	User             *goent.Table[User]
 	Watch            *goent.Table[Watch]
 	Webhook          *goent.Table[Webhook]
@@ -93,6 +97,7 @@ type Repository struct {
 	LocalPath  string
 
 	DefaultBranch string `goe:"default:'main'"`
+	LastCommitAt  *time.Time
 }
 
 type RepositoryStats struct {
@@ -177,6 +182,7 @@ type Comment struct {
 
 	IssueID       *int64 `goe:"index"`
 	PullRequestID *int64 `goe:"index"`
+	TaskID        *int64 `goe:"index"`
 
 	AuthorID int64 `goe:"index"`
 }
@@ -516,4 +522,42 @@ type TaskIssue struct {
 
 	TaskID  int64 `goe:"index"`
 	IssueID int64 `goe:"index"`
+}
+
+type CommitReference struct {
+	ID           int64 `goe:"pk"`
+	CreatedAt    time.Time
+	CommitHash   string `goe:"index"`
+	RepositoryID int64  `goe:"index"`
+	TargetType   string `goe:"index"`
+	TargetID     int64  `goe:"index"`
+	Action       string
+}
+
+type TaskTransition struct {
+	ID         int64 `goe:"pk"`
+	CreatedAt  time.Time
+	TaskID     int64 `goe:"index"`
+	FromStatus string
+	ToStatus   string
+	UserID     int64 `goe:"index"`
+	Comment    string
+}
+
+type TaskPullRequest struct {
+	ID            int64 `goe:"pk"`
+	CreatedAt     time.Time
+	TaskID        int64 `goe:"index"`
+	PullRequestID int64 `goe:"index"`
+}
+
+type TaskTimeLog struct {
+	ID        int64 `goe:"pk"`
+	CreatedAt time.Time
+	TaskID    int64 `goe:"index"`
+	UserID    int64 `goe:"index"`
+	StartTime time.Time
+	EndTime   *time.Time
+	Duration  int64
+	Note      string
 }

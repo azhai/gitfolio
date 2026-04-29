@@ -6,9 +6,11 @@ import (
 	"github.com/azhai/gitfolio/helpers"
 	"github.com/azhai/gitfolio/models"
 	"github.com/azhai/gitfolio/services"
+	"github.com/azhai/goent"
 	"github.com/gofiber/fiber/v3"
 )
 
+// ReleaseAuthorResponse 发布作者响应
 type ReleaseAuthorResponse struct {
 	ID       int64  `json:"id"`
 	Username string `json:"username"`
@@ -17,6 +19,7 @@ type ReleaseAuthorResponse struct {
 	Avatar   string `json:"avatar"`
 }
 
+// ReleaseResponse 发布版本响应
 type ReleaseResponse struct {
 	ID           int64                 `json:"id"`
 	TagName      string                `json:"tag_name"`
@@ -33,6 +36,7 @@ type ReleaseResponse struct {
 	HTMLURL      string                `json:"html_url"`
 }
 
+// AssetResponse 发布附件响应
 type AssetResponse struct {
 	ID                 int64     `json:"id"`
 	Name               string    `json:"name"`
@@ -45,6 +49,7 @@ type AssetResponse struct {
 	UpdatedAt          time.Time `json:"updated_at"`
 }
 
+// ListReleases 获取仓库发布版本列表
 func ListReleases(c fiber.Ctx) error {
 	result, err := helpers.GetOwnerAndRepoWithPrivateAccessFromParams(c)
 	if err != nil {
@@ -62,26 +67,43 @@ func ListReleases(c fiber.Ctx) error {
 		})
 	}
 
+	authorIDs := make([]int64, 0)
+	for _, release := range releases {
+		if release.AuthorID > 0 {
+			authorIDs = append(authorIDs, release.AuthorID)
+		}
+	}
+
+	usersMap := make(map[int64]*models.User)
+	if len(authorIDs) > 0 {
+		users, err := db.User.Select().Filter(
+			goent.In(db.User.Field("id"), authorIDs),
+		).All()
+		if err == nil {
+			for _, u := range users {
+				usersMap[u.ID] = u
+			}
+		}
+	}
+
+	defaultAuthor := ReleaseAuthorResponse{
+		ID:       0,
+		Username: "unknown",
+		Email:    "",
+		FullName: "",
+		Avatar:   "",
+	}
+
 	response := make([]ReleaseResponse, 0, len(releases))
 	for _, release := range releases {
-		author := ReleaseAuthorResponse{
-			ID:       0,
-			Username: "unknown",
-			Email:    "",
-			FullName: "",
-			Avatar:   "",
-		}
-
-		if release.AuthorID > 0 {
-			user, err := db.User.Select().Where("id = ?", release.AuthorID).One()
-			if err == nil {
-				author = ReleaseAuthorResponse{
-					ID:       user.ID,
-					Username: user.Username,
-					Email:    user.Email,
-					FullName: user.FullName,
-					Avatar:   user.Avatar,
-				}
+		author := defaultAuthor
+		if user, ok := usersMap[release.AuthorID]; ok {
+			author = ReleaseAuthorResponse{
+				ID:       user.ID,
+				Username: user.Username,
+				Email:    user.Email,
+				FullName: user.FullName,
+				Avatar:   user.Avatar,
 			}
 		}
 
@@ -105,6 +127,7 @@ func ListReleases(c fiber.Ctx) error {
 	})
 }
 
+// GetRelease 获取单个发布版本详情
 func GetRelease(c fiber.Ctx) error {
 	result, err := helpers.GetOwnerAndRepoWithPrivateAccessFromParams(c)
 	if err != nil {
@@ -164,6 +187,7 @@ func GetRelease(c fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(response)
 }
 
+// SyncReleases 从远程仓库同步发布版本数据
 func SyncReleases(c fiber.Ctx) error {
 	result, err := helpers.GetOwnerAndRepoWithPrivateAccessFromParams(c)
 	if err != nil {

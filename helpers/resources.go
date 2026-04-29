@@ -5,11 +5,13 @@ import (
 	"github.com/gofiber/fiber/v3"
 )
 
+// ResourceResult 资源查找结果，包含仓库所有者和仓库实体
 type ResourceResult struct {
 	Owner *models.User
 	Repo  *models.Repository
 }
 
+// GetOwnerAndRepo 根据用户名和仓库名查找所有者和仓库
 func GetOwnerAndRepo(c fiber.Ctx, ownerUsername, repoName string) (*ResourceResult, error) {
 	db := models.GetDB()
 
@@ -33,6 +35,7 @@ func GetOwnerAndRepo(c fiber.Ctx, ownerUsername, repoName string) (*ResourceResu
 	}, nil
 }
 
+// GetOwnerAndRepoFromParams 从 URL 路径参数中提取所有者和仓库名并查找
 func GetOwnerAndRepoFromParams(c fiber.Ctx) (*ResourceResult, error) {
 	owner := c.Params("owner")
 	repoName := c.Params("repo")
@@ -44,6 +47,7 @@ func GetOwnerAndRepoFromParams(c fiber.Ctx) (*ResourceResult, error) {
 	return GetOwnerAndRepo(c, owner, repoName)
 }
 
+// RequireOwnerAndRepo 查找仓库并验证当前用户为仓库所有者
 func RequireOwnerAndRepo(c fiber.Ctx, ownerUsername, repoName string) (*ResourceResult, error) {
 	result, err := GetOwnerAndRepo(c, ownerUsername, repoName)
 	if err != nil {
@@ -61,6 +65,7 @@ func RequireOwnerAndRepo(c fiber.Ctx, ownerUsername, repoName string) (*Resource
 	return result, nil
 }
 
+// RequireOwnerAndRepoFromParams 从 URL 路径参数中提取信息并验证所有者权限
 func RequireOwnerAndRepoFromParams(c fiber.Ctx) (*ResourceResult, error) {
 	owner := c.Params("owner")
 	repoName := c.Params("repo")
@@ -72,6 +77,7 @@ func RequireOwnerAndRepoFromParams(c fiber.Ctx) (*ResourceResult, error) {
 	return RequireOwnerAndRepo(c, owner, repoName)
 }
 
+// GetOwnerAndRepoWithPrivateAccess 查找仓库，私有仓库需验证访问权限
 func GetOwnerAndRepoWithPrivateAccess(c fiber.Ctx, ownerUsername, repoName string) (*ResourceResult, error) {
 	result, err := GetOwnerAndRepo(c, ownerUsername, repoName)
 	if err != nil {
@@ -89,6 +95,7 @@ func GetOwnerAndRepoWithPrivateAccess(c fiber.Ctx, ownerUsername, repoName strin
 	return result, nil
 }
 
+// GetOwnerAndRepoWithPrivateAccessFromParams 从 URL 路径参数中提取信息并验证私有仓库访问权限
 func GetOwnerAndRepoWithPrivateAccessFromParams(c fiber.Ctx) (*ResourceResult, error) {
 	owner := c.Params("owner")
 	repoName := c.Params("repo")

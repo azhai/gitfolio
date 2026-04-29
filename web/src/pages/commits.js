@@ -54,56 +54,49 @@ function computeGraphLayout(commits) {
 
     const commitLanes = {};
     const commitFlows = {};
-    const maxLane = { value: 0 };
+    let maxLane = 0;
     const activeLanes = [];
+    const hashToLane = {};
     const lanesAbove = [];
     const lanesBelow = [];
 
     function findLaneForHash(hash) {
-        for (let i = 0; i < activeLanes.length; i++) {
-            if (activeLanes[i] === hash) return i;
-        }
+        if (hash in hashToLane) return hashToLane[hash];
         return -1;
     }
 
-    function findAvailableLane(preferredLane) {
-        if (preferredLane !== undefined && preferredLane < activeLanes.length && activeLanes[preferredLane] === null) {
-            return preferredLane;
-        }
+    function findAvailableLane() {
         for (let i = 0; i < activeLanes.length; i++) {
             if (activeLanes[i] === null) return i;
         }
         activeLanes.push(null);
-        if (activeLanes.length - 1 > maxLane.value) maxLane.value = activeLanes.length - 1;
+        if (activeLanes.length - 1 > maxLane) maxLane = activeLanes.length - 1;
         return activeLanes.length - 1;
     }
 
     function setLane(lane, hash) {
         while (activeLanes.length <= lane) {
             activeLanes.push(null);
-            if (activeLanes.length - 1 > maxLane.value) maxLane.value = activeLanes.length - 1;
+            if (activeLanes.length - 1 > maxLane) maxLane = activeLanes.length - 1;
+        }
+        if (hash in hashToLane && hashToLane[hash] !== lane) {
+            const oldLane = hashToLane[hash];
+            if (oldLane < activeLanes.length && activeLanes[oldLane] === hash) {
+                activeLanes[oldLane] = null;
+            }
         }
         activeLanes[lane] = hash;
+        hashToLane[hash] = lane;
     }
 
     function clearLane(lane) {
-        if (lane < activeLanes.length) {
+        if (lane < activeLanes.length && activeLanes[lane] !== null) {
+            const oldHash = activeLanes[lane];
+            if (hashToLane[oldHash] === lane) {
+                delete hashToLane[oldHash];
+            }
             activeLanes[lane] = null;
         }
-    }
-
-    function compactLanes() {
-        let write = 0;
-        for (let read = 0; read < activeLanes.length; read++) {
-            if (activeLanes[read] !== null) {
-                if (write !== read) {
-                    activeLanes[write] = activeLanes[read];
-                    activeLanes[read] = null;
-                }
-                write++;
-            }
-        }
-        activeLanes.length = write;
     }
 
     function snapshotActive() {
@@ -123,7 +116,7 @@ function computeGraphLayout(commits) {
 
         let myLane = findLaneForHash(hash);
         if (myLane === -1) {
-            myLane = findAvailableLane(0);
+            myLane = findAvailableLane();
         }
 
         commitLanes[hash] = myLane;
@@ -132,7 +125,6 @@ function computeGraphLayout(commits) {
 
         if (parents.length === 0) {
             clearLane(myLane);
-            compactLanes();
             commitFlows[hash] = flows;
             lanesBelow[i] = snapshotActive();
             continue;
@@ -149,18 +141,17 @@ function computeGraphLayout(commits) {
             if (existingLane !== -1) {
                 flows.push({ fromLane: myLane, toLane: existingLane, type: 'merge' });
             } else {
-                const newLane = findAvailableLane(myLane + 1);
+                const newLane = findAvailableLane();
                 setLane(newLane, parentHash);
                 flows.push({ fromLane: myLane, toLane: newLane, type: 'branch' });
             }
         }
 
-        compactLanes();
         commitFlows[hash] = flows;
         lanesBelow[i] = snapshotActive();
     }
 
-    const laneCount = maxLane.value + 1;
+    const laneCount = maxLane + 1;
     const laneColorsMap = {};
     for (let l = 0; l < laneCount; l++) {
         laneColorsMap[l] = getLaneColor(l);

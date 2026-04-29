@@ -13,6 +13,7 @@ import (
 	"github.com/gofiber/fiber/v3"
 )
 
+// UploadGroupAvatar 上传团队头像，仅团队所有者或管理员可操作
 func UploadGroupAvatar(c fiber.Ctx) error {
 	userID := middleware.GetCurrentUserID(c)
 	name := c.Params("name")
@@ -63,6 +64,7 @@ func UploadGroupAvatar(c fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(ToGroupResponse(group, int(membersCount)))
 }
 
+// UploadUserAvatar 上传用户头像，仅本人或管理员可操作
 func UploadUserAvatar(c fiber.Ctx) error {
 	currentUserID := middleware.GetCurrentUserID(c)
 	targetUsername := c.Params("username")
@@ -116,144 +118,7 @@ func UploadUserAvatar(c fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(ToUserResponse(targetUser))
 }
 
-func AddGroupMember(c fiber.Ctx) error {
-	userID := middleware.GetCurrentUserID(c)
-	name := c.Params("name")
-
-	var req struct {
-		Username string `json:"username"`
-		Role     string `json:"role"`
-	}
-
-	if err := c.Bind().JSON(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
-	}
-
-	if req.Role == "" {
-		req.Role = "member"
-	}
-
-	if req.Role != "member" && req.Role != "admin" && req.Role != "owner" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid role"})
-	}
-
-	db := models.GetDB()
-
-	group, err := db.Group.Select().Where("name = ?", name).One()
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Group not found"})
-	}
-
-	currentMember, err := db.GroupMember.Select().Where("group_id = ? AND user_id = ?", group.ID, userID).One()
-	if err != nil || (currentMember.Role != "owner" && currentMember.Role != "admin") {
-		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Only group owners or admins can add members"})
-	}
-
-	newUser, err := db.User.Select().Where("username = ?", req.Username).One()
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "User not found"})
-	}
-
-	existingMember, _ := db.GroupMember.Select().Where("group_id = ? AND user_id = ?", group.ID, newUser.ID).One()
-	if existingMember != nil {
-		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "User is already a member"})
-	}
-
-	member := &models.GroupMember{
-		GroupID: group.ID,
-		UserID:  newUser.ID,
-		Role:    req.Role,
-	}
-
-	err = db.GroupMember.Insert().One(member)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to add member"})
-	}
-
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
-		"message": "Member added successfully",
-		"user":    ToUserResponse(newUser),
-		"role":    req.Role,
-	})
-}
-
-func RemoveGroupMember(c fiber.Ctx) error {
-	userID := middleware.GetCurrentUserID(c)
-	name := c.Params("name")
-	targetUsername := c.Params("username")
-
-	db := models.GetDB()
-
-	group, err := db.Group.Select().Where("name = ?", name).One()
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Group not found"})
-	}
-
-	currentMember, err := db.GroupMember.Select().Where("group_id = ? AND user_id = ?", group.ID, userID).One()
-	if err != nil || (currentMember.Role != "owner" && currentMember.Role != "admin") {
-		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Only group owners or admins can remove members"})
-	}
-
-	targetUser, err := db.User.Select().Where("username = ?", targetUsername).One()
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "User not found"})
-	}
-
-	targetMember, err := db.GroupMember.Select().Where("group_id = ? AND user_id = ?", group.ID, targetUser.ID).One()
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "User is not a member"})
-	}
-
-	if targetMember.Role == "owner" {
-		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Cannot remove the owner"})
-	}
-
-	err = db.GroupMember.Delete().Where("group_id = ? AND user_id = ?", group.ID, targetUser.ID).Exec()
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to remove member"})
-	}
-
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Member removed successfully"})
-}
-
-func ListGroupMembers(c fiber.Ctx) error {
-	name := c.Params("name")
-
-	db := models.GetDB()
-
-	group, err := db.Group.Select().Where("name = ?", name).One()
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Group not found"})
-	}
-
-	members, err := db.GroupMember.Select().Where("group_id = ?", group.ID).All()
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch members"})
-	}
-
-	type MemberResponse struct {
-		User     *UserResponse `json:"user"`
-		Role     string        `json:"role"`
-		JoinedAt string        `json:"joined_at"`
-	}
-
-	response := make([]MemberResponse, 0, len(members))
-	for _, member := range members {
-		user, err := db.User.Select().Where("id = ?", member.UserID).One()
-		if err != nil {
-			continue
-		}
-
-		response = append(response, MemberResponse{
-			User:     ToUserResponse(user),
-			Role:     member.Role,
-			JoinedAt: member.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
-		})
-	}
-
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{"data": response})
-}
-
+// isValidImageFile 校验上传文件是否为合法图片格式
 func isValidImageFile(file *multipart.FileHeader) bool {
 	ext := strings.ToLower(filepath.Ext(file.Filename))
 	validExts := map[string]bool{

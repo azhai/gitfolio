@@ -173,7 +173,10 @@ const ProjectHeader = {
                         repoType === 'mirror' ? m('span.project-type-badge.mirror', [
                             m('i.fas.fa-clone'),
                             ' 镜像'
-                        ]) : null,
+                        ]) : m('span.project-type-badge.local', [
+                            m('i.fas.fa-laptop-code'),
+                            ' 本地'
+                        ]),
                         m('span.project-visibility', { class: repoVisibility === 'private' ? 'private' : '' }, 
                             repoVisibility === 'private' ? '私有' : '公开')
                     ])
@@ -379,7 +382,10 @@ const ProjectCard = {
                     project.project_type === 'mirror' ? m('span.project-type-badge.mirror', [
                         m('i.fas.fa-clone'),
                         ' 镜像'
-                    ]) : null,
+                    ]) : m('span.project-type-badge.local', [
+                        m('i.fas.fa-laptop-code'),
+                        ' 本地'
+                    ]),
                     m('span.project-visibility', project.is_private ? '私有' : '公开')
                 ])
             ]),

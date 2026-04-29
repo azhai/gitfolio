@@ -1,24 +1,18 @@
 package main
 
 import (
-	"context"
 	"log"
 	"time"
 
-	"github.com/azhai/gitfolio/cmd"
 	"github.com/azhai/gitfolio/models"
-	"github.com/azhai/goent"
+	"github.com/azhai/goent/utils"
 )
 
 func main() {
-	_ = cmd.InitDB()
-	defer models.Disconnect()
+	env := utils.NewEnv()
+	models.OpenDB(env)
+	defer models.CloseDB()
 	db := models.GetDB()
-
-	ctx := context.Background()
-	if err := goent.AutoMigrateContext(ctx, db); err != nil {
-		log.Fatal("Failed to migrate database:", err)
-	}
 
 	log.Println("Inserting seed data...")
 

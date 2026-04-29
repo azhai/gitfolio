@@ -7,19 +7,20 @@ const Dashboard = {
         vnode.state.issues = [];
         vnode.state.prs = [];
         vnode.state.loading = true;
-        
-        Promise.all([
-            RepositoryService.list(),
-            IssueService.list(),
-            PullRequestService.list()
-        ]).then(([projects, issues, prs]) => {
-            vnode.state.projects = projects.data || [];
-            vnode.state.issues = issues.data || [];
-            vnode.state.prs = prs.data || [];
-            vnode.state.loading = false;
-            m.redraw();
-        }).catch(error => {
-            console.error('Failed to load dashboard data:', error);
+
+        const loadProjects = RepositoryService.list()
+            .then(res => { vnode.state.projects = res.data || []; })
+            .catch(err => { console.error('Failed to load projects:', err); });
+
+        const loadIssues = IssueService.list()
+            .then(res => { vnode.state.issues = res.data || []; })
+            .catch(err => { console.error('Failed to load issues:', err); });
+
+        const loadPRs = PullRequestService.list()
+            .then(res => { vnode.state.prs = res.data || []; })
+            .catch(err => { console.error('Failed to load PRs:', err); });
+
+        Promise.allSettled([loadProjects, loadIssues, loadPRs]).then(() => {
             vnode.state.loading = false;
             m.redraw();
         });
@@ -47,7 +48,7 @@ const Dashboard = {
                         ]),
                         projects.length === 0 
                             ? m(EmptyState, { message: '暂无项目' })
-                            : m('div.project-list', projects.slice(0, 5).map(project => 
+                            : m('div.project-list', projects.slice(0, 10).map(project => 
                                 m(ProjectCard, { project })
                             ))
                     ]),
@@ -59,7 +60,7 @@ const Dashboard = {
                         ]),
                         issues.length === 0 
                             ? m(EmptyState, { message: '暂无 Issue' })
-                            : m('div.issue-list', issues.slice(0, 5).map(issue => 
+                            : m('div.issue-list', issues.slice(0, 10).map(issue => 
                                 m(IssueItem, { issue })
                             ))
                     ]),
@@ -71,7 +72,7 @@ const Dashboard = {
                         ]),
                         prs.length === 0 
                             ? m(EmptyState, { message: '暂无 PR' })
-                            : m('div.pr-list', prs.slice(0, 5).map(pr => 
+                            : m('div.pr-list', prs.slice(0, 10).map(pr => 
                                 m(PRItem, { pr })
                             ))
                     ])

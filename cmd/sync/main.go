@@ -8,9 +8,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/azhai/gitfolio/cmd"
 	"github.com/azhai/gitfolio/models"
 	"github.com/azhai/gitfolio/services"
+	"github.com/azhai/goent/utils"
 )
 
 var (
@@ -36,8 +36,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	_ = cmd.InitDB()
-	defer models.Disconnect()
+	env := utils.NewEnv()
+	models.OpenDB(env)
+	defer models.CloseDB()
 	db := models.GetDB()
 	syncService := services.NewSyncService(db)
 

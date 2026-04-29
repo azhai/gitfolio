@@ -70,6 +70,12 @@ const API = {
         }
 
         return m.request(requestOptions).then(data => {
+            if (data.status === 401) {
+                Auth.setToken(null);
+                localStorage.removeItem('user');
+                m.route.set('/login');
+                throw new Error('登录已过期，请重新登录');
+            }
             if (data.status >= 400) {
                 let errorMsg = '请求失败';
                 if (data.body && data.body.error) {
@@ -85,10 +91,6 @@ const API = {
         }).catch(error => {
             if (error && error.message) {
                 throw error;
-            }
-            if (error && error.code === Constants.HTTP_STATUS.UNAUTHORIZED) {
-                Auth.setToken(null);
-                m.route.set('/login');
             }
             let errorMsg = '请求失败';
             if (typeof error === 'string') {
@@ -158,6 +160,10 @@ const UserService = {
     
     delete(id) {
         return API.delete(`/users/${id}`);
+    },
+
+    changePassword(data) {
+        return API.post('/user/me/password', data);
     }
 };
 
@@ -233,6 +239,18 @@ const RepositoryService = {
     
     rebase(owner, repo, data) {
         return API.post(`/${owner}/${repo}/rebase`, data);
+    },
+    
+    stage(owner, repo, data) {
+        return API.post(`/${owner}/${repo}/stage`, data);
+    },
+    
+    unstage(owner, repo, data) {
+        return API.post(`/${owner}/${repo}/unstage`, data);
+    },
+    
+    commit(owner, repo, data) {
+        return API.post(`/${owner}/${repo}/commit`, data);
     }
 };
 

@@ -6,9 +6,11 @@ import (
 	"github.com/azhai/gitfolio/helpers"
 	"github.com/azhai/gitfolio/middleware"
 	"github.com/azhai/gitfolio/models"
+	"github.com/azhai/goent"
 	"github.com/gofiber/fiber/v3"
 )
 
+// SnippetResponse 代码片段响应
 type SnippetResponse struct {
 	ID          int64  `json:"id"`
 	Title       string `json:"title"`
@@ -22,6 +24,7 @@ type SnippetResponse struct {
 	UpdatedAt   string `json:"updated_at"`
 }
 
+// ToSnippetResponse 将代码片段模型转换为 API 响应
 func ToSnippetResponse(snippet *models.Snippet, username string) *SnippetResponse {
 	return &SnippetResponse{
 		ID:          snippet.ID,
@@ -37,6 +40,7 @@ func ToSnippetResponse(snippet *models.Snippet, username string) *SnippetRespons
 	}
 }
 
+// ListSnippets 分页获取代码片段列表
 func ListSnippets(c fiber.Ctx) error {
 	pagination := helpers.GetPagination(c)
 	language := c.Query("language")
@@ -57,14 +61,30 @@ func ListSnippets(c fiber.Ctx) error {
 		return helpers.JSONError(c, helpers.HTTPStatusInternalServerError, "Failed to fetch snippets")
 	}
 
+	userIDs := make([]int64, 0)
+	for _, snippet := range snippets {
+		if snippet.UserID != nil {
+			userIDs = append(userIDs, *snippet.UserID)
+		}
+	}
+
+	usersMap := make(map[int64]string)
+	if len(userIDs) > 0 {
+		users, err := db.User.Select("id", "username").Filter(
+			goent.In(db.User.Field("id"), userIDs),
+		).All()
+		if err == nil {
+			for _, u := range users {
+				usersMap[u.ID] = u.Username
+			}
+		}
+	}
+
 	response := make([]*SnippetResponse, 0)
 	for _, snippet := range snippets {
 		var username string
 		if snippet.UserID != nil {
-			user, _ := db.User.Select().Where("id = ?", *snippet.UserID).One()
-			if user != nil {
-				username = user.Username
-			}
+			username = usersMap[*snippet.UserID]
 		}
 		response = append(response, ToSnippetResponse(snippet, username))
 	}
@@ -72,6 +92,7 @@ func ListSnippets(c fiber.Ctx) error {
 	return helpers.JSONSuccess(c, helpers.NewPaginatedResponse(response, pagination.Page, pagination.PerPage, 0))
 }
 
+// GetSnippet 获取单个代码片段详情
 func GetSnippet(c fiber.Ctx) error {
 	id, err := helpers.ParseUintParam(c, "id")
 	if err != nil {
@@ -96,6 +117,7 @@ func GetSnippet(c fiber.Ctx) error {
 	return helpers.JSONSuccess(c, ToSnippetResponse(snippet, username))
 }
 
+// CreateSnippet 创建代码片段
 func CreateSnippet(c fiber.Ctx) error {
 	userID := middleware.GetCurrentUserID(c)
 
@@ -144,6 +166,7 @@ func CreateSnippet(c fiber.Ctx) error {
 	return helpers.JSONCreated(c, ToSnippetResponse(snippet, ""))
 }
 
+// UpdateSnippet 更新代码片段
 func UpdateSnippet(c fiber.Ctx) error {
 	id, err := helpers.ParseUintParam(c, "id")
 	if err != nil {
@@ -198,6 +221,7 @@ func UpdateSnippet(c fiber.Ctx) error {
 	return helpers.JSONSuccess(c, ToSnippetResponse(snippet, ""))
 }
 
+// DeleteSnippet 删除代码片段
 func DeleteSnippet(c fiber.Ctx) error {
 	id, err := helpers.ParseUintParam(c, "id")
 	if err != nil {

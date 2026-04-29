@@ -1,4 +1,4 @@
-// GitFolio Frontend Build - 2026年 4月12日 星期日 05时18分47秒 CST
+// GitFolio Frontend Build - 2026年 4月29日 星期三 19时49分20秒 CST
 // Shared constants and configurations
 const Constants = {
     API_BASE_URL: '/api/v1',
@@ -159,6 +159,12 @@ const API = {
         }
 
         return m.request(requestOptions).then(data => {
+            if (data.status === 401) {
+                Auth.setToken(null);
+                localStorage.removeItem('user');
+                m.route.set('/login');
+                throw new Error('登录已过期，请重新登录');
+            }
             if (data.status >= 400) {
                 let errorMsg = '请求失败';
                 if (data.body && data.body.error) {
@@ -174,10 +180,6 @@ const API = {
         }).catch(error => {
             if (error && error.message) {
                 throw error;
-            }
-            if (error && error.code === Constants.HTTP_STATUS.UNAUTHORIZED) {
-                Auth.setToken(null);
-                m.route.set('/login');
             }
             let errorMsg = '请求失败';
             if (typeof error === 'string') {
@@ -247,6 +249,10 @@ const UserService = {
     
     delete(id) {
         return API.delete(`/users/${id}`);
+    },
+
+    changePassword(data) {
+        return API.post('/user/me/password', data);
     }
 };
 
@@ -322,6 +328,18 @@ const RepositoryService = {
     
     rebase(owner, repo, data) {
         return API.post(`/${owner}/${repo}/rebase`, data);
+    },
+    
+    stage(owner, repo, data) {
+        return API.post(`/${owner}/${repo}/stage`, data);
+    },
+    
+    unstage(owner, repo, data) {
+        return API.post(`/${owner}/${repo}/unstage`, data);
+    },
+    
+    commit(owner, repo, data) {
+        return API.post(`/${owner}/${repo}/commit`, data);
     }
 };
 
@@ -693,7 +711,10 @@ const ProjectHeader = {
                         repoType === 'mirror' ? m('span.project-type-badge.mirror', [
                             m('i.fas.fa-clone'),
                             ' 镜像'
-                        ]) : null,
+                        ]) : m('span.project-type-badge.local', [
+                            m('i.fas.fa-laptop-code'),
+                            ' 本地'
+                        ]),
                         m('span.project-visibility', { class: repoVisibility === 'private' ? 'private' : '' }, 
                             repoVisibility === 'private' ? '私有' : '公开')
                     ])
@@ -899,7 +920,10 @@ const ProjectCard = {
                     project.project_type === 'mirror' ? m('span.project-type-badge.mirror', [
                         m('i.fas.fa-clone'),
                         ' 镜像'
-                    ]) : null,
+                    ]) : m('span.project-type-badge.local', [
+                        m('i.fas.fa-laptop-code'),
+                        ' 本地'
+                    ]),
                     m('span.project-visibility', project.is_private ? '私有' : '公开')
                 ])
             ]),
@@ -1867,8 +1891,8 @@ const CreateProjectModal = {
                             }),
                             m('div.project-type-content', [
                                 m('i.fas.fa-code-branch'),
-                                m('strong', '持有项目'),
-                                m('span', '从本地创建并推送到远程')
+                                m('strong', '本地项目'),
+                                m('span', '在本地创建和管理代码')
                             ])
                         ]),
                         m('label.project-type-option', {
@@ -2109,19 +2133,20 @@ const Dashboard = {
         vnode.state.issues = [];
         vnode.state.prs = [];
         vnode.state.loading = true;
-        
-        Promise.all([
-            RepositoryService.list(),
-            IssueService.list(),
-            PullRequestService.list()
-        ]).then(([projects, issues, prs]) => {
-            vnode.state.projects = projects.data || [];
-            vnode.state.issues = issues.data || [];
-            vnode.state.prs = prs.data || [];
-            vnode.state.loading = false;
-            m.redraw();
-        }).catch(error => {
-            console.error('Failed to load dashboard data:', error);
+
+        const loadProjects = RepositoryService.list()
+            .then(res => { vnode.state.projects = res.data || []; })
+            .catch(err => { console.error('Failed to load projects:', err); });
+
+        const loadIssues = IssueService.list()
+            .then(res => { vnode.state.issues = res.data || []; })
+            .catch(err => { console.error('Failed to load issues:', err); });
+
+        const loadPRs = PullRequestService.list()
+            .then(res => { vnode.state.prs = res.data || []; })
+            .catch(err => { console.error('Failed to load PRs:', err); });
+
+        Promise.allSettled([loadProjects, loadIssues, loadPRs]).then(() => {
             vnode.state.loading = false;
             m.redraw();
         });
@@ -2149,7 +2174,7 @@ const Dashboard = {
                         ]),
                         projects.length === 0 
                             ? m(EmptyState, { message: '暂无项目' })
-                            : m('div.project-list', projects.slice(0, 5).map(project => 
+                            : m('div.project-list', projects.slice(0, 10).map(project => 
                                 m(ProjectCard, { project })
                             ))
                     ]),
@@ -2161,7 +2186,7 @@ const Dashboard = {
                         ]),
                         issues.length === 0 
                             ? m(EmptyState, { message: '暂无 Issue' })
-                            : m('div.issue-list', issues.slice(0, 5).map(issue => 
+                            : m('div.issue-list', issues.slice(0, 10).map(issue => 
                                 m(IssueItem, { issue })
                             ))
                     ]),
@@ -2173,7 +2198,7 @@ const Dashboard = {
                         ]),
                         prs.length === 0 
                             ? m(EmptyState, { message: '暂无 PR' })
-                            : m('div.pr-list', prs.slice(0, 5).map(pr => 
+                            : m('div.pr-list', prs.slice(0, 10).map(pr => 
                                 m(PRItem, { pr })
                             ))
                     ])
@@ -2375,6 +2400,13 @@ const ProjectDetail = {
         vnode.state.showBranchMenu = false;
         vnode.state.activeTab = 'branches';
         vnode.state.lastCommit = null;
+        vnode.state.stagedFiles = [];
+        vnode.state.workingFiles = [];
+        vnode.state.untrackedFiles = [];
+        vnode.state.isNonMirrorRepo = false;
+        vnode.state.showCommitDialog = false;
+        vnode.state.commitMessage = '';
+        vnode.state.committing = false;
         
         const closeBranchMenu = (e) => {
             if (vnode.state.showBranchMenu) {
@@ -2395,6 +2427,10 @@ const ProjectDetail = {
         vnode.state.loadBranches = function() {
             RepositoryService.getBranches(owner, repo).then(result => {
                 vnode.state.branches = result.branches || [];
+                vnode.state.stagedFiles = result.staged_files || [];
+                vnode.state.workingFiles = result.working_files || [];
+                vnode.state.untrackedFiles = result.untracked_files || [];
+                vnode.state.isNonMirrorRepo = result.staged_files !== undefined;
                 m.redraw();
             }).catch(() => {});
         };
@@ -2478,7 +2514,7 @@ const ProjectDetail = {
     },
     
     view(vnode) {
-        const { repo, issuesCount, prsCount, loading, currentPath, currentBranch, branches, tags, treeEntries, fileContent, showBranchMenu, activeTab, lastCommit } = vnode.state;
+        const { repo, issuesCount, prsCount, loading, currentPath, currentBranch, branches, tags, treeEntries, fileContent, showBranchMenu, activeTab, lastCommit, stagedFiles, workingFiles, untrackedFiles, isNonMirrorRepo, showCommitDialog, commitMessage, committing } = vnode.state;
         const { owner, repo: repoName } = vnode.attrs;
         
         console.log('🎨 [view] Rendering...');
@@ -2553,6 +2589,42 @@ const ProjectDetail = {
                                         ]),
                                         m('div.branch-menu-list', [
                                             activeTab === 'branches' ? 
+                                                [
+                                                    isNonMirrorRepo ? m('div.branch-option virtual-branch', {
+                                                        class: currentBranch === '__staged__' ? 'active' : '',
+                                                        onclick: (e) => { 
+                                                            e.stopPropagation();
+                                                            vnode.state.currentBranch = '__staged__';
+                                                            vnode.state.currentPath = '';
+                                                            vnode.state.showBranchMenu = false;
+                                                            vnode.state.treeEntries = stagedFiles.map(f => ({ type: 'blob', name: f.split('/').pop(), path: f, size: 0 }));
+                                                            vnode.state.fileContent = null;
+                                                            m.redraw();
+                                                        }
+                                                    }, [
+                                                        m('i.fas.fa-check', { style: { visibility: currentBranch === '__staged__' ? 'visible' : 'hidden' } }),
+                                                        m('i.fas.fa-layer-group'),
+                                                        `暂存区 (${stagedFiles.length})`
+                                                    ]) : null,
+                                                    isNonMirrorRepo ? m('div.branch-option virtual-branch', {
+                                                        class: currentBranch === '__working__' ? 'active' : '',
+                                                        onclick: (e) => { 
+                                                            e.stopPropagation();
+                                                            vnode.state.currentBranch = '__working__';
+                                                            vnode.state.currentPath = '';
+                                                            vnode.state.showBranchMenu = false;
+                                                            const allWorking = [...(workingFiles || []), ...(untrackedFiles || [])];
+                                                            vnode.state.treeEntries = allWorking.map(f => ({ type: 'blob', name: f.split('/').pop(), path: f, size: 0 }));
+                                                            vnode.state.fileContent = null;
+                                                            m.redraw();
+                                                        }
+                                                    }, [
+                                                        m('i.fas.fa-check', { style: { visibility: currentBranch === '__working__' ? 'visible' : 'hidden' } }),
+                                                        m('i.fas.fa-edit'),
+                                                        `工作区 (${(workingFiles || []).length + (untrackedFiles || []).length})`
+                                                    ]) : null,
+                                                    isNonMirrorRepo ? m('div.branch-divider') : null,
+                                                ].concat(
                                                 branches.map(branch => 
                                                     m('div.branch-option', {
                                                         class: currentBranch === branch ? 'active' : '',
@@ -2574,7 +2646,7 @@ const ProjectDetail = {
                                                         m('i.fas.fa-check', { style: { visibility: currentBranch === branch ? 'visible' : 'hidden' } }),
                                                         branch
                                                     ])
-                                                ) :
+                                                )) :
                                                 tags.map(tag => 
                                                     m('div.branch-option', {
                                                         class: currentBranch === tag ? 'active' : '',
@@ -2596,6 +2668,15 @@ const ProjectDetail = {
                                     ]) : null
                                 ]),
                                 m('div.file-actions', [
+                                    isNonMirrorRepo && stagedFiles.length > 0 ? m('button.btn.btn-sm.btn-primary', {
+                                        onclick: () => {
+                                            vnode.state.showCommitDialog = true;
+                                            vnode.state.commitMessage = '';
+                                        }
+                                    }, [
+                                        m('i.fas.fa-check'),
+                                        ' 提交'
+                                    ]) : null,
                                     m('button.btn.btn-sm', [
                                         m('i.fas.fa-plus'),
                                         ' 添加文件'
@@ -2638,11 +2719,115 @@ const ProjectDetail = {
                                     }, fileContent)
                                 ])
                             ] : [
+                                currentBranch === '__staged__' ? m('div.virtual-branch-panel', [
+                                    m('div.virtual-branch-header', [
+                                        m('div.virtual-branch-title', [
+                                            m('i.fas.fa-layer-group'),
+                                            m('span', '暂存区'),
+                                            m('span.badge', stagedFiles.length)
+                                        ]),
+                                        stagedFiles.length > 0 ? m('button.btn.btn-sm.btn-primary', {
+                                            onclick: () => {
+                                                vnode.state.showCommitDialog = true;
+                                                vnode.state.commitMessage = '';
+                                            }
+                                        }, [m('i.fas.fa-check'), ' 提交变更']) : null
+                                    ]),
+                                    stagedFiles.length === 0 
+                                        ? m('div.virtual-branch-empty', '暂无已暂存的文件')
+                                        : m('div.file-list', stagedFiles.map(file => 
+                                            m('div.file-item virtual-file-item', [
+                                                m('span.file-icon', [m('i.fas.fa-file-code')]),
+                                                m('span.file-name', file),
+                                                m('span.file-actions-inline', [
+                                                    m('button.btn-icon', {
+                                                        title: '取消暂存',
+                                                        onclick: () => {
+                                                            RepositoryService.unstage(owner, repoName, { files: [file] }).then(result => {
+                                                                vnode.state.stagedFiles = result.staged_files || [];
+                                                                vnode.state.workingFiles = result.working_files || [];
+                                                                vnode.state.untrackedFiles = result.untracked_files || [];
+                                                                vnode.state.treeEntries = (result.staged_files || []).map(f => ({ type: 'blob', name: f.split('/').pop(), path: f, size: 0 }));
+                                                                m.redraw();
+                                                            });
+                                                        }
+                                                    }, m('i.fas.fa-minus'))
+                                                ])
+                                            ])
+                                        ))
+                                ]) :
+                                currentBranch === '__working__' ? m('div.virtual-branch-panel', [
+                                    m('div.virtual-branch-header', [
+                                        m('div.virtual-branch-title', [
+                                            m('i.fas.fa-edit'),
+                                            m('span', '工作区'),
+                                            m('span.badge', (workingFiles || []).length + (untrackedFiles || []).length)
+                                        ]),
+                                        (workingFiles || []).length + (untrackedFiles || []).length > 0 ? m('button.btn.btn-sm', {
+                                            onclick: () => {
+                                                RepositoryService.stage(owner, repoName, { files: [] }).then(result => {
+                                                    vnode.state.stagedFiles = result.staged_files || [];
+                                                    vnode.state.workingFiles = result.working_files || [];
+                                                    vnode.state.untrackedFiles = result.untracked_files || [];
+                                                    vnode.state.currentBranch = '__staged__';
+                                                    vnode.state.treeEntries = (result.staged_files || []).map(f => ({ type: 'blob', name: f.split('/').pop(), path: f, size: 0 }));
+                                                    m.redraw();
+                                                });
+                                            }
+                                        }, [m('i.fas.fa-plus'), ' 全部暂存']) : null
+                                    ]),
+                                    (workingFiles || []).length + (untrackedFiles || []).length === 0
+                                        ? m('div.virtual-branch-empty', '工作区很干净，没有未暂存的修改')
+                                        : m('div.file-list', [
+                                            ...(workingFiles || []).map(file => 
+                                                m('div.file-item virtual-file-item', [
+                                                    m('span.file-icon.modified', [m('i.fas.fa-file-code')]),
+                                                    m('span.file-name', file),
+                                                    m('span.file-status.modified', '已修改'),
+                                                    m('span.file-actions-inline', [
+                                                        m('button.btn-icon', {
+                                                            title: '暂存此文件',
+                                                            onclick: () => {
+                                                                RepositoryService.stage(owner, repoName, { files: [file] }).then(result => {
+                                                                    vnode.state.stagedFiles = result.staged_files || [];
+                                                                    vnode.state.workingFiles = result.working_files || [];
+                                                                    vnode.state.untrackedFiles = result.untracked_files || [];
+                                                                    const allWorking = [...(result.working_files || []), ...(result.untracked_files || [])];
+                                                                    vnode.state.treeEntries = allWorking.map(f => ({ type: 'blob', name: f.split('/').pop(), path: f, size: 0 }));
+                                                                    m.redraw();
+                                                                });
+                                                            }
+                                                        }, m('i.fas.fa-plus'))
+                                                    ])
+                                                ])
+                                            ),
+                                            ...(untrackedFiles || []).map(file => 
+                                                m('div.file-item virtual-file-item', [
+                                                    m('span.file-icon.untracked', [m('i.fas.fa-file-code')]),
+                                                    m('span.file-name', file),
+                                                    m('span.file-status.untracked', '未跟踪'),
+                                                    m('span.file-actions-inline', [
+                                                        m('button.btn-icon', {
+                                                            title: '暂存此文件',
+                                                            onclick: () => {
+                                                                RepositoryService.stage(owner, repoName, { files: [file] }).then(result => {
+                                                                    vnode.state.stagedFiles = result.staged_files || [];
+                                                                    vnode.state.workingFiles = result.working_files || [];
+                                                                    vnode.state.untrackedFiles = result.untracked_files || [];
+                                                                    const allWorking = [...(result.working_files || []), ...(result.untracked_files || [])];
+                                                                    vnode.state.treeEntries = allWorking.map(f => ({ type: 'blob', name: f.split('/').pop(), path: f, size: 0 }));
+                                                                    m.redraw();
+                                                                });
+                                                            }
+                                                        }, m('i.fas.fa-plus'))
+                                                    ])
+                                                ])
+                                            )
+                                        ])
+                                ]) :
                                 treeEntries.length === 0 
                                     ? m(EmptyState, { message: repo.local_path ? '此目录为空' : '仓库未初始化，请先同步代码', icon: 'fa-folder-open' })
                                     : (function() {
-                                        console.log('📁 [view] Rendering file list with', treeEntries.length, 'entries');
-                                        console.log('📁 [view] First entry:', treeEntries[0]);
                                         return m('div.file-list', treeEntries.map(entry => 
                                             m(TreeEntry, { 
                                                 entry, 
@@ -2694,7 +2879,77 @@ const ProjectDetail = {
                             ])
                         ])
                     ])
-                ])
+                ]),
+                showCommitDialog ? m('div.modal-overlay', {
+                    onclick: (e) => {
+                        if (e.target.classList.contains('modal-overlay')) {
+                            vnode.state.showCommitDialog = false;
+                            m.redraw();
+                        }
+                    }
+                }, m('div.modal.commit-dialog', [
+                    m('div.modal-header', [
+                        m('h3', [m('i.fas.fa-check'), ' 提交变更']),
+                        m('button.modal-close', {
+                            onclick: () => {
+                                vnode.state.showCommitDialog = false;
+                                m.redraw();
+                            }
+                        }, m('i.fas.fa-times'))
+                    ]),
+                    m('div.modal-body', [
+                        m('div.commit-files-summary', [
+                            m('span', `${stagedFiles.length} 个文件已暂存`)
+                        ]),
+                        m('div.commit-files-list', stagedFiles.map(file => 
+                            m('div.commit-file-item', [
+                                m('i.fas.fa-file-code'),
+                                m('span', file)
+                            ])
+                        )),
+                        m('div.form-group', [
+                            m('label', '提交信息'),
+                            m('textarea.commit-message-input', {
+                                placeholder: '输入提交信息...',
+                                value: commitMessage,
+                                oninput: (e) => {
+                                    vnode.state.commitMessage = e.target.value;
+                                }
+                            })
+                        ])
+                    ]),
+                    m('div.modal-footer', [
+                        m('button.btn', {
+                            onclick: () => {
+                                vnode.state.showCommitDialog = false;
+                                m.redraw();
+                            }
+                        }, '取消'),
+                        m('button.btn.btn-primary', {
+                            disabled: !commitMessage.trim() || committing,
+                            onclick: () => {
+                                if (!commitMessage.trim()) return;
+                                vnode.state.committing = true;
+                                m.redraw();
+                                RepositoryService.commit(owner, repoName, { message: commitMessage.trim() }).then(result => {
+                                    vnode.state.committing = false;
+                                    vnode.state.showCommitDialog = false;
+                                    vnode.state.stagedFiles = result.staged_files || [];
+                                    vnode.state.workingFiles = result.working_files || [];
+                                    vnode.state.untrackedFiles = result.untracked_files || [];
+                                    vnode.state.currentBranch = repo.default_branch || 'main';
+                                    vnode.state.loadTree();
+                                    vnode.state.loadBranches();
+                                    m.redraw();
+                                }).catch(err => {
+                                    vnode.state.committing = false;
+                                    alert('提交失败: ' + (err.message || '未知错误'));
+                                    m.redraw();
+                                });
+                            }
+                        }, committing ? '提交中...' : '确认提交')
+                    ])
+                ])) : null
             ])
         ]);
     }
@@ -7331,12 +7586,34 @@ const LoginPage = {
 const Groups = {
     oninit(vnode) {
         vnode.state.groups = [];
+        vnode.state.users = [];
+        vnode.state.groupMembers = {};
         vnode.state.loading = true;
-        vnode.state.page = 1;
-        vnode.state.perPage = 30;
+        vnode.state.searchQuery = '';
+        vnode.state.activeTab = 'groups';
 
-        GroupService.list(1, 30).then(result => {
-            vnode.state.groups = result.data || [];
+        Promise.allSettled([
+            GroupService.list(),
+            API.get('/users')
+        ]).then(([groupsResult, usersResult]) => {
+            if (groupsResult.status === 'fulfilled') {
+                vnode.state.groups = groupsResult.value.data || [];
+            }
+            if (usersResult.status === 'fulfilled') {
+                vnode.state.users = usersResult.value.data || usersResult.value || [];
+            }
+            let membersPromise = Promise.resolve();
+            if (vnode.state.groups.length > 0) {
+                membersPromise = Promise.all(
+                    vnode.state.groups.map(g =>
+                        GroupService.getMembers(g.name)
+                            .then(members => { vnode.state.groupMembers[g.name] = members.data || []; })
+                            .catch(() => { vnode.state.groupMembers[g.name] = []; })
+                    )
+                );
+            }
+            return membersPromise;
+        }).then(() => {
             vnode.state.loading = false;
             m.redraw();
         }).catch(() => {
@@ -7345,12 +7622,39 @@ const Groups = {
         });
     },
 
+    filteredGroups(vnode) {
+        const q = (vnode.state.searchQuery || '').toLowerCase();
+        if (!q) return vnode.state.groups;
+        return vnode.state.groups.filter(g =>
+            (g.display_name || g.name).toLowerCase().includes(q) ||
+            (g.description || '').toLowerCase().includes(q) ||
+            (vnode.state.groupMembers[g.name] || []).some(m =>
+                (m.user.username || '').toLowerCase().includes(q) ||
+                (m.user.full_name || '').toLowerCase().includes(q) ||
+                (m.user.email || '').toLowerCase().includes(q)
+            )
+        );
+    },
+
+    filteredUsers(vnode) {
+        const q = (vnode.state.searchQuery || '').toLowerCase();
+        if (!q) return vnode.state.users;
+        return vnode.state.users.filter(u =>
+            (u.full_name || u.username || '').toLowerCase().includes(q) ||
+            (u.email || '').toLowerCase().includes(q) ||
+            (u.bio || '').toLowerCase().includes(q)
+        );
+    },
+
     view(vnode) {
-        const { groups, loading } = vnode.state;
+        const { groups, users, loading, searchQuery, activeTab } = vnode.state;
+
+        const filteredGroups = Groups.filteredGroups(vnode);
+        const filteredUsers = Groups.filteredUsers(vnode);
 
         return m(Layout, [
             m('div.page-header', [
-                m('h1', [m('i.fas.fa-users'), ' 团队']),
+                m('h1', [m('i.fas.fa-users'), ' 团队与账号']),
                 m('div.page-actions', [
                     m('button.btn.btn-primary', {
                         onclick: () => m.route.set('/groups/new')
@@ -7358,30 +7662,98 @@ const Groups = {
                 ])
             ]),
 
-            loading ? m(Loading) : [
-                groups.length === 0 
+            m('div.search-bar', [
+                m('div.search-input-wrapper', [
+                    m('i.fas.fa-search'),
+                    m('input.form-input.search-input', {
+                        type: 'text',
+                        placeholder: '搜索团队、成员、账号...',
+                        value: searchQuery,
+                        oninput: e => { vnode.state.searchQuery = e.target.value; }
+                    }),
+                    searchQuery ? m('button.search-clear', {
+                        onclick: () => { vnode.state.searchQuery = ''; }
+                    }, m('i.fas.fa-times')) : null
+                ])
+            ]),
+
+            m('div.tabs-bar', [
+                m('a.tab' + (activeTab === 'groups' ? '.active' : ''), {
+                    onclick: () => { vnode.state.activeTab = 'groups'; }
+                }, [m('i.fas.fa-users-cog'), ` 团队 (${filteredGroups.length})`]),
+                m('a.tab' + (activeTab === 'accounts' ? '.active' : ''), {
+                    onclick: () => { vnode.state.activeTab = 'accounts'; }
+                }, [m('i.fas.fa-user-circle'), ` 账号 (${filteredUsers.length})`])
+            ]),
+
+            loading ? m(Loading) :
+            activeTab === 'groups' ? m('div.groups-page', [
+                filteredGroups.length === 0 && !searchQuery && groups.length === 0
                     ? m(EmptyState, { message: '暂无团队', icon: 'fa-users' })
-                    : m('div.groups-list', groups.map(group => 
-                        m('div.group-card', {
+                    : filteredGroups.length === 0 && searchQuery
+                    ? m(EmptyState, { message: '未找到匹配的团队', icon: 'fa-search' })
+                    : m('div.groups-list', filteredGroups.map(group => {
+                        const members = vnode.state.groupMembers[group.name] || [];
+                        return m('div.group-card', {
                             onclick: () => m.route.set(`/groups/${group.name}`)
                         }, [
-                            m('div.group-avatar', [
-                                group.avatar 
-                                    ? m('img', { src: group.avatar, alt: group.name })
-                                    : m('div.avatar-placeholder', group.display_name ? group.display_name[0].toUpperCase() : group.name[0].toUpperCase())
-                            ]),
-                            m('div.group-info', [
-                                m('h3.group-name', group.display_name || group.name),
-                                group.description ? m('p.group-description', group.description) : null,
-                                m('div.group-meta', [
-                                    m('span', [m('i.fas.fa-users'), ` ${group.members_count || 0} 成员`]),
-                                    group.location ? m('span', [m('i.fas.fa-map-marker-alt'), ` ${group.location}`]) : null,
-                                    group.website ? m('a', { href: group.website, target: '_blank', onclick: e => e.stopPropagation() }, [m('i.fas.fa-globe')]) : null
+                            m('div.group-card-main', [
+                                m('div.group-avatar', [
+                                    group.avatar
+                                        ? m('img', { src: group.avatar, alt: group.name })
+                                        : m('div.avatar-placeholder', group.display_name ? group.display_name[0].toUpperCase() : group.name[0].toUpperCase())
+                                ]),
+                                m('div.group-info', [
+                                    m('h3.group-name', group.display_name || group.name),
+                                    group.description ? m('p.group-description', group.description) : null,
+                                    m('div.group-meta', [
+                                        m('span', [m('i.fas.fa-users'), ` ${members.length} 成员`]),
+                                        group.location ? m('span', [m('i.fas.fa-map-marker-alt'), ` ${group.location}`]) : null,
+                                        group.website ? m('a', { href: group.website, target: '_blank', onclick: e => e.stopPropagation() }, [m('i.fas.fa-globe')]) : null
+                                    ])
                                 ])
+                            ]),
+                            members.length > 0 ? m('div.group-members-inline', [
+                                m('div.members-label', '成员'),
+                                m('div.members-avatars',
+                                    members.slice(0, 8).map(function(member) {
+                                        return m('span.member-avatar-sm', {
+                                            title: member.user.full_name || member.user.username
+                                        }, [
+                                            member.user.avatar ? m('img', { src: member.user.avatar })
+                                                : m('div.avatar-placeholder-sm', (member.user.full_name || member.user.username)[0].toUpperCase())
+                                        ]);
+                                    })
+                                )
+                             ]) : null
+                        ]);
+                    }))
+            ]) : m('div.accounts-page', [
+                filteredUsers.length === 0 && !searchQuery && users.length === 0
+                    ? m(EmptyState, { message: '暂无账号', icon: 'fa-user-circle' })
+                    : filteredUsers.length === 0 && searchQuery
+                    ? m(EmptyState, { message: '未找到匹配的账号', icon: 'fa-search' })
+                    : m('div.accounts-grid', filteredUsers.map(user =>
+                        m('div.account-card', {
+                            onclick: () => m.route.set(`/user/${user.username}`)
+                        }, [
+                            m('div.account-avatar', [
+                                user.avatar
+                                    ? m('img', { src: user.avatar, alt: user.username })
+                                    : m('div.avatar-placeholder', (user.full_name || user.username)[0].toUpperCase())
+                            ]),
+                            m('div.account-info', [
+                                m('h4.account-name', user.full_name || user.username),
+                                m('p.account-email', user.email || ''),
+                                m('div.account-badges', [
+                                    user.is_admin ? m('span.badge.badge-admin', '管理员') : null,
+                                    !user.is_active ? m('span.badge.badge-inactive', '已禁用') : null
+                                ].filter(Boolean)),
+                                user.bio ? m('p.account-bio', user.bio) : null
                             ])
                         ])
                     ))
-            ]
+            ])
         ]);
     }
 };
@@ -7447,7 +7819,7 @@ const GroupDetail = {
     saveEdit(vnode) {
         const { name } = vnode.attrs;
         vnode.state.saving = true;
-        
+
         GroupService.update(name, vnode.state.editForm).then(result => {
             vnode.state.group = result;
             vnode.state.editing = false;
@@ -7540,7 +7912,7 @@ const GroupDetail = {
                     m('div.group-avatar-large', {
                         style: { position: 'relative' }
                     }, [
-                        group.avatar 
+                        group.avatar
                             ? m('img', { src: group.avatar, alt: group.name })
                             : m('div.avatar-placeholder', group.display_name ? group.display_name[0].toUpperCase() : group.name[0].toUpperCase()),
                         GroupDetail.canEdit(vnode) ? m('div.avatar-upload-overlay', {
@@ -7667,10 +8039,10 @@ const GroupDetail = {
                                     }, '取消')
                                 ])
                             ]) : null,
-                            m('div.members-list', members.map(member => 
+                            m('div.members-list', members.map(member =>
                                 m('div.member-card', [
                                     m('div.member-avatar', [
-                                        member.user.avatar 
+                                        member.user.avatar
                                             ? m('img', { src: member.user.avatar, alt: member.user.username })
                                             : m('div.avatar-placeholder', member.user.username[0].toUpperCase())
                                     ]),
@@ -8520,56 +8892,49 @@ function computeGraphLayout(commits) {
 
     const commitLanes = {};
     const commitFlows = {};
-    const maxLane = { value: 0 };
+    let maxLane = 0;
     const activeLanes = [];
+    const hashToLane = {};
     const lanesAbove = [];
     const lanesBelow = [];
 
     function findLaneForHash(hash) {
-        for (let i = 0; i < activeLanes.length; i++) {
-            if (activeLanes[i] === hash) return i;
-        }
+        if (hash in hashToLane) return hashToLane[hash];
         return -1;
     }
 
-    function findAvailableLane(preferredLane) {
-        if (preferredLane !== undefined && preferredLane < activeLanes.length && activeLanes[preferredLane] === null) {
-            return preferredLane;
-        }
+    function findAvailableLane() {
         for (let i = 0; i < activeLanes.length; i++) {
             if (activeLanes[i] === null) return i;
         }
         activeLanes.push(null);
-        if (activeLanes.length - 1 > maxLane.value) maxLane.value = activeLanes.length - 1;
+        if (activeLanes.length - 1 > maxLane) maxLane = activeLanes.length - 1;
         return activeLanes.length - 1;
     }
 
     function setLane(lane, hash) {
         while (activeLanes.length <= lane) {
             activeLanes.push(null);
-            if (activeLanes.length - 1 > maxLane.value) maxLane.value = activeLanes.length - 1;
+            if (activeLanes.length - 1 > maxLane) maxLane = activeLanes.length - 1;
+        }
+        if (hash in hashToLane && hashToLane[hash] !== lane) {
+            const oldLane = hashToLane[hash];
+            if (oldLane < activeLanes.length && activeLanes[oldLane] === hash) {
+                activeLanes[oldLane] = null;
+            }
         }
         activeLanes[lane] = hash;
+        hashToLane[hash] = lane;
     }
 
     function clearLane(lane) {
-        if (lane < activeLanes.length) {
+        if (lane < activeLanes.length && activeLanes[lane] !== null) {
+            const oldHash = activeLanes[lane];
+            if (hashToLane[oldHash] === lane) {
+                delete hashToLane[oldHash];
+            }
             activeLanes[lane] = null;
         }
-    }
-
-    function compactLanes() {
-        let write = 0;
-        for (let read = 0; read < activeLanes.length; read++) {
-            if (activeLanes[read] !== null) {
-                if (write !== read) {
-                    activeLanes[write] = activeLanes[read];
-                    activeLanes[read] = null;
-                }
-                write++;
-            }
-        }
-        activeLanes.length = write;
     }
 
     function snapshotActive() {
@@ -8589,7 +8954,7 @@ function computeGraphLayout(commits) {
 
         let myLane = findLaneForHash(hash);
         if (myLane === -1) {
-            myLane = findAvailableLane(0);
+            myLane = findAvailableLane();
         }
 
         commitLanes[hash] = myLane;
@@ -8598,7 +8963,6 @@ function computeGraphLayout(commits) {
 
         if (parents.length === 0) {
             clearLane(myLane);
-            compactLanes();
             commitFlows[hash] = flows;
             lanesBelow[i] = snapshotActive();
             continue;
@@ -8615,18 +8979,17 @@ function computeGraphLayout(commits) {
             if (existingLane !== -1) {
                 flows.push({ fromLane: myLane, toLane: existingLane, type: 'merge' });
             } else {
-                const newLane = findAvailableLane(myLane + 1);
+                const newLane = findAvailableLane();
                 setLane(newLane, parentHash);
                 flows.push({ fromLane: myLane, toLane: newLane, type: 'branch' });
             }
         }
 
-        compactLanes();
         commitFlows[hash] = flows;
         lanesBelow[i] = snapshotActive();
     }
 
-    const laneCount = maxLane.value + 1;
+    const laneCount = maxLane + 1;
     const laneColorsMap = {};
     for (let l = 0; l < laneCount; l++) {
         laneColorsMap[l] = getLaneColor(l);
@@ -9582,6 +9945,355 @@ const UserManagement = {
 };
 
 
+const UserProfile = {
+    oninit(vnode) {
+        const { username } = vnode.attrs;
+        vnode.state.user = null;
+        vnode.state.repos = [];
+        vnode.state.currentUser = null;
+        vnode.state.loading = true;
+        vnode.state.error = null;
+
+        vnode.state.editing = false;
+        vnode.state.editForm = {};
+        vnode.state.saving = false;
+
+        vnode.state.showPasswordModal = false;
+        vnode.state.passwordForm = {};
+        vnode.state.changingPassword = false;
+
+        vnode.state.uploadingAvatar = false;
+
+        UserProfile.loadUser(vnode, username);
+    },
+
+    loadUser(vnode, username) {
+        var requests = [
+            API.get(`/users/${username}`),
+            API.get(`/users/${username}/repos`)
+        ];
+        if (Auth.isAuthenticated()) {
+            requests.push(API.get('/user/me'));
+        }
+        Promise.allSettled(requests).then(function(results) {
+            if (results[0].status === 'fulfilled') {
+                vnode.state.user = results[0].value;
+            }
+            if (results[1].status === 'fulfilled') {
+                vnode.state.repos = results[1].value || [];
+            }
+            if (results.length > 2 && results[2].status === 'fulfilled') {
+                vnode.state.currentUser = results[2].value;
+            } else {
+                try {
+                    var userData = JSON.parse(localStorage.getItem('user') || 'null');
+                    if (userData) { vnode.state.currentUser = userData; }
+                } catch (e) {}
+            }
+            if (!vnode.state.user) {
+                vnode.state.error = '用户不存在';
+            }
+        }).catch(() => {
+            vnode.state.error = '加载失败';
+        }).finally(() => {
+            vnode.state.loading = false;
+            m.redraw();
+        });
+    },
+
+    isOwnProfile(vnode) {
+        return vnode.state.currentUser && vnode.state.user &&
+            vnode.state.currentUser.username === vnode.state.user.username;
+    },
+
+    canEdit(vnode) {
+        if (!vnode.state.currentUser) return false;
+        return UserProfile.isOwnProfile(vnode) || vnode.state.currentUser.is_admin;
+    },
+
+    startEdit(vnode) {
+        const { user } = vnode.state;
+        vnode.state.editing = true;
+        vnode.state.editForm = {
+            full_name: user.full_name || '',
+            bio: user.bio || '',
+            website: user.website || '',
+            location: user.location || ''
+        };
+    },
+
+    cancelEdit(vnode) {
+        vnode.state.editing = false;
+        vnode.state.editForm = {};
+    },
+
+    saveEdit(vnode) {
+        const { user, editForm } = vnode.state;
+        vnode.state.saving = true;
+
+        UserService.update(user.username, editForm).then(result => {
+            vnode.state.user = result;
+            vnode.state.editing = false;
+            vnode.state.saving = false;
+            m.redraw();
+        }).catch(error => {
+            vnode.state.saving = false;
+            alert('保存失败: ' + (error.message || '未知错误'));
+            m.redraw();
+        });
+    },
+
+    handleAvatarUpload(vnode, e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const formData = new FormData();
+        formData.append('avatar', file);
+
+        vnode.state.uploadingAvatar = true;
+
+        UserService.uploadAvatar(vnode.state.user.username, formData).then(result => {
+            vnode.state.user = result;
+            vnode.state.uploadingAvatar = false;
+            m.redraw();
+        }).catch(error => {
+            vnode.state.uploadingAvatar = false;
+            alert('上传失败: ' + (error.message || '未知错误'));
+            m.redraw();
+        });
+    },
+
+    openChangePassword(vnode) {
+        vnode.state.showPasswordModal = true;
+        vnode.state.passwordForm = { old_password: '', new_password: '', confirm_password: '' };
+    },
+
+    closeChangePassword(vnode) {
+        vnode.state.showPasswordModal = false;
+        vnode.state.passwordForm = {};
+    },
+
+    submitChangePassword(vnode) {
+        const pf = vnode.state.passwordForm;
+        if (!pf.old_password || !pf.new_password) {
+            alert('请填写完整');
+            return;
+        }
+        if (pf.new_password.length < 6) {
+            alert('新密码至少6位');
+            return;
+        }
+        if (pf.new_password !== pf.confirm_password) {
+            alert('两次输入的新密码不一致');
+            return;
+        }
+
+        vnode.state.changingPassword = true;
+
+        UserService.changePassword({
+            old_password: pf.old_password,
+            new_password: pf.new_password
+        }).then(() => {
+            UserProfile.closeChangePassword(vnode);
+            vnode.state.changingPassword = false;
+            alert('密码修改成功');
+            m.redraw();
+        }).catch(error => {
+            vnode.state.changingPassword = false;
+            alert('修改失败: ' + (error.message || '未知错误'));
+            m.redraw();
+        });
+    },
+
+    view(vnode) {
+        const { user, repos, loading, error, editing, editForm, saving,
+                showPasswordModal, passwordForm, changingPassword, uploadingAvatar } = vnode.state;
+
+        if (loading) {
+            return m(Layout, m(Loading));
+        }
+
+        if (error || !user) {
+            return m(Layout, m(EmptyState, { message: error || '用户不存在', icon: 'fa-user' }));
+        }
+
+        const ownProfile = UserProfile.isOwnProfile(vnode);
+        const canEdit = UserProfile.canEdit(vnode);
+
+        return m(Layout, [
+            m('div.user-profile-page', [
+                m('div.profile-header-card', [
+                    m('div.profile-avatar-wrap', {
+                        style: { position: 'relative' }
+                    }, [
+                        user.avatar_url
+                            ? m('img.profile-avatar-img', { src: user.avatar_url, alt: user.username })
+                            : m('div.profile-avatar-placeholder', (user.full_name || user.username)[0].toUpperCase()),
+                        canEdit ? m('div.avatar-upload-overlay', {
+                            onclick: () => document.getElementById('profile-avatar-input').click()
+                        }, [
+                            uploadingAvatar
+                                ? m('i.fas.fa-spinner.fa-spin')
+                                : m('i.fas.fa-camera'),
+                            m('input#profile-avatar-input', {
+                                type: 'file',
+                                accept: 'image/*',
+                                style: { display: 'none' },
+                                onchange: e => UserProfile.handleAvatarUpload(vnode, e)
+                            })
+                        ]) : null
+                    ]),
+                    m('div.profile-detail', [
+                        m('div.profile-name-row', [
+                            m('h1.profile-name', user.full_name || user.username),
+                            m('span.profile-username', '@' + user.username)
+                        ]),
+                        user.bio ? m('p.profile-bio', user.bio) : null,
+                        m('div.profile-meta', [
+                            user.email ? m('span.meta-item', [m('i.fas fa-envelope'), ' ' + user.email]) : null,
+                            user.location ? m('span.meta-item', [m('i.fas fa-map-marker-alt'), ' ' + user.location]) : null,
+                            user.website ? m('a.meta-item', { href: user.website, target: '_blank', rel: 'noopener' }, [m('i.fas fa-globe'), ' ' + user.website]) : null,
+                            m('span.meta-item', [m('i.fas fa-calendar-alt'), ' 加入于 ' + (user.created_at || '-')])
+                        ].filter(Boolean)),
+                        m('div.profile-tags', [
+                            user.is_admin ? m('span.tag.tag-admin', [m('i.fas fa-shield-alt'), ' 管理员']) : null,
+                            !user.is_active ? m('span.tag tag-inactive', '已禁用') : null
+                        ].filter(Boolean)),
+                        canEdit ? m('div.profile-actions', [
+                            m('button.btn.btn-primary.btn-sm', {
+                                onclick: () => UserProfile.startEdit(vnode)
+                            }, [m('i.fas fa-edit'), ' 编辑资料']),
+                            ownProfile ? m('button.btn.btn-secondary.btn-sm', {
+                                onclick: () => UserProfile.openChangePassword(vnode)
+                            }, [m('i.fas fa-key'), ' 修改密码']) : null
+                        ]) : null
+                    ])
+                ]),
+
+                editing ? m('div.profile-edit-panel', [
+                    m('h3.panel-title', [m('i.fas fa-user-edit'), ' 编辑个人资料']),
+                    m('div.form-group', [
+                        m('label.form-label', '全名'),
+                        m('input.form-input', {
+                            type: 'text',
+                            value: editForm.full_name,
+                            oninput: e => { editForm.full_name = e.target.value; },
+                            placeholder: '显示名称'
+                        })
+                    ]),
+                    m('div.form-group', [
+                        m('label.form-label', '个人简介'),
+                        m('textarea.form-input', {
+                            value: editForm.bio,
+                            oninput: e => { editForm.bio = e.target.value; },
+                            placeholder: '介绍一下自己...',
+                            rows: 3
+                        })
+                    ]),
+                    m('div.form-group', [
+                        m('label.form-label', '网站'),
+                        m('input.form-input', {
+                            type: 'url',
+                            value: editForm.website,
+                            oninput: e => { editForm.website = e.target.value; },
+                            placeholder: 'https://...'
+                        })
+                    ]),
+                    m('div.form-group', [
+                        m('label.form-label', '位置'),
+                        m('input.form-input', {
+                            type: 'text',
+                            value: editForm.location,
+                            oninput: e => { editForm.location = e.target.value; },
+                            placeholder: '所在城市'
+                        })
+                    ]),
+                    m('div.form-actions', [
+                        m('button.btn.btn-primary', {
+                            onclick: () => UserProfile.saveEdit(vnode),
+                            disabled: saving
+                        }, saving ? '保存中...' : '保存修改'),
+                        m('button.btn', {
+                            onclick: () => UserProfile.cancelEdit(vnode)
+                        }, '取消')
+                    ])
+                ]) : null,
+
+                showPasswordModal ? m('div.modal-overlay', {
+                    onclick: (e) => { if (e.target === e.currentTarget) UserProfile.closeChangePassword(vnode); }
+                }, [
+                    m('div.modal.modal-sm', [
+                        m('div.modal-header', [
+                            m('h3', [m('i.fas fa-key'), ' 修改密码']),
+                            m('button.modal-close', { onclick: () => UserProfile.closeChangePassword(vnode) }, '\u00d7')
+                        ]),
+                        m('div.modal-body', [
+                            m('div.form-group', [
+                                m('label.form-label', '当前密码'),
+                                m('input.form-input', {
+                                    type: 'password',
+                                    value: passwordForm.old_password,
+                                    oninput: e => { passwordForm.old_password = e.target.value; },
+                                    placeholder: '输入当前密码'
+                                })
+                            ]),
+                            m('div.form-group', [
+                                m('label.form-label', '新密码'),
+                                m('input.form-input', {
+                                    type: 'password',
+                                    value: passwordForm.new_password,
+                                    oninput: e => { passwordForm.new_password = e.target.value; },
+                                    placeholder: '至少6位'
+                                })
+                            ]),
+                            m('div.form-group', [
+                                m('label.form-label', '确认新密码'),
+                                m('input.form-input', {
+                                    type: 'password',
+                                    value: passwordForm.confirm_password,
+                                    oninput: e => { passwordForm.confirm_password = e.target.value; },
+                                    placeholder: '再次输入新密码'
+                                })
+                            ])
+                        ]),
+                        m('div.modal-footer', [
+                            m('button.btn.btn-primary', {
+                                onclick: () => UserProfile.submitChangePassword(vnode),
+                                disabled: changingPassword
+                            }, changingPassword ? '修改中...' : '确认修改'),
+                            m('button.btn', { onclick: () => UserProfile.closeChangePassword(vnode) }, '取消')
+                        ])
+                    ])
+                ]) : null,
+
+                m('div.profile-sections', [
+                    m('div.profile-section', [
+                        m('h2.section-title', [m('i.fas fa-book'), ' 项目 (' + repos.length + ')']),
+                        repos.length === 0
+                            ? m(EmptyState, { message: '暂无项目', icon: 'fa-code-branch' })
+                            : m('div.repos-grid', repos.map(repo =>
+                                m('a.repo-card', {
+                                    href: '/project/' + repo.owner + '/' + repo.name,
+                                    oncreate: (el) => el.onclick = (e) => { e.preventDefault(); m.route.set('/project/' + repo.owner + '/' + repo.name); }
+                                }, [
+                                    m('div.repo-name', repo.display_name || repo.name),
+                                    repo.description ? m('p.repo-desc', repo.description) : null,
+                                    m('div.repo-meta', [
+                                        m('span.repo-type', { class: repo.project_type === 'mirror' ? 'mirror' : '' },
+                                            repo.project_type === 'mirror' ? '镜像' : '本地'
+                                        ),
+                                        repo.language ? m('span', [m('i.fas fa-circle repo-lang-dot'), ' ' + repo.language]) : null
+                                    ].filter(Boolean))
+                                ])
+                            ))
+                    ])
+                ])
+            ])
+        ]);
+    }
+};
+
+
 Auth.init();
 
 async function loadTheme() {
@@ -9646,6 +10358,7 @@ const routes = {
     '/groups/new': withAuth(NewGroup),
     '/groups/:name': GroupDetail,
     '/users': withAuth(UserManagement),
+    '/user/:username': UserProfile,
     '/activity': Activities,
     '/snippets': SnippetsPage,
     '/snippets/new': withAuth(NewSnippet),

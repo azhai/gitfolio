@@ -3,6 +3,7 @@ package handlers
 import (
 	"github.com/azhai/gitfolio/config"
 	"github.com/azhai/gitfolio/models"
+	"github.com/azhai/goent"
 	"github.com/gofiber/fiber/v3"
 )
 
@@ -23,52 +24,38 @@ type StatsResponse struct {
 func GetStats(c fiber.Ctx) error {
 	db := models.GetDB()
 
-	users, _ := db.User.Select().All()
-	repos, _ := db.Repository.Select().All()
-	issues, _ := db.Issue.Select().All()
-	prs, _ := db.PullRequest.Select().All()
+	totalRepos, _ := db.Repository.Count("id")
+	totalUsers, _ := db.User.Count("id")
+	totalIssues, _ := db.Issue.Count("id")
+	totalPRs, _ := db.PullRequest.Count("id")
 
-	openIssues := 0
-	closedIssues := 0
-	for _, issue := range issues {
-		if issue.IsClosed {
-			closedIssues++
-		} else {
-			openIssues++
-		}
-	}
+	openIssues, _ := db.Issue.Select().Filter(goent.Equals(db.Issue.Field("is_closed"), false)).Count("id")
+	closedIssues, _ := db.Issue.Select().Filter(goent.Equals(db.Issue.Field("is_closed"), true)).Count("id")
 
-	openPRs := 0
-	mergedPRs := 0
-	for _, pr := range prs {
-		if pr.IsMerged {
-			mergedPRs++
-		} else if !pr.IsClosed {
-			openPRs++
-		}
-	}
+	openPRs, _ := db.PullRequest.Select().Filter(
+		goent.And(
+			goent.Equals(db.PullRequest.Field("is_closed"), false),
+			goent.Equals(db.PullRequest.Field("is_merged"), false),
+		),
+	).Count("id")
+	mergedPRs, _ := db.PullRequest.Select().Filter(
+		goent.Equals(db.PullRequest.Field("is_merged"), true),
+	).Count("id")
 
-	totalStars := 0
-	totalForks := 0
-	for _, repo := range repos {
-		stats, err := db.RepositoryStats.Select().Where("repository_id = ?", repo.ID).One()
-		if err == nil && stats != nil {
-			totalStars += stats.StarsCount
-			totalForks += stats.ForksCount
-		}
-	}
+	totalStars, _ := db.RepositoryStats.SumFloat("stars_count")
+	totalForks, _ := db.RepositoryStats.SumFloat("forks_count")
 
 	stats := &StatsResponse{
-		TotalRepos:   len(repos),
-		TotalUsers:   len(users),
-		TotalIssues:  len(issues),
-		TotalPRs:     len(prs),
-		OpenIssues:   openIssues,
-		ClosedIssues: closedIssues,
-		OpenPRs:      openPRs,
-		MergedPRs:    mergedPRs,
-		TotalStars:   totalStars,
-		TotalForks:   totalForks,
+		TotalRepos:   int(totalRepos),
+		TotalUsers:   int(totalUsers),
+		TotalIssues:  int(totalIssues),
+		TotalPRs:     int(totalPRs),
+		OpenIssues:   int(openIssues),
+		ClosedIssues: int(closedIssues),
+		OpenPRs:      int(openPRs),
+		MergedPRs:    int(mergedPRs),
+		TotalStars:   int(totalStars),
+		TotalForks:   int(totalForks),
 		Theme:        config.AppConfig.Server.Theme,
 	}
 

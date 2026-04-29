@@ -4,10 +4,10 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/azhai/gitfolio/config"
 	"github.com/azhai/gitfolio/helpers"
 	"github.com/azhai/gitfolio/middleware"
 	"github.com/azhai/gitfolio/models"
+	"github.com/azhai/goent"
 	"github.com/gofiber/fiber/v3"
 )
 
@@ -39,30 +39,81 @@ func ToGroupResponse(group *models.Group, membersCount int) *GroupResponse {
 	}
 }
 
-func ListGroups(c fiber.Ctx) error {
-	page, _ := strconv.Atoi(c.Query("page", strconv.Itoa(config.DefaultPage)))
-	perPage, _ := strconv.Atoi(c.Query("per_page", strconv.Itoa(config.DefaultPerPage)))
-	if perPage > config.MaxPerPage {
-		perPage = config.MaxPerPage
+// findGroupByName 根据名称查找群组
+func findGroupByName(db *models.Database, name string) (*models.Group, error) {
+	return db.Group.Select().Filter(
+		goent.Equals(db.Group.Field("name"), name),
+	).One()
+}
+
+// getGroupMembersCount 查询群组成员数
+func getGroupMembersCount(db *models.Database, groupID int64) int {
+	count, _ := db.GroupMember.Select().Filter(
+		goent.Equals(db.GroupMember.Field("group_id"), groupID),
+	).Count("id")
+	return int(count)
+}
+
+// batchGetGroupMembersCount 批量查询群组成员数
+func batchGetGroupMembersCount(db *models.Database, groupIDs []int64) map[int64]int {
+	result := make(map[int64]int)
+	if len(groupIDs) == 0 {
+		return result
 	}
+
+	members, err := db.GroupMember.Select("group_id").Filter(
+		goent.In(db.GroupMember.Field("group_id"), groupIDs),
+	).All()
+	if err != nil {
+		return result
+	}
+
+	for _, m := range members {
+		result[m.GroupID]++
+	}
+	return result
+}
+
+// checkGroupAdmin 检查当前用户是否为群组管理员或所有者
+func checkGroupAdmin(db *models.Database, groupID, userID int64) error {
+	member, err := db.GroupMember.Select().Filter(
+		goent.And(
+			goent.Equals(db.GroupMember.Field("group_id"), groupID),
+			goent.Equals(db.GroupMember.Field("user_id"), userID),
+		),
+	).One()
+	if err != nil || (member.Role != "owner" && member.Role != "admin") {
+		return fiber.NewError(fiber.StatusForbidden, "Only group owners or admins can perform this action")
+	}
+	return nil
+}
+
+func ListGroups(c fiber.Ctx) error {
+	pagination := helpers.GetPagination(c)
 
 	db := models.GetDB()
 
-	groups, err := db.Group.Select().Skip((page - 1) * perPage).Take(perPage).All()
+	groups, err := db.Group.Select().Skip(helpers.GetOffset(pagination.Page, pagination.PerPage)).Take(pagination.PerPage).All()
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch groups"})
 	}
 
-	response := make([]*GroupResponse, 0)
+	var groupIDs []int64
 	for _, group := range groups {
-		membersCount, _ := db.GroupMember.Select().Where("group_id = ?", group.ID).Count("")
-		response = append(response, ToGroupResponse(group, int(membersCount)))
+		groupIDs = append(groupIDs, group.ID)
+	}
+
+	membersCountMap := batchGetGroupMembersCount(db, groupIDs)
+
+	response := make([]*GroupResponse, 0, len(groups))
+	for _, group := range groups {
+		response = append(response, ToGroupResponse(group, membersCountMap[group.ID]))
 	}
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
 		"data":     response,
-		"page":     page,
-		"per_page": perPage,
+		"page":     pagination.Page,
+		"per_page": pagination.PerPage,
 	})
 }
 
@@ -71,13 +122,12 @@ func GetGroup(c fiber.Ctx) error {
 
 	db := models.GetDB()
 
-	group, err := db.Group.Select().Where("name = ?", name).One()
+	group, err := findGroupByName(db, name)
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Group not found"})
 	}
 
-	membersCount, _ := db.GroupMember.Select().Where("group_id = ?", group.ID).Count("")
-	return c.Status(fiber.StatusOK).JSON(ToGroupResponse(group, int(membersCount)))
+	return c.Status(fiber.StatusOK).JSON(ToGroupResponse(group, getGroupMembersCount(db, group.ID)))
 }
 
 func CreateGroup(c fiber.Ctx) error {
@@ -97,7 +147,7 @@ func CreateGroup(c fiber.Ctx) error {
 
 	db := models.GetDB()
 
-	existingGroup, _ := db.Group.Select().Where("name = ?", req.Name).One()
+	existingGroup, _ := findGroupByName(db, req.Name)
 	if existingGroup != nil {
 		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "Group name already exists"})
 	}
@@ -144,14 +194,13 @@ func UpdateGroup(c fiber.Ctx) error {
 
 	db := models.GetDB()
 
-	group, err := db.Group.Select().Where("name = ?", name).One()
+	group, err := findGroupByName(db, name)
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Group not found"})
 	}
 
-	member, err := db.GroupMember.Select().Where("group_id = ? AND user_id = ?", group.ID, userID).One()
-	if err != nil || (member.Role != "owner" && member.Role != "admin") {
-		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Only group owners or admins can update group info"})
+	if err := checkGroupAdmin(db, group.ID, userID); err != nil {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": err.Error()})
 	}
 
 	if req.DisplayName != "" {
@@ -175,8 +224,7 @@ func UpdateGroup(c fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update group"})
 	}
 
-	membersCount, _ := db.GroupMember.Select().Where("group_id = ?", group.ID).Count("")
-	return c.Status(fiber.StatusOK).JSON(ToGroupResponse(group, int(membersCount)))
+	return c.Status(fiber.StatusOK).JSON(ToGroupResponse(group, getGroupMembersCount(db, group.ID)))
 }
 
 type ActivityResponse struct {
@@ -215,39 +263,83 @@ func ToActivityResponse(activity *models.Activity, user *models.User, repoOwner,
 	}
 }
 
-func ListActivities(c fiber.Ctx) error {
-	page, _ := strconv.Atoi(c.Query("page", strconv.Itoa(config.DefaultPage)))
-	perPage, _ := strconv.Atoi(c.Query("per_page", strconv.Itoa(config.DefaultPerPage)))
-	if perPage > config.MaxPerPage {
-		perPage = config.MaxPerPage
+// collectActivityUserAndRepoIDs 从活动列表中收集用户 ID 和仓库 ID
+func collectActivityUserAndRepoIDs(activities []*models.Activity) (userIDs, repoIDs []int64) {
+	for _, activity := range activities {
+		if activity.UserID != nil {
+			userIDs = append(userIDs, *activity.UserID)
+		}
+		if activity.RepositoryID != nil {
+			repoIDs = append(repoIDs, *activity.RepositoryID)
+		}
 	}
+	return
+}
+
+// batchGetReposWithOwners 批量查询仓库及其所有者，返回仓库和所有者映射
+func batchGetReposWithOwners(db *models.Database, repoIDs []int64) (map[int64]*models.Repository, map[int64]*models.User) {
+	reposMap := make(map[int64]*models.Repository)
+	ownersMap := make(map[int64]*models.User)
+	if len(repoIDs) == 0 {
+		return reposMap, ownersMap
+	}
+
+	repos, err := db.Repository.Select().Filter(
+		goent.In(db.Repository.Field("id"), repoIDs),
+	).All()
+	if err != nil {
+		return reposMap, ownersMap
+	}
+
+	var ownerIDs []int64
+	for _, r := range repos {
+		reposMap[r.ID] = r
+		ownerIDs = append(ownerIDs, r.OwnerID)
+	}
+
+	ownersMap = helpers.BatchGetUsers(db, ownerIDs)
+	return reposMap, ownersMap
+}
+
+func ListActivities(c fiber.Ctx) error {
+	pagination := helpers.GetPagination(c)
 	userID := c.Query("user_id")
 
 	db := models.GetDB()
 
-	query := db.Activity.Select()
+	conds := []goent.Condition{}
 	if userID != "" {
 		uid, _ := strconv.ParseUint(userID, 10, 64)
-		query = query.Where("user_id = ?", uid)
+		conds = append(conds, goent.Equals(db.Activity.Field("user_id"), uid))
 	}
 
-	activities, err := query.Skip((page - 1) * perPage).Take(perPage).All()
+	var activities []*models.Activity
+	var err error
+	if len(conds) > 0 {
+		activities, err = db.Activity.Select().Filter(conds...).Skip(helpers.GetOffset(pagination.Page, pagination.PerPage)).Take(pagination.PerPage).All()
+	} else {
+		activities, err = db.Activity.Select().Skip(helpers.GetOffset(pagination.Page, pagination.PerPage)).Take(pagination.PerPage).All()
+	}
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch activities"})
 	}
 
-	response := make([]*ActivityResponse, 0)
+	userIDs, repoIDs := collectActivityUserAndRepoIDs(activities)
+	usersMap := helpers.BatchGetUsers(db, userIDs)
+	reposMap, ownersMap := batchGetReposWithOwners(db, repoIDs)
+
+	response := make([]*ActivityResponse, 0, len(activities))
 	for _, activity := range activities {
 		var user *models.User
 		var repoOwner, repoName string
 
 		if activity.UserID != nil {
-			user, _ = db.User.Select().Where("id = ?", *activity.UserID).One()
+			user = usersMap[*activity.UserID]
 		}
 		if activity.RepositoryID != nil {
-			repo, _ := db.Repository.Select().Where("id = ?", *activity.RepositoryID).One()
+			repo := reposMap[*activity.RepositoryID]
 			if repo != nil {
-				ownerUser, _ := db.User.Select().Where("id = ?", repo.OwnerID).One()
+				ownerUser := ownersMap[repo.OwnerID]
 				if ownerUser != nil {
 					repoOwner = ownerUser.Username
 				}
@@ -260,8 +352,8 @@ func ListActivities(c fiber.Ctx) error {
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
 		"data":     response,
-		"page":     page,
-		"per_page": perPage,
+		"page":     pagination.Page,
+		"per_page": pagination.PerPage,
 	})
 }
 
@@ -300,14 +392,14 @@ func CreateActivity(c fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create activity"})
 	}
 
-	var user *models.User
-	var repoOwner, repoName string
+	user := helpers.GetUser(db, userID)
 
-	user, _ = db.User.Select().Where("id = ?", userID).One()
+	var repoOwner, repoName string
 	if req.RepositoryID != nil {
-		repo, _ := db.Repository.Select().Where("id = ?", *req.RepositoryID).One()
+		reposMap, ownersMap := batchGetReposWithOwners(db, []int64{*req.RepositoryID})
+		repo := reposMap[*req.RepositoryID]
 		if repo != nil {
-			ownerUser, _ := db.User.Select().Where("id = ?", repo.OwnerID).One()
+			ownerUser := ownersMap[repo.OwnerID]
 			if ownerUser != nil {
 				repoOwner = ownerUser.Username
 			}
@@ -353,7 +445,9 @@ func ListMilestones(c fiber.Ctx) error {
 
 	db := models.GetDB()
 
-	milestones, err := db.Milestone.Select().Where("repository_id = ?", result.Repo.ID).All()
+	milestones, err := db.Milestone.Select().Filter(
+		goent.Equals(db.Milestone.Field("repository_id"), result.Repo.ID),
+	).All()
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch milestones"})
 	}

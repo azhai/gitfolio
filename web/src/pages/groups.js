@@ -1,15 +1,37 @@
 import { Layout, Loading, EmptyState } from '../components.js';
-import { GroupService, UserService, API, Auth } from '../api.js';
+import { GroupService, UserService, API } from '../api.js';
 
 const Groups = {
     oninit(vnode) {
         vnode.state.groups = [];
+        vnode.state.users = [];
+        vnode.state.groupMembers = {};
         vnode.state.loading = true;
-        vnode.state.page = 1;
-        vnode.state.perPage = 30;
+        vnode.state.searchQuery = '';
+        vnode.state.activeTab = 'groups';
 
-        GroupService.list(1, 30).then(result => {
-            vnode.state.groups = result.data || [];
+        Promise.allSettled([
+            GroupService.list(),
+            API.get('/users')
+        ]).then(([groupsResult, usersResult]) => {
+            if (groupsResult.status === 'fulfilled') {
+                vnode.state.groups = groupsResult.value.data || [];
+            }
+            if (usersResult.status === 'fulfilled') {
+                vnode.state.users = usersResult.value.data || usersResult.value || [];
+            }
+            let membersPromise = Promise.resolve();
+            if (vnode.state.groups.length > 0) {
+                membersPromise = Promise.all(
+                    vnode.state.groups.map(g =>
+                        GroupService.getMembers(g.name)
+                            .then(members => { vnode.state.groupMembers[g.name] = members.data || []; })
+                            .catch(() => { vnode.state.groupMembers[g.name] = []; })
+                    )
+                );
+            }
+            return membersPromise;
+        }).then(() => {
             vnode.state.loading = false;
             m.redraw();
         }).catch(() => {
@@ -18,12 +40,39 @@ const Groups = {
         });
     },
 
+    filteredGroups(vnode) {
+        const q = (vnode.state.searchQuery || '').toLowerCase();
+        if (!q) return vnode.state.groups;
+        return vnode.state.groups.filter(g =>
+            (g.display_name || g.name).toLowerCase().includes(q) ||
+            (g.description || '').toLowerCase().includes(q) ||
+            (vnode.state.groupMembers[g.name] || []).some(m =>
+                (m.user.username || '').toLowerCase().includes(q) ||
+                (m.user.full_name || '').toLowerCase().includes(q) ||
+                (m.user.email || '').toLowerCase().includes(q)
+            )
+        );
+    },
+
+    filteredUsers(vnode) {
+        const q = (vnode.state.searchQuery || '').toLowerCase();
+        if (!q) return vnode.state.users;
+        return vnode.state.users.filter(u =>
+            (u.full_name || u.username || '').toLowerCase().includes(q) ||
+            (u.email || '').toLowerCase().includes(q) ||
+            (u.bio || '').toLowerCase().includes(q)
+        );
+    },
+
     view(vnode) {
-        const { groups, loading } = vnode.state;
+        const { groups, users, loading, searchQuery, activeTab } = vnode.state;
+
+        const filteredGroups = Groups.filteredGroups(vnode);
+        const filteredUsers = Groups.filteredUsers(vnode);
 
         return m(Layout, [
             m('div.page-header', [
-                m('h1', [m('i.fas.fa-users'), ' 团队']),
+                m('h1', [m('i.fas.fa-users'), ' 团队与账号']),
                 m('div.page-actions', [
                     m('button.btn.btn-primary', {
                         onclick: () => m.route.set('/groups/new')
@@ -31,30 +80,98 @@ const Groups = {
                 ])
             ]),
 
-            loading ? m(Loading) : [
-                groups.length === 0 
+            m('div.search-bar', [
+                m('div.search-input-wrapper', [
+                    m('i.fas.fa-search'),
+                    m('input.form-input.search-input', {
+                        type: 'text',
+                        placeholder: '搜索团队、成员、账号...',
+                        value: searchQuery,
+                        oninput: e => { vnode.state.searchQuery = e.target.value; }
+                    }),
+                    searchQuery ? m('button.search-clear', {
+                        onclick: () => { vnode.state.searchQuery = ''; }
+                    }, m('i.fas.fa-times')) : null
+                ])
+            ]),
+
+            m('div.tabs-bar', [
+                m('a.tab' + (activeTab === 'groups' ? '.active' : ''), {
+                    onclick: () => { vnode.state.activeTab = 'groups'; }
+                }, [m('i.fas.fa-users-cog'), ` 团队 (${filteredGroups.length})`]),
+                m('a.tab' + (activeTab === 'accounts' ? '.active' : ''), {
+                    onclick: () => { vnode.state.activeTab = 'accounts'; }
+                }, [m('i.fas.fa-user-circle'), ` 账号 (${filteredUsers.length})`])
+            ]),
+
+            loading ? m(Loading) :
+            activeTab === 'groups' ? m('div.groups-page', [
+                filteredGroups.length === 0 && !searchQuery && groups.length === 0
                     ? m(EmptyState, { message: '暂无团队', icon: 'fa-users' })
-                    : m('div.groups-list', groups.map(group => 
-                        m('div.group-card', {
+                    : filteredGroups.length === 0 && searchQuery
+                    ? m(EmptyState, { message: '未找到匹配的团队', icon: 'fa-search' })
+                    : m('div.groups-list', filteredGroups.map(group => {
+                        const members = vnode.state.groupMembers[group.name] || [];
+                        return m('div.group-card', {
                             onclick: () => m.route.set(`/groups/${group.name}`)
                         }, [
-                            m('div.group-avatar', [
-                                group.avatar 
-                                    ? m('img', { src: group.avatar, alt: group.name })
-                                    : m('div.avatar-placeholder', group.display_name ? group.display_name[0].toUpperCase() : group.name[0].toUpperCase())
-                            ]),
-                            m('div.group-info', [
-                                m('h3.group-name', group.display_name || group.name),
-                                group.description ? m('p.group-description', group.description) : null,
-                                m('div.group-meta', [
-                                    m('span', [m('i.fas.fa-users'), ` ${group.members_count || 0} 成员`]),
-                                    group.location ? m('span', [m('i.fas.fa-map-marker-alt'), ` ${group.location}`]) : null,
-                                    group.website ? m('a', { href: group.website, target: '_blank', onclick: e => e.stopPropagation() }, [m('i.fas.fa-globe')]) : null
+                            m('div.group-card-main', [
+                                m('div.group-avatar', [
+                                    group.avatar
+                                        ? m('img', { src: group.avatar, alt: group.name })
+                                        : m('div.avatar-placeholder', group.display_name ? group.display_name[0].toUpperCase() : group.name[0].toUpperCase())
+                                ]),
+                                m('div.group-info', [
+                                    m('h3.group-name', group.display_name || group.name),
+                                    group.description ? m('p.group-description', group.description) : null,
+                                    m('div.group-meta', [
+                                        m('span', [m('i.fas.fa-users'), ` ${members.length} 成员`]),
+                                        group.location ? m('span', [m('i.fas.fa-map-marker-alt'), ` ${group.location}`]) : null,
+                                        group.website ? m('a', { href: group.website, target: '_blank', onclick: e => e.stopPropagation() }, [m('i.fas.fa-globe')]) : null
+                                    ])
                                 ])
+                            ]),
+                            members.length > 0 ? m('div.group-members-inline', [
+                                m('div.members-label', '成员'),
+                                m('div.members-avatars',
+                                    members.slice(0, 8).map(function(member) {
+                                        return m('span.member-avatar-sm', {
+                                            title: member.user.full_name || member.user.username
+                                        }, [
+                                            member.user.avatar ? m('img', { src: member.user.avatar })
+                                                : m('div.avatar-placeholder-sm', (member.user.full_name || member.user.username)[0].toUpperCase())
+                                        ]);
+                                    })
+                                )
+                             ]) : null
+                        ]);
+                    }))
+            ]) : m('div.accounts-page', [
+                filteredUsers.length === 0 && !searchQuery && users.length === 0
+                    ? m(EmptyState, { message: '暂无账号', icon: 'fa-user-circle' })
+                    : filteredUsers.length === 0 && searchQuery
+                    ? m(EmptyState, { message: '未找到匹配的账号', icon: 'fa-search' })
+                    : m('div.accounts-grid', filteredUsers.map(user =>
+                        m('div.account-card', {
+                            onclick: () => m.route.set(`/user/${user.username}`)
+                        }, [
+                            m('div.account-avatar', [
+                                user.avatar
+                                    ? m('img', { src: user.avatar, alt: user.username })
+                                    : m('div.avatar-placeholder', (user.full_name || user.username)[0].toUpperCase())
+                            ]),
+                            m('div.account-info', [
+                                m('h4.account-name', user.full_name || user.username),
+                                m('p.account-email', user.email || ''),
+                                m('div.account-badges', [
+                                    user.is_admin ? m('span.badge.badge-admin', '管理员') : null,
+                                    !user.is_active ? m('span.badge.badge-inactive', '已禁用') : null
+                                ].filter(Boolean)),
+                                user.bio ? m('p.account-bio', user.bio) : null
                             ])
                         ])
                     ))
-            ]
+            ])
         ]);
     }
 };
@@ -120,7 +237,7 @@ const GroupDetail = {
     saveEdit(vnode) {
         const { name } = vnode.attrs;
         vnode.state.saving = true;
-        
+
         GroupService.update(name, vnode.state.editForm).then(result => {
             vnode.state.group = result;
             vnode.state.editing = false;
@@ -213,7 +330,7 @@ const GroupDetail = {
                     m('div.group-avatar-large', {
                         style: { position: 'relative' }
                     }, [
-                        group.avatar 
+                        group.avatar
                             ? m('img', { src: group.avatar, alt: group.name })
                             : m('div.avatar-placeholder', group.display_name ? group.display_name[0].toUpperCase() : group.name[0].toUpperCase()),
                         GroupDetail.canEdit(vnode) ? m('div.avatar-upload-overlay', {
@@ -340,10 +457,10 @@ const GroupDetail = {
                                     }, '取消')
                                 ])
                             ]) : null,
-                            m('div.members-list', members.map(member => 
+                            m('div.members-list', members.map(member =>
                                 m('div.member-card', [
                                     m('div.member-avatar', [
-                                        member.user.avatar 
+                                        member.user.avatar
                                             ? m('img', { src: member.user.avatar, alt: member.user.username })
                                             : m('div.avatar-placeholder', member.user.username[0].toUpperCase())
                                     ]),

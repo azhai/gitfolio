@@ -10,9 +10,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/azhai/gitfolio/cmd"
 	"github.com/azhai/gitfolio/models"
 	"github.com/azhai/gitfolio/services"
+	"github.com/azhai/goent/utils"
 )
 
 type MirrorConfig struct {
@@ -158,8 +158,9 @@ func main() {
 	fmt.Printf("Sync PRs: %v\n", cfg.SyncPRs)
 	fmt.Println()
 
-	_ = cmd.InitDB()
-	defer models.Disconnect()
+	env := utils.NewEnv()
+	models.OpenDB(env)
+	defer models.CloseDB()
 	db := models.GetDB()
 
 	stats, err := mirrorRepository(db, cfg)

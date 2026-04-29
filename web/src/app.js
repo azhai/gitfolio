@@ -20,6 +20,7 @@ import { CreateProjectPage } from './pages/create-project.js';
 import { MigrateProjectPage } from './pages/migrate-project.js';
 import { LoginPage } from './pages/login.js';
 import { UserManagement } from './pages/user-management.js';
+import { UserProfile } from './pages/user-profile.js';
 import CommitList from './pages/commits.js';
 
 Auth.init();
@@ -86,6 +87,7 @@ const routes = {
     '/groups/new': withAuth(NewGroup),
     '/groups/:name': GroupDetail,
     '/users': withAuth(UserManagement),
+    '/user/:username': UserProfile,
     '/activity': Activities,
     '/snippets': SnippetsPage,
     '/snippets/new': withAuth(NewSnippet),

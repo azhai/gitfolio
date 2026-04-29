@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -12,13 +11,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/azhai/gitfolio/config"
 	"github.com/azhai/gitfolio/models"
 	"github.com/azhai/gitfolio/services"
-	"github.com/azhai/goent"
-	"github.com/azhai/goent/drivers/pgsql"
-	"github.com/azhai/goent/drivers/sqlite"
-	"github.com/azhai/goent/model"
+	"github.com/azhai/goent/utils"
 )
 
 type GitHubIssue struct {
@@ -96,29 +91,12 @@ type GiteaUser struct {
 }
 
 func main() {
-	cfg := config.Load()
-
-	var drv model.Driver
-	switch cfg.Database.Type {
-	case "pgsql":
-		drv = pgsql.OpenDSN(cfg.Database.GetDSN())
-	case "sqlite":
-		drv = sqlite.OpenDSN(cfg.Database.Name)
-	default:
-		log.Fatal("Unsupported database type:", cfg.Database.Type)
-	}
-
-	db, err := goent.Open[models.Database](drv, "stdout")
-	if err != nil {
+	env := utils.NewEnv()
+	if _, err := models.OpenDB(env); err != nil {
 		log.Fatal("Failed to connect database:", err)
 	}
+	db := models.GetDB()
 	log.Println("Database connected successfully")
-
-	ctx := context.Background()
-	if err := goent.AutoMigrateContext(ctx, db); err != nil {
-		log.Fatal("Failed to migrate database:", err)
-	}
-	log.Println("Database schema created successfully")
 
 	log.Println("=== Step 1: Cleaning existing data ===")
 	cleanData(db)

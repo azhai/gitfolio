@@ -6,9 +6,10 @@ import (
 	"log"
 	"os"
 
-	"github.com/azhai/gitfolio/cmd"
+	"github.com/azhai/gitfolio/config"
 	"github.com/azhai/gitfolio/models"
 	"github.com/azhai/gitfolio/services"
+	"github.com/azhai/goent/utils"
 )
 
 var (
@@ -39,8 +40,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	cfg := cmd.InitDB()
-	defer models.Disconnect()
+	cfg := config.Load()
+	env := utils.NewEnv()
+	models.OpenDB(env)
+	defer models.CloseDB()
 	db := models.GetDB()
 	accountService := services.NewAccountService(db)
 

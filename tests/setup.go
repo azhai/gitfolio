@@ -8,7 +8,6 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/azhai/gitfolio/cmd"
 	"github.com/azhai/gitfolio/config"
 	"github.com/azhai/gitfolio/models"
 	"github.com/azhai/gitfolio/routes"
@@ -29,11 +28,13 @@ func SetupTestRouter() *fiber.App {
 
 	cfg := &config.DatabaseConfig{
 		Type: "sqlite",
-		Name: ":memory:",
+		DSN:  ":memory:",
 	}
 
-	cmd.ConnectDB(cfg)
-	defer models.Disconnect()
+	if _, err := models.Connect(cfg.Type, cfg.DSN, "stdout"); err != nil {
+		panic("Failed to connect database: " + err.Error())
+	}
+	defer models.CloseDB()
 	return routes.SetupRouter()
 }
 

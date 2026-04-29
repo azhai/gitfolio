@@ -10,6 +10,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+// Claims JWT 令牌的自定义声明
 type Claims struct {
 	UserID   int64  `json:"user_id"`
 	Username string `json:"username"`
@@ -18,6 +19,7 @@ type Claims struct {
 	jwt.RegisteredClaims
 }
 
+// GenerateToken 为用户生成 JWT 令牌，有效期 24 小时
 func GenerateToken(user *models.User) (string, error) {
 	claims := Claims{
 		UserID:   user.ID,
@@ -35,6 +37,7 @@ func GenerateToken(user *models.User) (string, error) {
 	return token.SignedString([]byte(config.AppConfig.Auth.JWTSecret))
 }
 
+// AuthMiddleware 要求请求携带有效 JWT 令牌，否则返回 401
 func AuthMiddleware() fiber.Handler {
 	return func(c fiber.Ctx) error {
 		authHeader := c.Get("Authorization")
@@ -67,6 +70,7 @@ func AuthMiddleware() fiber.Handler {
 	}
 }
 
+// OptionalAuth 可选认证中间件，令牌有效时注入用户信息，无效时继续放行
 func OptionalAuth() fiber.Handler {
 	return func(c fiber.Ctx) error {
 		authHeader := c.Get("Authorization")
@@ -97,6 +101,7 @@ func OptionalAuth() fiber.Handler {
 	}
 }
 
+// AdminOnly 要求当前用户为管理员，否则返回 403
 func AdminOnly() fiber.Handler {
 	return func(c fiber.Ctx) error {
 		isAdmin := c.Locals("is_admin")
@@ -107,6 +112,7 @@ func AdminOnly() fiber.Handler {
 	}
 }
 
+// GetCurrentUser 从上下文中获取当前登录用户
 func GetCurrentUser(c fiber.Ctx) (*models.User, error) {
 	userID := c.Locals("user_id")
 	if userID == nil {
@@ -123,6 +129,7 @@ func GetCurrentUser(c fiber.Ctx) (*models.User, error) {
 	return user, nil
 }
 
+// GetCurrentUserID 从上下文中获取当前登录用户 ID，未登录返回 0
 func GetCurrentUserID(c fiber.Ctx) int64 {
 	userID := c.Locals("user_id")
 	if userID == nil {

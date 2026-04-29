@@ -4,10 +4,10 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/azhai/gitfolio/config"
 	"github.com/azhai/gitfolio/helpers"
 	"github.com/azhai/gitfolio/middleware"
 	"github.com/azhai/gitfolio/models"
+	"github.com/azhai/gitfolio/services"
 	"github.com/gofiber/fiber/v3"
 )
 
@@ -139,17 +139,14 @@ func ToTaskResponse(task *models.Task, initiator *models.User, verifier *models.
 	if initiator != nil {
 		response.Initiator = initiator.Username
 	}
-
 	if verifier != nil {
 		response.Verifier = verifier.Username
 		response.VerifierID = task.VerifierID
 	}
-
 	if handler != nil {
 		response.Handler = handler.Username
 		response.HandlerID = task.HandlerID
 	}
-
 	if task.LastHandledAt != nil {
 		response.LastHandledAt = task.LastHandledAt.Format("2006-01-02T15:04:05Z07:00")
 	}
@@ -157,12 +154,87 @@ func ToTaskResponse(task *models.Task, initiator *models.User, verifier *models.
 	return response
 }
 
-func ListTasks(c fiber.Ctx) error {
-	page, _ := strconv.Atoi(c.Query("page", strconv.Itoa(config.DefaultPage)))
-	perPage, _ := strconv.Atoi(c.Query("per_page", strconv.Itoa(config.DefaultPerPage)))
-	if perPage > config.MaxPerPage {
-		perPage = config.MaxPerPage
+// collectTaskUserIDs 收集任务列表中所有关联用户 ID
+func collectTaskUserIDs(tasks []*models.Task) []int64 {
+	var initiatorIDs, verifierIDs, handlerIDs []int64
+	for _, task := range tasks {
+		if task.InitiatorID != 0 {
+			initiatorIDs = append(initiatorIDs, task.InitiatorID)
+		}
+		if task.VerifierID != nil && *task.VerifierID != 0 {
+			verifierIDs = append(verifierIDs, *task.VerifierID)
+		}
+		if task.HandlerID != nil && *task.HandlerID != 0 {
+			handlerIDs = append(handlerIDs, *task.HandlerID)
+		}
 	}
+	return helpers.CollectUniqueIDs(initiatorIDs, verifierIDs, handlerIDs)
+}
+
+// findUserByUsername 根据用户名查找用户，返回用户 ID 的指针
+func findUserByUsername(db *models.Database, username string) *int64 {
+	if username == "" {
+		return nil
+	}
+	user, err := db.User.Select().Where("username = ?", username).One()
+	if err != nil {
+		return nil
+	}
+	return &user.ID
+}
+
+// createScheduleFromInput 根据输入创建排期记录
+func createScheduleFromInput(db *models.Database, taskID int64, s ScheduleInput) {
+	schedule := &models.TaskSchedule{
+		TaskID:       taskID,
+		ScheduleType: s.ScheduleType,
+	}
+
+	if s.PlanStartDate != "" {
+		t, err := time.Parse("2006-01-02", s.PlanStartDate)
+		if err == nil {
+			schedule.PlanStartDate = &t
+		}
+	}
+	if s.PlanEndDate != "" {
+		t, err := time.Parse("2006-01-02", s.PlanEndDate)
+		if err == nil {
+			schedule.PlanEndDate = &t
+		}
+	}
+	schedule.PlanStartNoon = s.PlanStartNoon
+	schedule.PlanEndNoon = s.PlanEndNoon
+
+	schedule.User1ID = findUserByUsername(db, s.User1)
+	schedule.User2ID = findUserByUsername(db, s.User2)
+	schedule.User3ID = findUserByUsername(db, s.User3)
+
+	db.TaskSchedule.Insert().One(schedule)
+}
+
+// buildTaskFullResponse 构建包含排期、附件和关联 Issue 的完整任务响应
+func buildTaskFullResponse(db *models.Database, task *models.Task) TaskResponse {
+	initiator := helpers.GetUser(db, task.InitiatorID)
+
+	var verifier *models.User
+	if task.VerifierID != nil {
+		verifier = helpers.GetUser(db, *task.VerifierID)
+	}
+
+	var handler *models.User
+	if task.HandlerID != nil {
+		handler = helpers.GetUser(db, *task.HandlerID)
+	}
+
+	schedules := getTaskSchedules(db, task.ID)
+	attachments := getTaskAttachments(db, task.ID)
+	issues := getTaskIssues(db, task.ID)
+
+	return ToTaskResponse(task, initiator, verifier, handler, schedules, attachments, issues)
+}
+
+func ListTasks(c fiber.Ctx) error {
+	pagination := helpers.GetPagination(c)
 	status := c.Query("status", "")
 	priority := c.Query("priority", "")
 
@@ -174,7 +246,6 @@ func ListTasks(c fiber.Ctx) error {
 	db := models.GetDB()
 
 	query := db.Task.Select().Where("repository_id = ?", result.Repo.ID)
-
 	if status != "" {
 		query = query.Where("status = ?", status)
 	}
@@ -191,31 +262,13 @@ func ListTasks(c fiber.Ctx) error {
 	}
 	total, _ := countQuery.Count("*")
 
-	tasks, err := query.Skip((page - 1) * perPage).Take(perPage).All()
+	tasks, err := query.Skip(helpers.GetOffset(pagination.Page, pagination.PerPage)).Take(pagination.PerPage).All()
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch tasks"})
 	}
 
-	userIDs := make(map[int64]bool)
-	for _, task := range tasks {
-		if task.InitiatorID != 0 {
-			userIDs[task.InitiatorID] = true
-		}
-		if task.VerifierID != nil && *task.VerifierID != 0 {
-			userIDs[*task.VerifierID] = true
-		}
-		if task.HandlerID != nil && *task.HandlerID != 0 {
-			userIDs[*task.HandlerID] = true
-		}
-	}
-
-	usersMap := make(map[int64]*models.User)
-	for userID := range userIDs {
-		user, err := db.User.Select().Where("id = ?", userID).One()
-		if err == nil {
-			usersMap[userID] = user
-		}
-	}
+	userIDs := collectTaskUserIDs(tasks)
+	usersMap := helpers.BatchGetUsers(db, userIDs)
 
 	var response []TaskResponse
 	response = make([]TaskResponse, 0)
@@ -236,8 +289,8 @@ func ListTasks(c fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
 		"data":     response,
 		"total":    total,
-		"page":     page,
-		"per_page": perPage,
+		"page":     pagination.Page,
+		"per_page": pagination.PerPage,
 	})
 }
 
@@ -256,23 +309,7 @@ func GetTask(c fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Task not found"})
 	}
 
-	initiator, _ := db.User.Select().Where("id = ?", task.InitiatorID).One()
-
-	var verifier *models.User
-	if task.VerifierID != nil {
-		verifier, _ = db.User.Select().Where("id = ?", *task.VerifierID).One()
-	}
-
-	var handler *models.User
-	if task.HandlerID != nil {
-		handler, _ = db.User.Select().Where("id = ?", *task.HandlerID).One()
-	}
-
-	schedules := getTaskSchedules(db, task.ID)
-	attachments := getTaskAttachments(db, task.ID)
-	issues := getTaskIssues(db, task.ID)
-
-	return c.Status(fiber.StatusOK).JSON(ToTaskResponse(task, initiator, verifier, handler, schedules, attachments, issues))
+	return c.Status(fiber.StatusOK).JSON(buildTaskFullResponse(db, task))
 }
 
 func getTaskSchedules(db *models.Database, taskID int64) []TaskScheduleResp {
@@ -281,26 +318,20 @@ func getTaskSchedules(db *models.Database, taskID int64) []TaskScheduleResp {
 		return []TaskScheduleResp{}
 	}
 
-	userIDs := make(map[int64]bool)
+	var userIDs []int64
 	for _, s := range schedules {
 		if s.User1ID != nil && *s.User1ID != 0 {
-			userIDs[*s.User1ID] = true
+			userIDs = append(userIDs, *s.User1ID)
 		}
 		if s.User2ID != nil && *s.User2ID != 0 {
-			userIDs[*s.User2ID] = true
+			userIDs = append(userIDs, *s.User2ID)
 		}
 		if s.User3ID != nil && *s.User3ID != 0 {
-			userIDs[*s.User3ID] = true
+			userIDs = append(userIDs, *s.User3ID)
 		}
 	}
 
-	usersMap := make(map[int64]*models.User)
-	for userID := range userIDs {
-		user, err := db.User.Select().Where("id = ?", userID).One()
-		if err == nil {
-			usersMap[userID] = user
-		}
-	}
+	usersMap := helpers.BatchGetUsers(db, userIDs)
 
 	var result []TaskScheduleResp
 	for _, s := range schedules {
@@ -433,19 +464,8 @@ func CreateTask(c fiber.Ctx) error {
 		task.Priority = 3
 	}
 
-	if req.Verifier != "" {
-		verifierUser, err := db.User.Select().Where("username = ?", req.Verifier).One()
-		if err == nil {
-			task.VerifierID = &verifierUser.ID
-		}
-	}
-
-	if req.Handler != "" {
-		handlerUser, err := db.User.Select().Where("username = ?", req.Handler).One()
-		if err == nil {
-			task.HandlerID = &handlerUser.ID
-		}
-	}
+	task.VerifierID = findUserByUsername(db, req.Verifier)
+	task.HandlerID = findUserByUsername(db, req.Handler)
 
 	err = db.Task.Insert().One(task)
 	if err != nil {
@@ -453,64 +473,10 @@ func CreateTask(c fiber.Ctx) error {
 	}
 
 	for _, s := range req.Schedules {
-		schedule := &models.TaskSchedule{
-			TaskID:       task.ID,
-			ScheduleType: s.ScheduleType,
-		}
-
-		if s.PlanStartDate != "" {
-			t, err := time.Parse("2006-01-02", s.PlanStartDate)
-			if err == nil {
-				schedule.PlanStartDate = &t
-			}
-		}
-		if s.PlanEndDate != "" {
-			t, err := time.Parse("2006-01-02", s.PlanEndDate)
-			if err == nil {
-				schedule.PlanEndDate = &t
-			}
-		}
-		schedule.PlanStartNoon = s.PlanStartNoon
-		schedule.PlanEndNoon = s.PlanEndNoon
-
-		if s.User1 != "" {
-			u, err := db.User.Select().Where("username = ?", s.User1).One()
-			if err == nil {
-				schedule.User1ID = &u.ID
-			}
-		}
-		if s.User2 != "" {
-			u, err := db.User.Select().Where("username = ?", s.User2).One()
-			if err == nil {
-				schedule.User2ID = &u.ID
-			}
-		}
-		if s.User3 != "" {
-			u, err := db.User.Select().Where("username = ?", s.User3).One()
-			if err == nil {
-				schedule.User3ID = &u.ID
-			}
-		}
-
-		db.TaskSchedule.Insert().One(schedule)
+		createScheduleFromInput(db, task.ID, s)
 	}
 
-	initiator, _ := db.User.Select().Where("id = ?", task.InitiatorID).One()
-
-	var verifier *models.User
-	if task.VerifierID != nil {
-		verifier, _ = db.User.Select().Where("id = ?", *task.VerifierID).One()
-	}
-
-	var handler *models.User
-	if task.HandlerID != nil {
-		handler, _ = db.User.Select().Where("id = ?", *task.HandlerID).One()
-	}
-
-	schedules := getTaskSchedules(db, task.ID)
-	issues := getTaskIssues(db, task.ID)
-
-	return c.Status(fiber.StatusCreated).JSON(ToTaskResponse(task, initiator, verifier, handler, schedules, nil, issues))
+	return c.Status(fiber.StatusCreated).JSON(buildTaskFullResponse(db, task))
 }
 
 func UpdateTask(c fiber.Ctx) error {
@@ -561,17 +527,10 @@ func UpdateTask(c fiber.Ctx) error {
 	}
 
 	if req.Verifier != "" {
-		verifierUser, err := db.User.Select().Where("username = ?", req.Verifier).One()
-		if err == nil {
-			task.VerifierID = &verifierUser.ID
-		}
+		task.VerifierID = findUserByUsername(db, req.Verifier)
 	}
-
 	if req.Handler != "" {
-		handlerUser, err := db.User.Select().Where("username = ?", req.Handler).One()
-		if err == nil {
-			task.HandlerID = &handlerUser.ID
-		}
+		task.HandlerID = findUserByUsername(db, req.Handler)
 	}
 
 	now := time.Now()
@@ -584,68 +543,12 @@ func UpdateTask(c fiber.Ctx) error {
 
 	if req.Schedules != nil {
 		db.TaskSchedule.Delete().Where("task_id = ?", task.ID).Exec()
-
 		for _, s := range req.Schedules {
-			schedule := &models.TaskSchedule{
-				TaskID:       task.ID,
-				ScheduleType: s.ScheduleType,
-			}
-
-			if s.PlanStartDate != "" {
-				t, err := time.Parse("2006-01-02", s.PlanStartDate)
-				if err == nil {
-					schedule.PlanStartDate = &t
-				}
-			}
-			if s.PlanEndDate != "" {
-				t, err := time.Parse("2006-01-02", s.PlanEndDate)
-				if err == nil {
-					schedule.PlanEndDate = &t
-				}
-			}
-			schedule.PlanStartNoon = s.PlanStartNoon
-			schedule.PlanEndNoon = s.PlanEndNoon
-
-			if s.User1 != "" {
-				u, err := db.User.Select().Where("username = ?", s.User1).One()
-				if err == nil {
-					schedule.User1ID = &u.ID
-				}
-			}
-			if s.User2 != "" {
-				u, err := db.User.Select().Where("username = ?", s.User2).One()
-				if err == nil {
-					schedule.User2ID = &u.ID
-				}
-			}
-			if s.User3 != "" {
-				u, err := db.User.Select().Where("username = ?", s.User3).One()
-				if err == nil {
-					schedule.User3ID = &u.ID
-				}
-			}
-
-			db.TaskSchedule.Insert().One(schedule)
+			createScheduleFromInput(db, task.ID, s)
 		}
 	}
 
-	initiator, _ := db.User.Select().Where("id = ?", task.InitiatorID).One()
-
-	var verifier *models.User
-	if task.VerifierID != nil {
-		verifier, _ = db.User.Select().Where("id = ?", *task.VerifierID).One()
-	}
-
-	var handler *models.User
-	if task.HandlerID != nil {
-		handler, _ = db.User.Select().Where("id = ?", *task.HandlerID).One()
-	}
-
-	schedules := getTaskSchedules(db, task.ID)
-	attachments := getTaskAttachments(db, task.ID)
-	issues := getTaskIssues(db, task.ID)
-
-	return c.Status(fiber.StatusOK).JSON(ToTaskResponse(task, initiator, verifier, handler, schedules, attachments, issues))
+	return c.Status(fiber.StatusOK).JSON(buildTaskFullResponse(db, task))
 }
 
 func DeleteTask(c fiber.Ctx) error {
@@ -836,4 +739,612 @@ func DeleteTaskAttachment(c fiber.Ctx) error {
 	db.TaskAttachment.Delete().Where("id = ?", attachmentID).Exec()
 
 	return c.Status(fiber.StatusNoContent).JSON(nil)
+}
+
+var validTransitions = map[string][]string{
+	TaskStatusDraft:    {TaskStatusProgress},
+	TaskStatusProgress: {TaskStatusReview},
+	TaskStatusReview:   {TaskStatusCompleted, "rejected"},
+	"rejected":         {TaskStatusProgress},
+}
+
+func isValidTransition(from, to string) bool {
+	allowed, ok := validTransitions[from]
+	if !ok {
+		return false
+	}
+	for _, t := range allowed {
+		if t == to {
+			return true
+		}
+	}
+	return false
+}
+
+type TransitionRequest struct {
+	ToStatus string `json:"to_status"`
+	Comment  string `json:"comment"`
+}
+
+func TransitionTask(c fiber.Ctx) error {
+	taskID, _ := strconv.Atoi(c.Params("id"))
+	userID := middleware.GetCurrentUserID(c)
+	if userID == 0 {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
+	}
+
+	var req TransitionRequest
+	if err := c.Bind().JSON(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	result, err := helpers.GetOwnerAndRepoWithPrivateAccessFromParams(c)
+	if err != nil {
+		return err
+	}
+
+	db := models.GetDB()
+
+	task, err := db.Task.Select().Where("id = ? AND repository_id = ?", taskID, result.Repo.ID).One()
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Task not found"})
+	}
+
+	if !isValidTransition(task.Status, req.ToStatus) {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid transition from " + task.Status + " to " + req.ToStatus,
+		})
+	}
+
+	if req.ToStatus == TaskStatusCompleted && task.VerifierID != nil && *task.VerifierID != userID {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Only the verifier can complete this task"})
+	}
+
+	transition := &models.TaskTransition{
+		TaskID:     task.ID,
+		FromStatus: task.Status,
+		ToStatus:   req.ToStatus,
+		UserID:     userID,
+		Comment:    req.Comment,
+	}
+	db.TaskTransition.Insert().One(transition)
+
+	task.Status = req.ToStatus
+	now := time.Now()
+	task.LastHandledAt = &now
+	db.Task.Save().One(task)
+
+	return c.Status(fiber.StatusOK).JSON(buildTaskFullResponse(db, task))
+}
+
+func GetTaskTransitions(c fiber.Ctx) error {
+	taskID, _ := strconv.Atoi(c.Params("id"))
+
+	result, err := helpers.GetOwnerAndRepoWithPrivateAccessFromParams(c)
+	if err != nil {
+		return err
+	}
+
+	db := models.GetDB()
+
+	task, err := db.Task.Select().Where("id = ? AND repository_id = ?", taskID, result.Repo.ID).One()
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Task not found"})
+	}
+
+	transitions, err := db.TaskTransition.Select().Where("task_id = ?", task.ID).OrderBy("created_at DESC").All()
+	if err != nil {
+		return c.Status(fiber.StatusOK).JSON([]interface{}{})
+	}
+
+	var userIDs []int64
+	for _, t := range transitions {
+		if t.UserID != 0 {
+			userIDs = append(userIDs, t.UserID)
+		}
+	}
+	usersMap := helpers.BatchGetUsers(db, userIDs)
+
+	type TransitionResponse struct {
+		ID         int64  `json:"id"`
+		FromStatus string `json:"from_status"`
+		ToStatus   string `json:"to_status"`
+		UserID     int64  `json:"user_id"`
+		Username   string `json:"username"`
+		Comment    string `json:"comment"`
+		CreatedAt  string `json:"created_at"`
+	}
+
+	var response []TransitionResponse
+	for _, t := range transitions {
+		username := ""
+		if u := usersMap[t.UserID]; u != nil {
+			username = u.Username
+		}
+		response = append(response, TransitionResponse{
+			ID:         t.ID,
+			FromStatus: t.FromStatus,
+			ToStatus:   t.ToStatus,
+			UserID:     t.UserID,
+			Username:   username,
+			Comment:    t.Comment,
+			CreatedAt:  t.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(response)
+}
+
+func GetTaskComments(c fiber.Ctx) error {
+	taskID, _ := strconv.Atoi(c.Params("id"))
+
+	result, err := helpers.GetOwnerAndRepoWithPrivateAccessFromParams(c)
+	if err != nil {
+		return err
+	}
+
+	db := models.GetDB()
+
+	task, err := db.Task.Select().Where("id = ? AND repository_id = ?", taskID, result.Repo.ID).One()
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Task not found"})
+	}
+
+	comments, err := db.Comment.Select().Where("task_id = ?", task.ID).OrderBy("created_at ASC").All()
+	if err != nil {
+		return c.Status(fiber.StatusOK).JSON([]interface{}{})
+	}
+
+	var authorIDs []int64
+	for _, c := range comments {
+		if c.AuthorID != 0 {
+			authorIDs = append(authorIDs, c.AuthorID)
+		}
+	}
+	usersMap := helpers.BatchGetUsers(db, authorIDs)
+
+	type CommentResponse struct {
+		ID        int64  `json:"id"`
+		Body      string `json:"body"`
+		AuthorID  int64  `json:"author_id"`
+		Author    string `json:"author"`
+		CreatedAt string `json:"created_at"`
+		UpdatedAt string `json:"updated_at"`
+	}
+
+	var response []CommentResponse
+	for _, c := range comments {
+		author := ""
+		if u := usersMap[c.AuthorID]; u != nil {
+			author = u.Username
+		}
+		response = append(response, CommentResponse{
+			ID:        c.ID,
+			Body:      c.Body,
+			AuthorID:  c.AuthorID,
+			Author:    author,
+			CreatedAt: c.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+			UpdatedAt: c.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(response)
+}
+
+func CreateTaskComment(c fiber.Ctx) error {
+	taskID, _ := strconv.Atoi(c.Params("id"))
+	userID := middleware.GetCurrentUserID(c)
+	if userID == 0 {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
+	}
+
+	var req struct {
+		Body string `json:"body"`
+	}
+	if err := c.Bind().JSON(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	if req.Body == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Comment body is required"})
+	}
+
+	result, err := helpers.GetOwnerAndRepoWithPrivateAccessFromParams(c)
+	if err != nil {
+		return err
+	}
+
+	db := models.GetDB()
+
+	task, err := db.Task.Select().Where("id = ? AND repository_id = ?", taskID, result.Repo.ID).One()
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Task not found"})
+	}
+
+	taskIDVal := task.ID
+	comment := &models.Comment{
+		Body:     req.Body,
+		TaskID:   &taskIDVal,
+		AuthorID: userID,
+	}
+
+	if err := db.Comment.Insert().One(comment); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create comment"})
+	}
+
+	user := helpers.GetUser(db, userID)
+	username := ""
+	if user != nil {
+		username = user.Username
+	}
+
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
+		"id":         comment.ID,
+		"body":       comment.Body,
+		"author_id":  comment.AuthorID,
+		"author":     username,
+		"created_at": comment.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		"updated_at": comment.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+	})
+}
+
+func LinkTaskPullRequest(c fiber.Ctx) error {
+	taskID, _ := strconv.Atoi(c.Params("id"))
+	userID := middleware.GetCurrentUserID(c)
+	if userID == 0 {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
+	}
+
+	var req struct {
+		PullRequestID int64 `json:"pull_request_id"`
+	}
+	if err := c.Bind().JSON(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	result, err := helpers.GetOwnerAndRepoWithPrivateAccessFromParams(c)
+	if err != nil {
+		return err
+	}
+
+	db := models.GetDB()
+
+	task, err := db.Task.Select().Where("id = ? AND repository_id = ?", taskID, result.Repo.ID).One()
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Task not found"})
+	}
+
+	pr, err := db.PullRequest.Select().Where("id = ? AND repository_id = ?", req.PullRequestID, result.Repo.ID).One()
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Pull request not found"})
+	}
+
+	existing, _ := db.TaskPullRequest.Select().Where("task_id = ? AND pull_request_id = ?", task.ID, pr.ID).One()
+	if existing != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Pull request already linked"})
+	}
+
+	link := &models.TaskPullRequest{
+		TaskID:        task.ID,
+		PullRequestID: pr.ID,
+	}
+	db.TaskPullRequest.Insert().One(link)
+
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"message": "Pull request linked successfully"})
+}
+
+func UnlinkTaskPullRequest(c fiber.Ctx) error {
+	taskID, _ := strconv.Atoi(c.Params("id"))
+	prID, _ := strconv.Atoi(c.Params("pr_id"))
+	userID := middleware.GetCurrentUserID(c)
+	if userID == 0 {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
+	}
+
+	result, err := helpers.GetOwnerAndRepoWithPrivateAccessFromParams(c)
+	if err != nil {
+		return err
+	}
+
+	db := models.GetDB()
+
+	task, err := db.Task.Select().Where("id = ? AND repository_id = ?", taskID, result.Repo.ID).One()
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Task not found"})
+	}
+
+	db.TaskPullRequest.Delete().Where("task_id = ? AND pull_request_id = ?", task.ID, prID).Exec()
+
+	return c.Status(fiber.StatusNoContent).JSON(nil)
+}
+
+func GetTaskPullRequests(c fiber.Ctx) error {
+	taskID, _ := strconv.Atoi(c.Params("id"))
+
+	result, err := helpers.GetOwnerAndRepoWithPrivateAccessFromParams(c)
+	if err != nil {
+		return err
+	}
+
+	db := models.GetDB()
+
+	task, err := db.Task.Select().Where("id = ? AND repository_id = ?", taskID, result.Repo.ID).One()
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Task not found"})
+	}
+
+	links, err := db.TaskPullRequest.Select().Where("task_id = ?", task.ID).All()
+	if err != nil {
+		return c.Status(fiber.StatusOK).JSON([]interface{}{})
+	}
+
+	var prIDs []int64
+	for _, l := range links {
+		prIDs = append(prIDs, l.PullRequestID)
+	}
+
+	var prs []*models.PullRequest
+	if len(prIDs) > 0 {
+		prs, _ = db.PullRequest.Select().Where("id IN ?", prIDs).All()
+	}
+
+	type PRSummary struct {
+		ID           int64  `json:"id"`
+		Number       int    `json:"number"`
+		Title        string `json:"title"`
+		Status       string `json:"status"`
+		SourceBranch string `json:"source_branch"`
+		TargetBranch string `json:"target_branch"`
+		IsMerged     bool   `json:"is_merged"`
+	}
+
+	var response []PRSummary
+	for _, pr := range prs {
+		status := pr.Status
+		if pr.IsMerged {
+			status = "merged"
+		}
+		response = append(response, PRSummary{
+			ID:           pr.ID,
+			Number:       pr.Number,
+			Title:        pr.Title,
+			Status:       status,
+			SourceBranch: pr.SourceBranch,
+			TargetBranch: pr.TargetBranch,
+			IsMerged:     pr.IsMerged,
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(response)
+}
+
+func GetTaskCommits(c fiber.Ctx) error {
+	taskID, _ := strconv.Atoi(c.Params("id"))
+
+	result, err := helpers.GetOwnerAndRepoWithPrivateAccessFromParams(c)
+	if err != nil {
+		return err
+	}
+
+	db := models.GetDB()
+
+	task, err := db.Task.Select().Where("id = ? AND repository_id = ?", taskID, result.Repo.ID).One()
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Task not found"})
+	}
+
+	refs, err := db.CommitReference.Select().Where("target_type = ? AND target_id = ?", "task", task.ID).All()
+	if err != nil {
+		return c.Status(fiber.StatusOK).JSON([]interface{}{})
+	}
+
+	gitSvc := services.NewGitService()
+	type CommitSummary struct {
+		Hash        string `json:"hash"`
+		ShortHash   string `json:"short_hash"`
+		Message     string `json:"message"`
+		Author      string `json:"author"`
+		AuthorEmail string `json:"author_email"`
+		Date        string `json:"date"`
+	}
+
+	var response []CommitSummary
+	for _, ref := range refs {
+		detail, err := gitSvc.GetCommitDetail(result.Owner.Username, result.Repo.Name, ref.CommitHash)
+		if err != nil {
+			response = append(response, CommitSummary{
+				Hash:    ref.CommitHash,
+				Message: "Unable to load commit details",
+			})
+			continue
+		}
+		response = append(response, CommitSummary{
+			Hash:        detail.Hash,
+			ShortHash:   detail.ShortHash,
+			Message:     detail.Message,
+			Author:      detail.Author,
+			AuthorEmail: detail.AuthorEmail,
+			Date:        detail.Date,
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(response)
+}
+
+func StartTimer(c fiber.Ctx) error {
+	taskID, _ := strconv.Atoi(c.Params("id"))
+	userID := middleware.GetCurrentUserID(c)
+	if userID == 0 {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
+	}
+
+	var req struct {
+		Note string `json:"note"`
+	}
+	if err := c.Bind().JSON(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	result, err := helpers.GetOwnerAndRepoWithPrivateAccessFromParams(c)
+	if err != nil {
+		return err
+	}
+
+	db := models.GetDB()
+
+	task, err := db.Task.Select().Where("id = ? AND repository_id = ?", taskID, result.Repo.ID).One()
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Task not found"})
+	}
+
+	active, _ := db.TaskTimeLog.Select().Where("task_id = ? AND user_id = ? AND end_time IS NULL", task.ID, userID).One()
+	if active != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Timer already running for this task"})
+	}
+
+	timeLog := &models.TaskTimeLog{
+		TaskID:    task.ID,
+		UserID:    userID,
+		StartTime: time.Now(),
+		Note:      req.Note,
+	}
+	db.TaskTimeLog.Insert().One(timeLog)
+
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
+		"id":         timeLog.ID,
+		"task_id":    timeLog.TaskID,
+		"start_time": timeLog.StartTime.Format("2006-01-02T15:04:05Z07:00"),
+		"note":       timeLog.Note,
+	})
+}
+
+func StopTimer(c fiber.Ctx) error {
+	taskID, _ := strconv.Atoi(c.Params("id"))
+	userID := middleware.GetCurrentUserID(c)
+	if userID == 0 {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
+	}
+
+	result, err := helpers.GetOwnerAndRepoWithPrivateAccessFromParams(c)
+	if err != nil {
+		return err
+	}
+
+	db := models.GetDB()
+
+	task, err := db.Task.Select().Where("id = ? AND repository_id = ?", taskID, result.Repo.ID).One()
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Task not found"})
+	}
+
+	active, err := db.TaskTimeLog.Select().Where("task_id = ? AND user_id = ? AND end_time IS NULL", task.ID, userID).One()
+	if err != nil || active == nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "No active timer found"})
+	}
+
+	now := time.Now()
+	active.EndTime = &now
+	active.Duration = int64(now.Sub(active.StartTime).Seconds())
+	db.TaskTimeLog.Save().One(active)
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"id":         active.ID,
+		"task_id":    active.TaskID,
+		"start_time": active.StartTime.Format("2006-01-02T15:04:05Z07:00"),
+		"end_time":   active.EndTime.Format("2006-01-02T15:04:05Z07:00"),
+		"duration":   active.Duration,
+		"note":       active.Note,
+	})
+}
+
+func GetTaskTimeLogs(c fiber.Ctx) error {
+	taskID, _ := strconv.Atoi(c.Params("id"))
+
+	result, err := helpers.GetOwnerAndRepoWithPrivateAccessFromParams(c)
+	if err != nil {
+		return err
+	}
+
+	db := models.GetDB()
+
+	task, err := db.Task.Select().Where("id = ? AND repository_id = ?", taskID, result.Repo.ID).One()
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Task not found"})
+	}
+
+	logs, err := db.TaskTimeLog.Select().Where("task_id = ?", task.ID).OrderBy("created_at DESC").All()
+	if err != nil {
+		return c.Status(fiber.StatusOK).JSON([]interface{}{})
+	}
+
+	var userIDs []int64
+	for _, l := range logs {
+		if l.UserID != 0 {
+			userIDs = append(userIDs, l.UserID)
+		}
+	}
+	usersMap := helpers.BatchGetUsers(db, userIDs)
+
+	type TimeLogResponse struct {
+		ID        int64  `json:"id"`
+		UserID    int64  `json:"user_id"`
+		Username  string `json:"username"`
+		StartTime string `json:"start_time"`
+		EndTime   string `json:"end_time,omitempty"`
+		Duration  int64  `json:"duration"`
+		Note      string `json:"note"`
+	}
+
+	var response []TimeLogResponse
+	for _, l := range logs {
+		username := ""
+		if u := usersMap[l.UserID]; u != nil {
+			username = u.Username
+		}
+		resp := TimeLogResponse{
+			ID:        l.ID,
+			UserID:    l.UserID,
+			Username:  username,
+			StartTime: l.StartTime.Format("2006-01-02T15:04:05Z07:00"),
+			Duration:  l.Duration,
+			Note:      l.Note,
+		}
+		if l.EndTime != nil {
+			resp.EndTime = l.EndTime.Format("2006-01-02T15:04:05Z07:00")
+		}
+		response = append(response, resp)
+	}
+
+	return c.Status(fiber.StatusOK).JSON(response)
+}
+
+func GetTaskTimeSummary(c fiber.Ctx) error {
+	taskID, _ := strconv.Atoi(c.Params("id"))
+
+	result, err := helpers.GetOwnerAndRepoWithPrivateAccessFromParams(c)
+	if err != nil {
+		return err
+	}
+
+	db := models.GetDB()
+
+	task, err := db.Task.Select().Where("id = ? AND repository_id = ?", taskID, result.Repo.ID).One()
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Task not found"})
+	}
+
+	logs, err := db.TaskTimeLog.Select().Where("task_id = ? AND duration > 0", task.ID).All()
+	if err != nil {
+		return c.Status(fiber.StatusOK).JSON(fiber.Map{"total_seconds": 0, "entries": 0})
+	}
+
+	var totalDuration int64
+	for _, l := range logs {
+		totalDuration += l.Duration
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"total_seconds": totalDuration,
+		"entries":       len(logs),
+	})
 }

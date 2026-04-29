@@ -6,15 +6,21 @@ import (
 	"os"
 
 	"github.com/azhai/gitfolio/cmd"
+	"github.com/azhai/gitfolio/config"
 	"github.com/azhai/gitfolio/models"
 	"github.com/azhai/gitfolio/routes"
+	"github.com/azhai/goent/utils"
 )
 
 func main() {
-	cfg := cmd.InitDB()
+	cfg := config.Load()
+	env := utils.NewEnv()
+	if _, err := models.OpenDB(env); err != nil {
+		log.Fatalf("Failed to open database: %v", err)
+	}
+	defer models.CloseDB()
 	cmd.SeedUsers()
 	cmd.AddGithubToken(cfg.Github.Username, cfg.Github.Token)
-	defer models.Disconnect()
 
 	if err := os.MkdirAll(cfg.Repository.Root, 0755); err != nil {
 		log.Fatalf("Failed to create repository root: %v", err)
