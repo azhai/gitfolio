@@ -1,4 +1,4 @@
-package cmd
+package seed
 
 import (
 	"log"

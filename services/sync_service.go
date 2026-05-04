@@ -22,6 +22,20 @@ type SyncService struct {
 	account *AccountService
 }
 
+type SyncResult struct {
+	IssuesInserted int
+	IssuesUpdated  int
+	PRsInserted    int
+	PRsUpdated     int
+}
+
+func (r *SyncResult) Add(other SyncResult) {
+	r.IssuesInserted += other.IssuesInserted
+	r.IssuesUpdated += other.IssuesUpdated
+	r.PRsInserted += other.PRsInserted
+	r.PRsUpdated += other.PRsUpdated
+}
+
 func NewSyncService(db *models.Database) *SyncService {
 	return &SyncService{
 		db:      db,
@@ -125,7 +139,7 @@ func (s *SyncService) makeGitHubRequest(url string, token string) ([]byte, error
 		req.Header.Set("Authorization", fmt.Sprintf("token %s", token))
 	}
 
-	client := &http.Client{Timeout: 30 * time.Second}
+	client := NewHTTPClient(30 * time.Second)
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
@@ -211,7 +225,7 @@ func (s *SyncService) makeGiteaRequest(baseURL, path, token string) ([]byte, err
 		req.Header.Set("Authorization", "token "+token)
 	}
 
-	client := &http.Client{}
+	client := NewHTTPClient(30 * time.Second)
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
@@ -225,7 +239,8 @@ func (s *SyncService) makeGiteaRequest(baseURL, path, token string) ([]byte, err
 	return io.ReadAll(resp.Body)
 }
 
-func (s *SyncService) SyncGiteaIssues(ctx context.Context, repoID int64, owner, repo, token string) error {
+func (s *SyncService) SyncGiteaIssues(ctx context.Context, repoID int64, owner, repo, token string) (SyncResult, error) {
+	result := SyncResult{}
 	remoteRepo, _ := s.GetRemoteRepoInfo(repoID)
 	baseURL := "https://gitea.com"
 	if remoteRepo != nil && remoteRepo.WebURL != "" {
@@ -242,7 +257,7 @@ func (s *SyncService) SyncGiteaIssues(ctx context.Context, repoID int64, owner, 
 		url := fmt.Sprintf("repos/%s/%s/issues?state=all&limit=%d&page=%d", owner, repo, limit, page)
 		data, err := s.makeGiteaRequest(baseURL, url, token)
 		if err != nil {
-			return err
+			return result, err
 		}
 
 		var giteaIssues []struct {
@@ -257,7 +272,7 @@ func (s *SyncService) SyncGiteaIssues(ctx context.Context, repoID int64, owner, 
 			UpdatedAt time.Time     `json:"updated_at"`
 		}
 		if err := json.Unmarshal(data, &giteaIssues); err != nil {
-			return err
+			return result, err
 		}
 
 		if len(giteaIssues) == 0 {
@@ -291,9 +306,13 @@ func (s *SyncService) SyncGiteaIssues(ctx context.Context, repoID int64, owner, 
 				issue.Body = giteaIssue.Body
 				issue.IsClosed = isClosed
 				issue.UpdatedAt = giteaIssue.UpdatedAt
-				s.db.Issue.Save().One(&issue)
+				if err := s.db.Issue.Save().One(&issue); err == nil {
+					result.IssuesUpdated++
+				}
 			} else {
-				s.db.Issue.Insert().One(&issue)
+				if err := s.db.Issue.Insert().One(&issue); err == nil {
+					result.IssuesInserted++
+				}
 			}
 
 			s.syncIssueLabels(repoID, issue.ID, giteaIssue.Labels)
@@ -302,10 +321,11 @@ func (s *SyncService) SyncGiteaIssues(ctx context.Context, repoID int64, owner, 
 		page++
 	}
 
-	return nil
+	return result, nil
 }
 
-func (s *SyncService) SyncGiteaPRs(ctx context.Context, repoID int64, owner, repo, token string) error {
+func (s *SyncService) SyncGiteaPRs(ctx context.Context, repoID int64, owner, repo, token string) (SyncResult, error) {
+	result := SyncResult{}
 	remoteRepo, _ := s.GetRemoteRepoInfo(repoID)
 	baseURL := "https://gitea.com"
 	if remoteRepo != nil && remoteRepo.WebURL != "" {
@@ -322,7 +342,7 @@ func (s *SyncService) SyncGiteaPRs(ctx context.Context, repoID int64, owner, rep
 		url := fmt.Sprintf("repos/%s/%s/pulls?state=all&limit=%d&page=%d", owner, repo, limit, page)
 		data, err := s.makeGiteaRequest(baseURL, url, token)
 		if err != nil {
-			return err
+			return result, err
 		}
 
 		var giteaPRs []struct {
@@ -344,7 +364,7 @@ func (s *SyncService) SyncGiteaPRs(ctx context.Context, repoID int64, owner, rep
 			MergedAt  *time.Time `json:"merged_at"`
 		}
 		if err := json.Unmarshal(data, &giteaPRs); err != nil {
-			return err
+			return result, err
 		}
 
 		if len(giteaPRs) == 0 {
@@ -394,9 +414,13 @@ func (s *SyncService) SyncGiteaPRs(ctx context.Context, repoID int64, owner, rep
 				pr.IsMerged = isMerged
 				pr.IsClosed = isClosed
 				pr.UpdatedAt = giteaPR.UpdatedAt
-				s.db.PullRequest.Save().One(&pr)
+				if err := s.db.PullRequest.Save().One(&pr); err == nil {
+					result.PRsUpdated++
+				}
 			} else {
-				s.db.PullRequest.Insert().One(&pr)
+				if err := s.db.PullRequest.Insert().One(&pr); err == nil {
+					result.PRsInserted++
+				}
 			}
 
 			s.syncPRLabels(repoID, pr.ID, giteaPR.Labels)
@@ -405,7 +429,7 @@ func (s *SyncService) SyncGiteaPRs(ctx context.Context, repoID int64, owner, rep
 		page++
 	}
 
-	return nil
+	return result, nil
 }
 
 func (s *SyncService) SyncGitHubRepo(ctx context.Context, owner, repo string, token string, userID int64) (*models.Repository, error) {
@@ -529,7 +553,8 @@ func (s *SyncService) SyncGitHubRepo(ctx context.Context, owner, repo string, to
 	return &repository, nil
 }
 
-func (s *SyncService) SyncGitHubIssues(ctx context.Context, repoID int64, owner, repo, token string) error {
+func (s *SyncService) SyncGitHubIssues(ctx context.Context, repoID int64, owner, repo, token string) (SyncResult, error) {
+	result := SyncResult{}
 	page := 1
 	perPage := 100
 
@@ -537,12 +562,12 @@ func (s *SyncService) SyncGitHubIssues(ctx context.Context, repoID int64, owner,
 		url := fmt.Sprintf("https://api.github.com/repos/%s/%s/issues?state=all&per_page=%d&page=%d", owner, repo, perPage, page)
 		data, err := s.makeGitHubRequest(url, token)
 		if err != nil {
-			return err
+			return result, err
 		}
 
 		var ghIssues []GitHubIssue
 		if err := json.Unmarshal(data, &ghIssues); err != nil {
-			return err
+			return result, err
 		}
 
 		if len(ghIssues) == 0 {
@@ -619,6 +644,8 @@ func (s *SyncService) SyncGitHubIssues(ctx context.Context, repoID int64, owner,
 				for _, issue := range batch {
 					if err := s.db.Issue.Insert().One(issue); err != nil {
 						fmt.Printf("Warning: failed to insert Issue #%d: %v\n", issue.Number, err)
+					} else {
+						result.IssuesInserted++
 					}
 				}
 			}
@@ -647,6 +674,8 @@ func (s *SyncService) SyncGitHubIssues(ctx context.Context, repoID int64, owner,
 				for _, issue := range batch {
 					if err := s.db.Issue.Save().One(issue); err != nil {
 						fmt.Printf("Warning: failed to update Issue #%d: %v\n", issue.Number, err)
+					} else {
+						result.IssuesUpdated++
 					}
 				}
 			}
@@ -663,7 +692,7 @@ func (s *SyncService) SyncGitHubIssues(ctx context.Context, repoID int64, owner,
 		page++
 	}
 
-	return nil
+	return result, nil
 }
 
 func (s *SyncService) syncIssueLabels(repoID, issueID int64, ghLabels []GitHubLabel) {
@@ -960,7 +989,8 @@ func (s *SyncService) syncPRComments(ctx context.Context, repoID, prID int64, pr
 	return nil
 }
 
-func (s *SyncService) SyncGitHubPRs(ctx context.Context, repoID int64, owner, repo, token string) error {
+func (s *SyncService) SyncGitHubPRs(ctx context.Context, repoID int64, owner, repo, token string) (SyncResult, error) {
+	result := SyncResult{}
 	page := 1
 	perPage := 100
 
@@ -968,12 +998,12 @@ func (s *SyncService) SyncGitHubPRs(ctx context.Context, repoID int64, owner, re
 		url := fmt.Sprintf("https://api.github.com/repos/%s/%s/pulls?state=all&per_page=%d&page=%d", owner, repo, perPage, page)
 		data, err := s.makeGitHubRequest(url, token)
 		if err != nil {
-			return err
+			return result, err
 		}
 
 		var ghPRs []GitHubPR
 		if err := json.Unmarshal(data, &ghPRs); err != nil {
-			return err
+			return result, err
 		}
 
 		if len(ghPRs) == 0 {
@@ -1062,6 +1092,8 @@ func (s *SyncService) SyncGitHubPRs(ctx context.Context, repoID int64, owner, re
 				for _, pr := range batch {
 					if err := s.db.PullRequest.Insert().One(pr); err != nil {
 						fmt.Printf("Warning: failed to insert PR #%d: %v\n", pr.Number, err)
+					} else {
+						result.PRsInserted++
 					}
 				}
 			}
@@ -1090,6 +1122,8 @@ func (s *SyncService) SyncGitHubPRs(ctx context.Context, repoID int64, owner, re
 				for _, pr := range batch {
 					if err := s.db.PullRequest.Save().One(pr); err != nil {
 						fmt.Printf("Warning: failed to update PR #%d: %v\n", pr.Number, err)
+					} else {
+						result.PRsUpdated++
 					}
 				}
 			}
@@ -1106,7 +1140,7 @@ func (s *SyncService) SyncGitHubPRs(ctx context.Context, repoID int64, owner, re
 		page++
 	}
 
-	return nil
+	return result, nil
 }
 
 func (s *SyncService) getOrCreateUser(user *models.User) (*models.User, bool, error) {
@@ -1209,16 +1243,287 @@ func (s *SyncService) LogSync(syncPointID int64, syncType, status, message strin
 }
 
 func (s *SyncService) getRepoRoot() string {
-	return config.AppConfig.Repository.Root
+	return config.GetRepoRoot()
 }
 
-func (s *SyncService) SyncPullRepository(localPath string) error {
-	cmd := exec.Command("git", "-C", localPath, "remote", "update")
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("failed to sync repository: %s", string(output))
+type GitSyncResult struct {
+	Command    string
+	Output     string
+	Success    bool
+	ProxyURL   string
+	LocalPath  string
+	DurationMs int64
+	LogID      int64
+}
+
+func LogGitCommand(db *models.Database, command, workingDir, output string, status string, exitCode int, durationMs int64, repoID *int64, errMsg string) (int64, error) {
+	logEntry := models.GitCommandLog{
+		Command:      command,
+		WorkingDir:   workingDir,
+		Output:       output,
+		Status:       status,
+		ExitCode:     exitCode,
+		DurationMs:   durationMs,
+		RepositoryID: repoID,
+		ErrorMsg:     errMsg,
 	}
-	return nil
+	if err := db.GitCommandLog.Insert().One(&logEntry); err != nil {
+		return 0, fmt.Errorf("[GIT-LOG] failed to save log entry: %w", err)
+	}
+	return logEntry.ID, nil
+}
+
+func (s *SyncService) RunGitCommand(args []string, workingDir string, repoID *int64) (*GitSyncResult, error) {
+	logEntry := models.GitCommandLog{
+		Command:      fmt.Sprintf("git %s", strings.Join(args, " ")),
+		WorkingDir:   workingDir,
+		Status:       "running",
+		RepositoryID: repoID,
+	}
+
+	now := time.Now()
+	logEntry.StartedAt = &now
+
+	if err := s.db.GitCommandLog.Insert().One(&logEntry); err != nil {
+		fmt.Printf("[GIT-LOG] Warning: failed to create log entry: %v\n", err)
+	}
+
+	result := &GitSyncResult{
+		Command:   logEntry.Command,
+		LocalPath: workingDir,
+		LogID:     logEntry.ID,
+	}
+
+	startTime := time.Now()
+	fmt.Printf("[GIT-CMD] [%d] >>> %s (dir=%s)\n", logEntry.ID, logEntry.Command, workingDir)
+
+	var cmd *exec.Cmd
+	if workingDir != "" {
+		cmd = exec.Command("git", args...)
+		cmd.Dir = workingDir
+	} else {
+		cmd = exec.Command("git", args...)
+	}
+
+	output, err := cmd.CombinedOutput()
+	result.Output = strings.TrimSpace(string(output))
+	result.DurationMs = time.Since(startTime).Milliseconds()
+
+	finishTime := time.Now()
+	logEntry.FinishedAt = &finishTime
+	logEntry.DurationMs = result.DurationMs
+	logEntry.Output = result.Output
+
+	if err != nil {
+		result.Success = false
+		logEntry.Status = "failed"
+		logEntry.ErrorMsg = err.Error()
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			logEntry.ExitCode = exitErr.ExitCode()
+		}
+		fmt.Printf("[GIT-CMD] [%d] <<< FAILED (%dms) exit=%d\n  Error: %v\n  Output: %s\n",
+			logEntry.ID, result.DurationMs, logEntry.ExitCode, err, truncateOutput(result.Output, 500))
+	} else {
+		result.Success = true
+		logEntry.Status = "success"
+		logEntry.ExitCode = 0
+		fmt.Printf("[GIT-CMD] [%d] <<< OK (%dms) output:\n%s\n", logEntry.ID, result.DurationMs, truncateOutput(result.Output, 500))
+	}
+
+	if saveErr := s.db.GitCommandLog.Save().One(&logEntry); saveErr != nil {
+		fmt.Printf("[GIT-LOG] Warning: failed to update log entry %d: %v\n", logEntry.ID, saveErr)
+	}
+
+	return result, err
+}
+
+func truncateOutput(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "...(truncated)"
+}
+
+func (s *SyncService) SyncPullRepository(localPath string) (*GitSyncResult, error) {
+	proxyURL := config.GetProxyURL()
+
+	if err := ConfigureGitProxy(); err != nil {
+		fmt.Printf("[SYNC] Warning: failed to configure git proxy: %v\n", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	args := []string{"-C", localPath, "remote", "update"}
+	cmdStr := fmt.Sprintf("git %s", strings.Join(args, " "))
+	startTime := time.Now()
+	fmt.Printf("[GIT-CMD] >>> %s (dir=%s)\n", cmdStr, localPath)
+
+	cmd := exec.CommandContext(ctx, "git", args...)
+	output, err := cmd.CombinedOutput()
+	durationMs := time.Since(startTime).Milliseconds()
+	outputStr := strings.TrimSpace(string(output))
+
+	result := &GitSyncResult{
+		Command:    cmdStr,
+		Output:     outputStr,
+		LocalPath:  localPath,
+		ProxyURL:   proxyURL,
+		DurationMs: durationMs,
+	}
+
+	logEntry := models.GitCommandLog{
+		Command:    cmdStr,
+		WorkingDir: localPath,
+		Output:     outputStr,
+		DurationMs: durationMs,
+	}
+
+	if err != nil {
+		result.Success = false
+		logEntry.Status = "failed"
+		logEntry.ErrorMsg = err.Error()
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			logEntry.ExitCode = exitErr.ExitCode()
+		}
+		if ctx.Err() == context.DeadlineExceeded {
+			logEntry.ErrorMsg = "git remote update timed out after 5 minutes"
+			s.db.GitCommandLog.Insert().One(&logEntry)
+			result.LogID = logEntry.ID
+			return result, fmt.Errorf("git remote update timed out after 5 minutes")
+		}
+	} else {
+		result.Success = true
+		logEntry.Status = "success"
+		logEntry.ExitCode = 0
+	}
+
+	if saveErr := s.db.GitCommandLog.Insert().One(&logEntry); saveErr != nil {
+		fmt.Printf("[GIT-LOG] Warning: failed to save log entry: %v\n", saveErr)
+	}
+	result.LogID = logEntry.ID
+
+	fmt.Printf("[GIT-CMD] <<< [%s] (%dms) log_id=%d output:\n%s\n",
+		logEntry.Status, durationMs, logEntry.ID, truncateOutput(outputStr, 500))
+
+	if err != nil {
+		return result, fmt.Errorf("failed to sync repository: %s", result.Output)
+	}
+
+	fetchArgs := []string{"-C", localPath, "fetch", "origin", "+refs/heads/*:refs/heads/*"}
+	fetchCmdStr := fmt.Sprintf("git %s", strings.Join(fetchArgs, " "))
+	fmt.Printf("[GIT-CMD] >>> Updating local branch refs: %s\n", fetchCmdStr)
+
+	fetchCmd := exec.CommandContext(ctx, "git", fetchArgs...)
+	fetchOutput, fetchErr := fetchCmd.CombinedOutput()
+	fetchOutputStr := strings.TrimSpace(string(fetchOutput))
+
+	if fetchErr != nil {
+		fmt.Printf("[GIT-CMD] Warning: failed to update local branch refs: %s\n", fetchOutputStr)
+		result.Output = result.Output + "\n[branch-update] " + fetchOutputStr
+	} else {
+		fmt.Printf("[GIT-CMD] <<< Branch refs updated: %s\n", truncateOutput(fetchOutputStr, 200))
+		result.Output = result.Output + "\n[branch-updated] " + fetchOutputStr
+	}
+
+	fetchLogEntry := models.GitCommandLog{
+		Command:    fetchCmdStr,
+		WorkingDir: localPath,
+		Output:     fetchOutputStr,
+		DurationMs: time.Since(startTime).Milliseconds(),
+	}
+	if fetchErr != nil {
+		fetchLogEntry.Status = "failed"
+		fetchLogEntry.ErrorMsg = fetchErr.Error()
+	} else {
+		fetchLogEntry.Status = "success"
+		fetchLogEntry.ExitCode = 0
+	}
+	s.db.GitCommandLog.Insert().One(&fetchLogEntry)
+
+	return result, nil
+}
+
+func (s *SyncService) SyncPushAll(localPath string) (*GitSyncResult, error) {
+	proxyURL := config.GetProxyURL()
+
+	if err := ConfigureGitProxy(); err != nil {
+		fmt.Printf("[SYNC] Warning: failed to configure git proxy: %v\n", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+
+	result := &GitSyncResult{
+		LocalPath: localPath,
+		ProxyURL:  proxyURL,
+		Output:    "",
+		Success:   true,
+	}
+
+	totalStart := time.Now()
+
+	pushSteps := []struct {
+		name string
+		args []string
+	}{
+		{"push-all", []string{"-C", localPath, "push", "origin", "--all"}},
+		{"push-tags", []string{"-C", localPath, "push", "origin", "--tags"}},
+	}
+
+	for _, step := range pushSteps {
+		stepStart := time.Now()
+		cmdStr := fmt.Sprintf("git %s", strings.Join(step.args, " "))
+		fmt.Printf("[GIT-CMD] >>> [%s] %s (dir=%s)\n", step.name, cmdStr, localPath)
+
+		cmd := exec.CommandContext(ctx, "git", step.args...)
+		output, err := cmd.CombinedOutput()
+		durationMs := time.Since(stepStart).Milliseconds()
+		outputStr := strings.TrimSpace(string(output))
+
+		logEntry := models.GitCommandLog{
+			Command:    cmdStr,
+			WorkingDir: localPath,
+			Output:     outputStr,
+			DurationMs: durationMs,
+		}
+
+		if err != nil {
+			result.Success = false
+			logEntry.Status = "failed"
+			logEntry.ErrorMsg = err.Error()
+			if exitErr, ok := err.(*exec.ExitError); ok {
+				logEntry.ExitCode = exitErr.ExitCode()
+			}
+			fmt.Printf("[GIT-CMD] <<< [%s] FAILED (%dms) exit=%d\n  Error: %v\n  Output: %s\n",
+				step.name, durationMs, logEntry.ExitCode, err, truncateOutput(outputStr, 500))
+		} else {
+			logEntry.Status = "success"
+			logEntry.ExitCode = 0
+			fmt.Printf("[GIT-CMD] <<< [%s] OK (%dms)\n%s\n", step.name, durationMs, truncateOutput(outputStr, 500))
+		}
+
+		s.db.GitCommandLog.Insert().One(&logEntry)
+
+		if result.Output != "" {
+			result.Output += "\n"
+		}
+		result.Output += fmt.Sprintf("[%s] %s", step.name, outputStr)
+		if result.Command == "" {
+			result.Command = cmdStr
+		} else {
+			result.Command += " && " + step.name
+		}
+	}
+
+	result.DurationMs = time.Since(totalStart).Milliseconds()
+
+	return result, nil
+}
+
+func (s *SyncService) SetRemoteURL(localPath, remoteURL string) error {
+	_, err := s.RunGitCommand([]string{"-C", localPath, "remote", "set-url", "origin", remoteURL}, "", nil)
+	return err
 }
 
 func (s *SyncService) InitBareRepository(owner, name string) (string, error) {
@@ -1228,40 +1533,45 @@ func (s *SyncService) InitBareRepository(owner, name string) (string, error) {
 	}
 
 	localPath := filepath.Join(reposDir, owner, name+".git")
-	cmd := exec.Command("git", "init", "--bare", localPath)
-	if output, err := cmd.CombinedOutput(); err != nil {
-		return "", fmt.Errorf("failed to init repository: %s", string(output))
+	if _, err := s.RunGitCommand([]string{"init", "--bare", localPath}, "", nil); err != nil {
+		return "", fmt.Errorf("failed to init repository: %v", err)
 	}
 	return localPath, nil
 }
 
 func (s *SyncService) PushRepository(localPath, remoteURL string) error {
+	ConfigureGitProxy()
+
 	if remoteURL != "" {
-		cmd := exec.Command("git", "-C", localPath, "remote", "add", "push_target", remoteURL)
-		cmd.Run()
+		s.RunGitCommand([]string{"-C", localPath, "remote", "add", "push_target", remoteURL}, "", nil)
 	}
 
-	cmd := exec.Command("git", "-C", localPath, "push", "push_target", "--all")
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("failed to push repository: %s", string(output))
+	if _, err := s.RunGitCommand([]string{"-C", localPath, "push", "push_target", "--all"}, "", nil); err != nil {
+		return fmt.Errorf("failed to push repository: %v", err)
 	}
 
-	cmd = exec.Command("git", "-C", localPath, "push", "push_target", "--tags")
-	cmd.Run()
+	s.RunGitCommand([]string{"-C", localPath, "push", "push_target", "--tags"}, "", nil)
 
 	return nil
 }
 
-func (s *SyncService) SyncRepositoryData(ctx context.Context, repoID int64, platform, owner, repoName, token string) error {
+func (s *SyncService) SyncRepositoryData(ctx context.Context, repoID int64, platform, owner, repoName, token string) (SyncResult, error) {
+	result := SyncResult{}
+
 	switch platform {
 	case "github":
-		if err := s.SyncGitHubIssues(ctx, repoID, owner, repoName, token); err != nil {
-			return fmt.Errorf("failed to sync issues: %w", err)
+		issueResult, err := s.SyncGitHubIssues(ctx, repoID, owner, repoName, token)
+		if err != nil {
+			return result, fmt.Errorf("failed to sync issues: %w", err)
 		}
-		if err := s.SyncGitHubPRs(ctx, repoID, owner, repoName, token); err != nil {
-			return fmt.Errorf("failed to sync PRs: %w", err)
+		result.Add(issueResult)
+
+		prResult, err := s.SyncGitHubPRs(ctx, repoID, owner, repoName, token)
+		if err != nil {
+			return result, fmt.Errorf("failed to sync PRs: %w", err)
 		}
+		result.Add(prResult)
+
 		if err := s.SyncGitHubContributors(ctx, repoID, owner, repoName, token); err != nil {
 			fmt.Printf("Warning: failed to sync contributors: %v\n", err)
 		}
@@ -1269,19 +1579,30 @@ func (s *SyncService) SyncRepositoryData(ctx context.Context, repoID int64, plat
 			fmt.Printf("Warning: failed to sync repo stats: %v\n", err)
 		}
 	case "gitea":
-		if err := s.SyncGiteaIssues(ctx, repoID, owner, repoName, token); err != nil {
-			return fmt.Errorf("failed to sync issues: %w", err)
+		issueResult, err := s.SyncGiteaIssues(ctx, repoID, owner, repoName, token)
+		if err != nil {
+			return result, fmt.Errorf("failed to sync issues: %w", err)
 		}
-		if err := s.SyncGiteaPRs(ctx, repoID, owner, repoName, token); err != nil {
-			return fmt.Errorf("failed to sync PRs: %w", err)
+		result.Add(issueResult)
+
+		prResult, err := s.SyncGiteaPRs(ctx, repoID, owner, repoName, token)
+		if err != nil {
+			return result, fmt.Errorf("failed to sync PRs: %w", err)
 		}
+		result.Add(prResult)
 	default:
-		if err := s.SyncGitHubIssues(ctx, repoID, owner, repoName, token); err != nil {
-			return fmt.Errorf("failed to sync issues: %w", err)
+		issueResult, err := s.SyncGitHubIssues(ctx, repoID, owner, repoName, token)
+		if err != nil {
+			return result, fmt.Errorf("failed to sync issues: %w", err)
 		}
-		if err := s.SyncGitHubPRs(ctx, repoID, owner, repoName, token); err != nil {
-			return fmt.Errorf("failed to sync PRs: %w", err)
+		result.Add(issueResult)
+
+		prResult, err := s.SyncGitHubPRs(ctx, repoID, owner, repoName, token)
+		if err != nil {
+			return result, fmt.Errorf("failed to sync PRs: %w", err)
 		}
+		result.Add(prResult)
+
 		if err := s.SyncGitHubContributors(ctx, repoID, owner, repoName, token); err != nil {
 			fmt.Printf("Warning: failed to sync contributors: %v\n", err)
 		}
@@ -1295,7 +1616,7 @@ func (s *SyncService) SyncRepositoryData(ctx context.Context, repoID int64, plat
 		fmt.Printf("Warning: failed to update repository stats: %v\n", err)
 	}
 
-	return nil
+	return result, nil
 }
 
 func (s *SyncService) GetRemoteRepoInfo(repoID int64) (*models.RemoteRepository, error) {
@@ -1436,7 +1757,7 @@ func (s *SyncService) CreateRemoteRepoFromMirrorURL(repoID int64, mirrorURL stri
 		Platform:     platform,
 		Owner:        owner,
 		RepoName:     repoName,
-		CloneURL:     mirrorURL + ".git",
+		CloneURL:     mirrorURL,
 		WebURL:       fmt.Sprintf("%s/%s/%s", baseURL, owner, repoName),
 		RepositoryID: repoID,
 		AccountID:    accountID,

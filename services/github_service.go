@@ -55,10 +55,8 @@ type GitHubService struct {
 
 func NewGitHubService(token string) *GitHubService {
 	return &GitHubService{
-		client: &http.Client{
-			Timeout: 30 * time.Second,
-		},
-		token: token,
+		client: NewHTTPClient(30 * time.Second),
+		token:  token,
 	}
 }
 

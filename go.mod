@@ -3,7 +3,7 @@ module github.com/azhai/gitfolio
 go 1.26.0
 
 require (
-	github.com/azhai/goent v0.8.7
+	github.com/azhai/goent v0.8.8
 	github.com/gofiber/fiber/v3 v3.2.0
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/go-github/v84 v84.0.0
@@ -40,5 +40,3 @@ require (
 	modernc.org/memory v1.11.0 // indirect
 	modernc.org/sqlite v1.50.0 // indirect
 )
-
-replace github.com/azhai/goent => ../goent

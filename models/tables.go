@@ -12,6 +12,7 @@ type FolioSchema struct {
 	Branch           *goent.Table[Branch]
 	Comment          *goent.Table[Comment]
 	Contributor      *goent.Table[Contributor]
+	GitCommandLog    *goent.Table[GitCommandLog]
 	Group            *goent.Table[Group]
 	GroupMember      *goent.Table[GroupMember]
 	Issue            *goent.Table[Issue]
@@ -375,6 +376,22 @@ type SyncLog struct {
 	ItemsSynced int
 	ItemsFailed int
 	Details     string
+}
+
+type GitCommandLog struct {
+	ID        int64 `goe:"pk"`
+	CreatedAt time.Time
+
+	Command     string
+	WorkingDir  string
+	Output      string
+	Status      string `goe:"default:'pending'"`
+	StartedAt   *time.Time
+	FinishedAt  *time.Time
+	DurationMs  int64
+	ExitCode    int
+	RepositoryID *int64 `goe:"index"`
+	ErrorMsg    string
 }
 
 type Group struct {

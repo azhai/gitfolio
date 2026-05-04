@@ -177,7 +177,7 @@ func TestTokenExpiration(t *testing.T) {
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenString, _ := token.SignedString([]byte(config.AppConfig.Auth.JWTSecret))
+	tokenString, _ := token.SignedString([]byte(config.GetJWTSecret()))
 
 	app := fiber.New()
 	app.Use(middleware.AuthMiddleware())

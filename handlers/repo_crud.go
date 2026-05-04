@@ -80,7 +80,7 @@ func CreateRepository(c fiber.Ctx) error {
 				"error": fmt.Sprintf("Failed to initialize repository: %v", err),
 			})
 		}
-		repo.LocalPath = filepath.Join(config.AppConfig.Repository.Root, "local", req.Name)
+		repo.LocalPath = filepath.Join(config.GetRepoRoot(), "local", req.Name)
 	}
 
 	err = db.Repository.Insert().One(repo)
@@ -236,6 +236,9 @@ func UpdateRepository(c fiber.Ctx) error {
 	}
 	if req.DefaultBranch != "" {
 		result.Repo.DefaultBranch = req.DefaultBranch
+	}
+	if req.MirrorURL != "" {
+		result.Repo.MirrorURL = req.MirrorURL
 	}
 
 	db := models.GetDB()

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -70,6 +71,29 @@ func GetRepositoryFile(c fiber.Ctx) error {
 	}
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"path": path, "ref": ref, "content": content})
+}
+
+func GetRepositoryRawFile(c fiber.Ctx) error {
+	path := c.Params("*", "")
+	ref := c.Query("ref", "HEAD")
+
+	result, err := helpers.GetOwnerAndRepoWithPrivateAccessFromParams(c)
+	if err != nil {
+		return err
+	}
+
+	if result.Repo.LocalPath == "" {
+		return c.Status(fiber.StatusNotFound).SendString("Repository not initialized")
+	}
+
+	gitSvc := services.NewGitService()
+	content, err := gitSvc.GetFileContentByRef(result.Owner.Username, result.Repo.Name, ref, path)
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).SendString("File not found")
+	}
+
+	c.Set("Content-Type", getContentType(path))
+	return c.Status(fiber.StatusOK).SendString(content)
 }
 
 // GetRepositoryBranches 获取仓库所有分支列表，非镜像项目额外返回暂存区和工作区状态
@@ -490,4 +514,23 @@ func CompareCommits(c fiber.Ctx) error {
 	}
 
 	return c.Status(fiber.StatusOK).JSON(compareResult)
+}
+
+func getContentType(path string) string {
+	ext := strings.ToLower(filepath.Ext(path))
+	contentTypes := map[string]string{
+		".png":  "image/png",
+		".jpg":  "image/jpeg",
+		".jpeg": "image/jpeg",
+		".gif":  "image/gif",
+		".svg":  "image/svg+xml",
+		".webp": "image/webp",
+		".bmp":  "image/bmp",
+		".ico":  "image/x-icon",
+		".avif": "image/avif",
+	}
+	if ct, ok := contentTypes[ext]; ok {
+		return ct
+	}
+	return "application/octet-stream"
 }

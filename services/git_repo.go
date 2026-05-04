@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/azhai/gitfolio/config"
 	"github.com/azhai/gitfolio/models"
@@ -14,12 +15,21 @@ import (
 // GitService 提供 Git 仓库操作服务
 type GitService struct {
 	repoRoot string
+	db       *models.Database
 }
 
 // NewGitService 创建 GitService 实例，使用配置中的仓库根目录
 func NewGitService() *GitService {
 	return &GitService{
-		repoRoot: config.AppConfig.Repository.Root,
+		repoRoot: config.GetRepoRoot(),
+	}
+}
+
+// NewGitServiceWithDB 创建带数据库的 GitService 实例（用于需要日志记录的场景）
+func NewGitServiceWithDB(db *models.Database) *GitService {
+	return &GitService{
+		repoRoot: config.GetRepoRoot(),
+		db:       db,
 	}
 }
 
@@ -89,13 +99,17 @@ func (s *GitService) CloneRepository(owner, name, cloneURL string, isMirror bool
 			}
 		}
 
-		var cmd *exec.Cmd
+		var cmdArgs []string
 		if isMirror {
-			cmd = exec.Command("git", "clone", "--bare", "--progress", cloneURL, localPath)
+			cmdArgs = []string{"clone", "--bare", "--progress", cloneURL, localPath}
 		} else {
-			cmd = exec.Command("git", "clone", "--progress", cloneURL, localPath)
+			cmdArgs = []string{"clone", "--progress", cloneURL, localPath}
 		}
 
+		cmdStr := fmt.Sprintf("git %s", strings.Join(cmdArgs, " "))
+		startTime := time.Now()
+
+		cmd := exec.Command("git", cmdArgs...)
 		cmd.Env = append(os.Environ(),
 			"GIT_HTTP_MAX_REQUESTS=1",
 			"GIT_HTTP_LOW_SPEED_LIMIT=1000",
@@ -103,11 +117,25 @@ func (s *GitService) CloneRepository(owner, name, cloneURL string, isMirror bool
 		)
 
 		output, err := cmd.CombinedOutput()
+		durationMs := time.Since(startTime).Milliseconds()
+		outputStr := strings.TrimSpace(string(output))
+
 		if err == nil {
+			if s.db != nil {
+				LogGitCommand(s.db, cmdStr, "", outputStr, "success", 0, durationMs, nil, "")
+			}
 			return localPath, nil
 		}
 
-		lastErr = fmt.Errorf("failed to clone repository: %s", string(output))
+		lastErr = fmt.Errorf("failed to clone repository: %s", outputStr)
+
+		exitCode := 0
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			exitCode = exitErr.ExitCode()
+		}
+		if s.db != nil {
+			LogGitCommand(s.db, cmdStr, "", outputStr, "failed", exitCode, durationMs, nil, err.Error())
+		}
 
 		if strings.Contains(string(output), "HTTP2") || strings.Contains(string(output), "HTTP/2") {
 			continue
@@ -119,7 +147,7 @@ func (s *GitService) CloneRepository(owner, name, cloneURL string, isMirror bool
 	return "", lastErr
 }
 
-// configureGitHTTPVersion 设置 Git 使用 HTTP/1.1 并增大缓冲区
+// configureGitHTTPVersion 设置 Git 使用 HTTP/1.1 并增大缓冲区，同时配置代理
 func (s *GitService) configureGitHTTPVersion() error {
 	cmd := exec.Command("git", "config", "--global", "http.version", "HTTP/1.1")
 	if err := cmd.Run(); err != nil {
@@ -131,15 +159,38 @@ func (s *GitService) configureGitHTTPVersion() error {
 		return fmt.Errorf("failed to set git http buffer: %w", err)
 	}
 
+	if err := ConfigureGitProxy(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
 // FetchRepository 从所有远程分支拉取更新
 func (s *GitService) FetchRepository(owner, name string) error {
 	repoPath := s.getRepoPath(owner, name)
-	cmd := exec.Command("git", "-C", repoPath, "fetch", "--all")
-	if err := cmd.Run(); err != nil {
+	cmdArgs := []string{"-C", repoPath, "fetch", "--all"}
+	cmdStr := fmt.Sprintf("git %s", strings.Join(cmdArgs, " "))
+	startTime := time.Now()
+
+	cmd := exec.Command("git", cmdArgs...)
+	output, err := cmd.CombinedOutput()
+	durationMs := time.Since(startTime).Milliseconds()
+	outputStr := strings.TrimSpace(string(output))
+
+	if err != nil {
+		exitCode := 0
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			exitCode = exitErr.ExitCode()
+		}
+		if s.db != nil {
+			LogGitCommand(s.db, cmdStr, repoPath, outputStr, "failed", exitCode, durationMs, nil, err.Error())
+		}
 		return fmt.Errorf("failed to fetch updates: %w", err)
+	}
+
+	if s.db != nil {
+		LogGitCommand(s.db, cmdStr, repoPath, outputStr, "success", 0, durationMs, nil, "")
 	}
 	return nil
 }
@@ -147,9 +198,28 @@ func (s *GitService) FetchRepository(owner, name string) error {
 // PullRepository 拉取并合并当前分支的远程更新
 func (s *GitService) PullRepository(owner, name string) error {
 	repoPath := s.getRepoPath(owner, name)
-	cmd := exec.Command("git", "-C", repoPath, "pull")
-	if err := cmd.Run(); err != nil {
+	cmdArgs := []string{"-C", repoPath, "pull"}
+	cmdStr := fmt.Sprintf("git %s", strings.Join(cmdArgs, " "))
+	startTime := time.Now()
+
+	cmd := exec.Command("git", cmdArgs...)
+	output, err := cmd.CombinedOutput()
+	durationMs := time.Since(startTime).Milliseconds()
+	outputStr := strings.TrimSpace(string(output))
+
+	if err != nil {
+		exitCode := 0
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			exitCode = exitErr.ExitCode()
+		}
+		if s.db != nil {
+			LogGitCommand(s.db, cmdStr, repoPath, outputStr, "failed", exitCode, durationMs, nil, err.Error())
+		}
 		return fmt.Errorf("failed to pull updates: %w", err)
+	}
+
+	if s.db != nil {
+		LogGitCommand(s.db, cmdStr, repoPath, outputStr, "success", 0, durationMs, nil, "")
 	}
 	return nil
 }

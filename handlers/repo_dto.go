@@ -21,6 +21,7 @@ type UpdateRepositoryRequest struct {
 	Homepage      string `json:"homepage"`
 	IsPrivate     *bool  `json:"is_private"`
 	DefaultBranch string `json:"default_branch"`
+	MirrorURL     string `json:"mirror_url"`
 }
 
 // RepositoryResponse 仓库详情响应，包含统计信息

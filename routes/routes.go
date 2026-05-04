@@ -90,6 +90,7 @@ func setupAPIRoutes(app *fiber.App) {
 	setupGroupRoutes(api)
 	setupActivityRoutes(api)
 	setupSnippetRoutes(api)
+	setupAdminRoutes(api)
 	setupRepositoryRoutes(api)
 }
 
@@ -146,6 +147,19 @@ func setupSnippetRoutes(api fiber.Router) {
 	api.Delete("/snippets/:id", middleware.AuthMiddleware(), handlers.DeleteSnippet)
 }
 
+func setupAdminRoutes(api fiber.Router) {
+	admin := api.Group("/admin", middleware.AuthMiddleware(), middleware.AdminOnly())
+
+	admin.Get("/accounts", handlers.ListAccounts)
+	admin.Post("/accounts", handlers.CreateAccount)
+	admin.Delete("/accounts/:id", handlers.DeleteAccount)
+
+	admin.Post("/mirror", handlers.CreateMirror)
+	admin.Post("/import", handlers.ImportFromRemote)
+
+	admin.Post("/maintenance/update-commit-times", handlers.UpdateCommitTimes)
+}
+
 // setupRepositoryRoutes 注册仓库资源路由（含子模块）
 func setupRepositoryRoutes(api fiber.Router) {
 	repo := api.Group("/:owner/:repo")
@@ -173,6 +187,7 @@ func setupRepoGitRoutes(repo fiber.Router) {
 	repo.Get("/tree/*", middleware.OptionalAuth(), handlers.GetRepositoryTree)
 	repo.Get("/file", middleware.OptionalAuth(), handlers.GetRepositoryFile)
 	repo.Get("/file/*", middleware.OptionalAuth(), handlers.GetRepositoryFile)
+	repo.Get("/raw/*", middleware.OptionalAuth(), handlers.GetRepositoryRawFile)
 	repo.Get("/branches", middleware.OptionalAuth(), handlers.GetRepositoryBranches)
 	repo.Get("/tags", middleware.OptionalAuth(), handlers.GetRepositoryTags)
 	repo.Get("/commits", middleware.OptionalAuth(), handlers.GetRepositoryCommits)

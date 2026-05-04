@@ -6,32 +6,24 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 
 	"github.com/azhai/gitfolio/config"
 	"github.com/azhai/gitfolio/models"
 	"github.com/azhai/gitfolio/routes"
+	"github.com/azhai/goent/utils"
 	"github.com/gofiber/fiber/v3"
 )
 
 func SetupTestRouter() *fiber.App {
-	config.AppConfig = &config.Config{
-		Auth: config.AuthConfig{
-			JWTSecret:     "test-secret-key",
-			SessionSecret: "test-session-secret",
-			TokenExpiry:   24,
-		},
-		Repository: config.RepositoryConfig{
-			Root: "./test-repositories",
-		},
-	}
+	os.Setenv("JWT_SECRET", "test-secret-key")
+	os.Setenv("SESSION_SECRET", "test-session-secret")
+	os.Setenv("TOKEN_EXPIRY", "24")
+	os.Setenv("REPO_ROOT", "./test-repositories")
+	config.Load(utils.NewEnv())
 
-	cfg := &config.DatabaseConfig{
-		Type: "sqlite",
-		DSN:  ":memory:",
-	}
-
-	if _, err := models.Connect(cfg.Type, cfg.DSN, "stdout"); err != nil {
+	if _, err := models.Connect("sqlite", ":memory:", "stdout"); err != nil {
 		panic("Failed to connect database: " + err.Error())
 	}
 	defer models.CloseDB()

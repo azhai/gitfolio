@@ -466,7 +466,8 @@ const DangerSettings = {
 const SyncSettings = {
     oninit(vnode) {
         vnode.state.syncing = false;
-        vnode.state.pushUrl = '';
+        vnode.state.saving = false;
+        vnode.state.pushUrl = vnode.attrs.repo?.mirror_url || '';
     },
 
     handleSyncPull(vnode) {
@@ -485,20 +486,39 @@ const SyncSettings = {
         });
     },
 
-    handleSyncPush(vnode) {
+    handleSaveRemote(vnode) {
         const { owner, repo } = vnode.attrs;
-        const { pushUrl, syncing } = vnode.state;
+        const { pushUrl, saving } = vnode.state;
 
-        if (syncing) return;
+        if (saving) return;
         if (!pushUrl || !pushUrl.trim()) {
-            alert('请输入推送目标 URL');
+            alert('请输入远程仓库 URL');
             return;
         }
 
+        vnode.state.saving = true;
+        API.put(`/api/v1/${owner}/${repo.name}`, { mirror_url: pushUrl }).then(result => {
+            vnode.state.saving = false;
+            alert('保存成功！');
+            repo.mirror_url = pushUrl;
+            m.redraw();
+        }).catch(error => {
+            vnode.state.saving = false;
+            alert('保存失败: ' + (error.response?.data?.error || error.message || '未知错误'));
+            m.redraw();
+        });
+    },
+
+    handlePushAll(vnode) {
+        const { owner, repo } = vnode.attrs;
+        const { syncing } = vnode.state;
+
+        if (syncing) return;
+
         vnode.state.syncing = true;
-        RepositoryService.syncPush(owner, repo.name, pushUrl).then(result => {
+        RepositoryService.syncPull(owner, repo.name).then(result => {
             vnode.state.syncing = false;
-            alert('推送成功！');
+            alert('推送完成！');
             m.redraw();
         }).catch(error => {
             vnode.state.syncing = false;
@@ -509,8 +529,7 @@ const SyncSettings = {
 
     view(vnode) {
         const { repo } = vnode.attrs;
-        const { syncing, pushUrl } = vnode.state;
-        const isMirror = repo.is_mirror;
+        const { syncing, saving, pushUrl } = vnode.state;
 
         return m('div.settings-section', [
             m('div.settings-section-header', [
@@ -518,42 +537,46 @@ const SyncSettings = {
                 m('p.settings-section-description', '管理代码的拉取和推送同步')
             ]),
 
-            isMirror ? [
-                m('div.form-group', [
-                    m('h4', '镜像同步'),
-                    m('p', '从远程仓库拉取最新代码更新'),
-                    m('p', [
-                        m('strong', '镜像地址: '),
-                        repo.mirror_url || '未设置'
-                    ]),
-                    repo.last_sync_at ? m('p', [
-                        m('strong', '最后同步: '),
-                        repo.last_sync_at
-                    ]) : null,
+            repo.is_mirror ? m('div.form-group', [
+                m('h4', '镜像同步'),
+                m('p', '从远程仓库拉取最新代码更新'),
+                m('p', [
+                    m('strong', '镜像地址: '),
+                    repo.mirror_url || '未设置'
+                ]),
+                repo.last_sync_at ? m('p', [
+                    m('strong', '最后同步: '),
+                    repo.last_sync_at
+                ]) : null,
+                m('button.btn.btn-primary', {
+                    onclick: () => SyncSettings.handleSyncPull(vnode),
+                    disabled: syncing
+                }, syncing ? '同步中...' : '立即同步')
+            ]) : null,
+
+            m('div.form-group', [
+                m('h4', '推送到远程'),
+                m('p', '将本地代码推送到远程仓库'),
+                m('div.form-row', [
+                    m('input.form-input', {
+                        type: 'text',
+                        placeholder: '远程仓库 URL (例如: https://github.com/user/repo.git)',
+                        value: pushUrl,
+                        oninput: (e) => { vnode.state.pushUrl = e.target.value; },
+                        style: 'flex: 1; margin-right: 10px;'
+                    }),
+                    m('button.btn.btn-secondary', {
+                        onclick: () => SyncSettings.handleSaveRemote(vnode),
+                        disabled: saving,
+                        style: 'padding: 6px 10px; font-size: 13px; flex-shrink: 0; width: 200px;'
+                    }, saving ? '保存中...' : '保存'),
                     m('button.btn.btn-primary', {
-                        onclick: () => SyncSettings.handleSyncPull(vnode),
-                        disabled: syncing
-                    }, syncing ? '同步中...' : '立即同步')
+                        onclick: () => SyncSettings.handlePushAll(vnode),
+                        disabled: syncing,
+                        style: 'padding: 6px 10px; font-size: 13px; flex-shrink: 0; width: 200px;'
+                    }, syncing ? '推送中...' : '全部推送')
                 ])
-            ] : [
-                m('div.form-group', [
-                    m('h4', '推送到远程'),
-                    m('p', '将代码推送到远程仓库'),
-                    m('div.form-row', [
-                        m('input.form-input', {
-                            type: 'text',
-                            placeholder: '输入目标仓库 URL (例如: git@github.com:user/repo.git)',
-                            value: pushUrl,
-                            oninput: (e) => { vnode.state.pushUrl = e.target.value; },
-                            style: 'flex: 1; margin-right: 10px;'
-                        }),
-                        m('button.btn.btn-primary', {
-                            onclick: () => SyncSettings.handleSyncPush(vnode),
-                            disabled: syncing
-                        }, syncing ? '推送中...' : '推送')
-                    ])
-                ])
-            ]
+            ])
         ]);
     }
 };

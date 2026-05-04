@@ -56,7 +56,7 @@ func GetStats(c fiber.Ctx) error {
 		MergedPRs:    int(mergedPRs),
 		TotalStars:   int(totalStars),
 		TotalForks:   int(totalForks),
-		Theme:        config.AppConfig.Server.Theme,
+		Theme:        config.GetTheme(),
 	}
 
 	return c.Status(fiber.StatusOK).JSON(stats)

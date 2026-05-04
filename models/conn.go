@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/azhai/gitfolio/config"
 	"github.com/azhai/goent"
 	"github.com/azhai/goent/drivers/pgsql"
 	"github.com/azhai/goent/drivers/sqlite"
@@ -15,32 +16,25 @@ import (
 
 var db *Database
 
-// Database represents the database connection.
 type Database struct {
 	FolioSchema `goe:"folio"`
 	*goent.DB
 }
 
-// GetDB 获取全局数据库单例实例
 func GetDB() *Database {
 	return db
 }
 
-// CloseDB 关闭数据库连接
 func CloseDB() {
 	if db != nil {
 		_ = goent.Close(db)
 	}
 }
 
-// OpenDB 打开数据库连接并执行自动迁移和种子数据初始化
-// 支持 PostgreSQL（pgsql/postgres://前缀）和 SQLite（默认）两种数据库
-func OpenDB(env *utils.Environ) (*Database, error) {
-	dbType, dbDSN := env.Get("DB_TYPE"), env.Get("DB_DSN")
-	logFile := env.GetStr("LOG_FILE", "stdout")
-
+func OpenDB(cfg config.DatabaseConfig) (*Database, error) {
+	// 连接数据库
 	var err error
-	db, err = Connect(dbType, dbDSN, logFile)
+	db, err = Connect(cfg.Type, cfg.DSN, cfg.LogFile)
 	if err != nil {
 		return nil, fmt.Errorf("连接数据库失败: %v", err)
 	}
@@ -51,7 +45,6 @@ func OpenDB(env *utils.Environ) (*Database, error) {
 	return db, nil
 }
 
-// Connect 根据数据库类型和 DSN 创建数据库连接
 func Connect(dbType, dbDSN, logFile string) (*Database, error) {
 	var drv model.Driver
 	if dbType == "pgsql" || dbType == "postgres" {

@@ -189,8 +189,9 @@ const RepositoryService = {
         return API.delete(`/${owner}/${repo}`);
     },
 
-    syncPull(owner, repo) {
-        return API.post(`/${owner}/${repo}/sync/pull`);
+    syncPull(owner, repo, remoteUrl) {
+        const data = remoteUrl ? { remote_url: remoteUrl } : {};
+        return API.post(`/${owner}/${repo}/sync/pull`, data);
     },
 
     syncPush(owner, repo, remoteUrl) {

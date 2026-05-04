@@ -34,7 +34,7 @@ func GenerateToken(user *models.User) (string, error) {
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString([]byte(config.AppConfig.Auth.JWTSecret))
+	return token.SignedString([]byte(config.GetJWTSecret()))
 }
 
 // AuthMiddleware 要求请求携带有效 JWT 令牌，否则返回 401
@@ -54,7 +54,7 @@ func AuthMiddleware() fiber.Handler {
 		claims := &Claims{}
 
 		token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (any, error) {
-			return []byte(config.AppConfig.Auth.JWTSecret), nil
+			return []byte(config.GetJWTSecret()), nil
 		})
 
 		if err != nil || !token.Valid {
@@ -87,7 +87,7 @@ func OptionalAuth() fiber.Handler {
 		claims := &Claims{}
 
 		token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (any, error) {
-			return []byte(config.AppConfig.Auth.JWTSecret), nil
+			return []byte(config.GetJWTSecret()), nil
 		})
 
 		if err == nil && token.Valid {
