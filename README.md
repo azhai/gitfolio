@@ -27,7 +27,7 @@
 - **ORM**: goent（自研轻量 ORM）
 - **数据库**: SQLite（可扩展支持 PostgreSQL、MySQL）
 - **认证**: JWT
-- **前端**: 原生 SPA（Vanilla JS）
+- **前端**: React 18 + Chakra UI + Vite
 - **配置管理**: goent/utils Environ
 
 ## 快速开始
@@ -71,6 +71,24 @@ go run main.go
 
 ```bash
 make dev
+# 前端: http://localhost:5173
+# 后端: http://localhost:3000
+```
+
+### 构建前端
+
+```bash
+# 开发模式（HMR）
+./build-frontend.sh dev
+
+# 生产构建
+./build-frontend.sh build
+
+# 清理构建产物
+./build-frontend.sh clean
+
+# 安装依赖
+./build-frontend.sh install
 ```
 
 ## 项目结构
@@ -128,17 +146,22 @@ gitfolio/
 │   ├── stats_service.go    # 统计服务
 │   └── sync_service.go     # 同步服务
 ├── tests/                  # 测试套件
-├── web/                    # 前端文件
-│   ├── src/                # SPA 页面源码
-│   │   ├── pages/          # 各功能页面
-│   │   ├── api.js          # API 调用封装
-│   │   ├── app.js          # 应用入口
-│   │   ├── components.js   # UI 组件
-│   │   └── shared.js       # 共享工具
-│   ├── scripts/            # 构建和调试脚本
-│   ├── app-spa.js          # 编译后的 SPA
-│   ├── index-spa.html      # SPA 入口
-│   └── styles.css          # 全局样式
+├── web/                    # 前端（React + Chakra UI + Vite）
+│   ├── src/
+│   │   ├── api/           # API 调用封装
+│   │   ├── components/    # 通用组件（布局、导航、侧边栏）
+│   │   ├── contexts/      # React Context（认证）
+│   │   ├── i18n/          # 国际化（中文）
+│   │   ├── pages/         # 页面组件
+│   │   │   ├── project/   # 项目子页面（代码、议题、PR、提交等）
+│   │   │   └── ...        # 其他页面
+│   │   ├── theme/         # Chakra UI 主题
+│   │   ├── App.jsx        # 应用入口和路由
+│   │   └── main.jsx       # React 挂载
+│   ├── dist/              # 构建产物
+│   ├── index.html         # HTML 入口
+│   ├── package.json
+│   └── vite.config.js     # Vite 配置
 ├── main.go                 # 程序入口
 └── Makefile                # 构建命令
 ```

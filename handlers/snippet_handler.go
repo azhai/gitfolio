@@ -18,6 +18,7 @@ type SnippetResponse struct {
 	Language    string `json:"language"`
 	Code        string `json:"code"`
 	Visibility  string `json:"visibility"`
+	Version     int    `json:"version"`
 	UserID      *int64 `json:"user_id"`
 	Username    string `json:"username"`
 	CreatedAt   string `json:"created_at"`
@@ -33,6 +34,7 @@ func ToSnippetResponse(snippet *models.Snippet, username string) *SnippetRespons
 		Language:    snippet.Language,
 		Code:        snippet.Code,
 		Visibility:  snippet.Visibility,
+		Version:     snippet.Version,
 		UserID:      snippet.UserID,
 		Username:    username,
 		CreatedAt:   snippet.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
@@ -153,6 +155,7 @@ func CreateSnippet(c fiber.Ctx) error {
 		Language:    req.Language,
 		Code:        req.Code,
 		Visibility:  req.Visibility,
+		Version:     1,
 		UserID:      &userID,
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
@@ -212,6 +215,7 @@ func UpdateSnippet(c fiber.Ctx) error {
 		snippet.Visibility = req.Visibility
 	}
 	snippet.UpdatedAt = time.Now()
+	snippet.Version++
 
 	err = db.Snippet.Save().One(snippet)
 	if err != nil {

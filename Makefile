@@ -8,7 +8,6 @@ endif
 
 GOBIN    = go
 UPXBIN   = upx
-#GOOS    = $(shell uname -s | tr [A-Z] [a-z])
 GOARCH  = $(shell uname -m | tr [A-Z] [a-z])
 ifeq ($(GOARCH), amd64)
 	GOARGS = GOEXPERIMENT=greenteagc GOAMD64=$(GOAMD64) CGO_ENABLED=1
@@ -20,9 +19,10 @@ GOBUILD  = $(GOARGS) $(GOBIN) build -ldflags=$(RELEASE)
 BINFILES = $(SINGLETON) $(COMMANDS)
 
 
-.PHONY: all build clean upx upxx dev $(BINFILES)
+.PHONY: all build clean upx upxx dev frontend-dev frontend-build frontend-clean frontend-install frontend-serve $(BINFILES)
 
-all: clean build
+all: frontend-build $(BINFILES)
+	@echo "✅ Build success."
 
 $(SINGLETON):
 	@echo "Compile $@ ..."
@@ -36,29 +36,46 @@ $(COMMANDS):
 	@echo "Compile $@ ..."
 	CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 $(GOBUILD) -o ./bin/$@.darwin-arm64 ./cmd/$@
 	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 $(GOBUILD) -o ./bin/$@.darwin-amd64 ./cmd/$@
-	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(GOBUILD) -o ./bin/$@.linux-arm64 ./cmd/$@
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(GOBUILD) -o ./bin/$@.linux-arm64 ./
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GOBUILD) -o ./bin/$@.linux-amd64 ./cmd/$@
 	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 $(GOBUILD) -o ./bin/$@.windows-amd64 ./cmd/$@
 
-frontend:
-	@echo "Build frontend..."
-	@./build-frontend.sh
+frontend-dev:
+	@./build-frontend.sh dev
 
-build: frontend $(BINFILES)
-	@echo "Build success."
+frontend-build:
+	@./build-frontend.sh build
 
-dev: frontend
-	@echo "Start development server..."
-	@which air > /dev/null || go install github.com/air-verse/air@latest
-# lsof -i tcp:$(SERVER_PORT) | xargs kill -9
-	air -c .air.toml
+frontend-clean:
+	@./build-frontend.sh clean
 
-clean:
+frontend-install:
+	@./build-frontend.sh install
+
+frontend-serve:
+	@./build-frontend.sh serve
+
+frontend: frontend-build
+
+dev: frontend-dev
+	@echo ""
+	@echo "💡 Tips:"
+	@echo "   - Frontend: http://localhost:5173"
+	@echo "   - Backend:  http://localhost:$(SERVER_PORT)"
+	@echo "   - HMR:      Enabled"
+
+serve: frontend-build
+	@echo ""
+	@echo "🌐 Starting GitFolio Server..."
+	@echo "   🌐 http://localhost:$(SERVER_PORT)"
+	go run main.go
+
+clean: frontend-clean
 	rm -f $(BINFILES:%=./bin/%)
-	@echo "Remove old files."
+	@echo "✅ Clean complete."
 
-upx: clean build
+upx: all
 	$(UPXBIN) $(BINFILES:%=./bin/%)
 
-upxx: clean build
+upxx: all
 	$(UPXBIN) --ultra-brute $(BINFILES:%=./bin/%)

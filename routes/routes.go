@@ -39,7 +39,7 @@ func SetupRouter() *fiber.App {
 		if strings.HasPrefix(path, "/api/") {
 			return c.Status(404).JSON(fiber.Map{"error": "API endpoint not found"})
 		}
-		return c.SendFile("./web/index-spa.html")
+		return c.SendFile("./web/dist/index.html")
 	})
 
 	return app
@@ -48,29 +48,13 @@ func SetupRouter() *fiber.App {
 // setupStaticFiles 注册静态文件和 SPA 入口路由
 func setupStaticFiles(app *fiber.App) {
 	app.Get("/", func(c fiber.Ctx) error {
-		return c.SendFile("./web/index-spa.html")
+		return c.SendFile("./web/dist/index.html")
 	})
-	app.Get("/static/app-spa.js", func(c fiber.Ctx) error {
-		c.Set("Cache-Control", "no-cache, no-store, must-revalidate")
-		c.Set("Pragma", "no-cache")
-		c.Set("Expires", "0")
-		return c.SendFile("./web/app-spa.js")
-	})
-	app.Get("/static/styles.css", func(c fiber.Ctx) error {
-		return c.SendFile("./web/styles.css")
-	})
+	app.Get("/assets/*", static.New("./web/dist/assets"))
 	app.Get("/uploads/*", static.New("./uploads"))
-	app.Get("/static/vendor/*", func(c fiber.Ctx) error {
-		path := c.Params("*")
-		c.Set("Cache-Control", "public, max-age=31536000")
-		return c.SendFile("./web/vendor/" + path)
-	})
 	app.Get("/images/*", func(c fiber.Ctx) error {
 		path := c.Params("*")
 		return c.SendFile("./web/images/" + path)
-	})
-	app.Get("/manual", func(c fiber.Ctx) error {
-		return c.SendFile("./web/manual.html")
 	})
 }
 

@@ -457,6 +457,7 @@ type Snippet struct {
 	Language    string
 	Code        string
 	Visibility  string `goe:"default:'public';index"`
+	Version     int    `goe:"default:1"`
 
 	UserID       *int64 `goe:"index"`
 	RepositoryID *int64 `goe:"index"`

@@ -1,35 +1,34 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -e
 
-echo "Building GitFolio frontend..."
+WEB_DIR="web"
+cd "$(dirname "$0")"
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR/web"
-
-echo "// GitFolio Frontend Build - $(date)" > app-spa.js
-
-echo "Adding shared constants and utilities..."
-sed '/^import /d; /^export /d' src/shared.js >> app-spa.js
-
-echo "Adding API and Auth..."
-sed '/^import /d; /^export /d' src/api.js | sed 's/return request(/return m.request(/g' >> app-spa.js
-
-echo "Adding components..."
-sed '/^import /d; /^export /d' src/components.js >> app-spa.js
-
-echo "Adding modals..."
-sed '/^import /d; /^export /d' src/modals.js >> app-spa.js
-
-echo "Adding project modals..."
-sed '/^import /d; /^export /d' src/project-modals.js >> app-spa.js
-
-echo "Adding pages..."
-for file in dashboard projects project-detail issues issue-detail new-issue pull-requests pr-detail new-pr tasks task-detail new-task releases-stats settings create-project migrate-project login groups activities milestones snippets commits user-management user-profile; do
-    echo "Processing $file.js..."
-    sed '/^import /d; /^export /d' "src/pages/$file.js" >> app-spa.js
-done
-
-echo "Adding app initialization..."
-sed '/^import /d; /^export /d' src/app.js >> app-spa.js
-
-echo "Frontend build complete!"
-echo "Output: web/app-spa.js"
+case "${1:-build}" in
+  dev)
+    echo "🚀 Starting frontend dev server..."
+    cd "$WEB_DIR" && npm run dev
+    ;;
+  build)
+    echo "🔨 Building frontend..."
+    cd "$WEB_DIR" && npm install && npm run build
+    echo "✅ Frontend build complete: $WEB_DIR/dist/"
+    ;;
+  clean)
+    echo "🧹 Cleaning frontend dist..."
+    rm -rf "$WEB_DIR/dist"
+    echo "✅ Cleaned."
+    ;;
+  install)
+    echo "📦 Installing frontend dependencies..."
+    cd "$WEB_DIR" && npm install
+    ;;
+  serve)
+    echo "🌐 Serving frontend preview..."
+    cd "$WEB_DIR" && npx vite preview
+    ;;
+  *)
+    echo "Usage: $0 {dev|build|clean|install|serve}"
+    exit 1
+    ;;
+esac

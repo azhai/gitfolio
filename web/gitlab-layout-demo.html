@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GitFolio - GitLab Layout Demo</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; }
+
+/* ===== 顶部全局导航 ===== */
+.top-nav {
+  position: fixed; top: 0; left: 0; right: 0;
+  height: 52px;
+  background: white;
+  border-bottom: 1px solid #e2e2e2;
+  display: flex; align-items: center;
+  padding: 0 20px;
+  z-index: 1000;
+}
+.top-nav .logo {
+  font-size: 18px; font-weight: bold; text-decoration: none; color: #333;
+  display: flex; align-items: center; gap: 6px; margin-right: 32px;
+}
+.global-menu { display: flex; gap: 4px; flex: 1; }
+.global-menu a {
+  padding: 8px 12px; border-radius: 6px;
+  font-size: 14px; color: #666; text-decoration: none;
+  transition: all 0.15s;
+}
+.global-menu a:hover, .global-menu a.active {
+  background: #e6ffed; color: #16a34a;
+}
+.nav-right { display: flex; align-items: center; gap: 16px; }
+.search-box {
+  width: 240px; height: 32px;
+  border: 1px solid #d1d5db; border-radius: 9999px;
+  padding: 0 14px; font-size: 13px; outline: none;
+}
+.search-box:focus { border-color: #22c55e; box-shadow: 0 0 0 3px rgba(34,197,94,0.1); }
+.nav-link { cursor: pointer; font-size: 13px; color: #666; transition: color 0.15s; }
+.nav-link:hover { color: #16a34a; }
+
+/* ===== 项目二级导航 ===== */
+.project-nav {
+  position: fixed; top: 52px; left: 0; right: 0;
+  height: 48px;
+  background: #f9fafb;
+  border-bottom: 1px solid #e2e2e2;
+  display: none; align-items: center;
+  padding: 0 20px;
+  z-index: 999;
+}
+.project-nav.show { display: flex; }
+.project-breadcrumb { font-size: 13px; color: #888; margin-right: 32px; }
+.project-breadcrumb strong { color: #333; font-weight: 600; }
+.project-tabs { display: flex; gap: 4px; flex: 1; }
+.project-tabs a {
+  padding: 10px 12px; border-radius: 6px 6px 0 0;
+  font-size: 13px; color: #666; text-decoration: none;
+  transition: all 0.15s;
+}
+.project-tabs a:hover { background: white; color: #333; }
+.project-tabs a.active {
+  background: white; color: #16a34a; font-weight: 600;
+  border-bottom: 2px solid #22c55e;
+}
+
+/* ===== 左侧项目菜单 ===== */
+.sidebar {
+  position: fixed; left: 0; top: 100px; bottom: 0;
+  width: 248px;
+  background: white;
+  border-right: 1px solid #e2e2e2;
+  overflow-y: auto;
+  display: none; flex-direction: column;
+  padding: 16px 0;
+  z-index: 998;
+}
+.sidebar.show { display: flex; }
+.sidebar-section { margin-bottom: 24px; }
+.sidebar-title {
+  font-size: 11px; font-weight: 600; color: #aaa;
+  text-transform: uppercase; letter-spacing: 0.8px;
+  padding: 0 16px; margin-bottom: 8px;
+}
+.sidebar-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 8px 16px;
+  font-size: 13.5px; color: #666; text-decoration: none;
+  transition: all 0.15s;
+  border-right: 3px solid transparent;
+}
+.sidebar-item:hover { background: #f9fafb; color: #333; }
+.sidebar-item.active {
+  color: #16a34a; background: #f0fdf4;
+  border-right-color: #22c55e; font-weight: 600;
+}
+
+/* ===== 主内容区 ===== */
+.main-content {
+  margin-top: 52px;
+  padding: 28px 32px;
+  max-width: 1280px;
+  margin-left: auto; margin-right: auto;
+  transition: margin-left 0.2s;
+}
+.main-content.with-sidebar { margin-left: 248px; }
+
+/* ===== FileGator 风格表格 ===== */
+.file-table-container {
+  background: white;
+  border: 1px solid #e2e2e2;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.toolbar {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid #f0f0f0;
+}
+.toolbar-left { display: flex; align-items: center; gap: 8px; }
+.toolbar-title { font-size: 13.5px; font-weight: 600; color: #16a34a; }
+.btn-xs {
+  height: 26px; padding: 0 10px;
+  font-size: 12px; border-radius: 4px;
+  border: 1px solid #d1d5db; background: white; cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-xs.primary { background: #22c55e; color: white; border-color: #22c55e; }
+.btn-xs.primary:hover { background: #16a34a; }
+.btn-xs:hover { background: #f9fafb; }
+.page-select {
+  height: 26px; width: 130px;
+  font-size: 12px; border: 1px solid #d1d5db; border-radius: 4px;
+  outline: none;
+}
+.file-table { width: 100%; border-collapse: collapse; }
+.file-table thead th {
+  background: #f9fafb;
+  padding: 10px 12px;
+  font-size: 11px; font-weight: 600; color: #666;
+  text-align: left; text-transform: uppercase; letter-spacing: 0.3px;
+  border-bottom: 1px solid #eee;
+  user-select: none; cursor: pointer;
+}
+.file-table thead th:hover { color: #16a34a; }
+.file-table tbody td {
+  padding: 10px 12px;
+  font-size: 13.5px;
+  border-bottom: 1px solid #f5f5f5;
+}
+.file-table tbody tr { transition: background-color 0.15s; }
+.file-table tbody tr:hover { background: #f9fafb; }
+.file-name-cell { display: flex; align-items: center; gap: 8px; }
+.file-icon { font-size: 18px; }
+.file-name { font-weight: 500; color: #333; cursor: pointer; }
+.file-name:hover { color: #16a34a; text-decoration: underline; }
+.file-size { color: #666; }
+.file-time { color: #888; }
+.file-actions { color: #ccc; cursor: pointer; }
+.file-actions:hover { color: #22c55e; }
+.table-footer {
+  padding: 8px 16px;
+  border-top: 1px solid #f0f0f0;
+  font-size: 13px; color: #888;
+}
+
+/* ===== Dashboard 样式 ===== */
+.welcome-card {
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+  border-radius: 12px; padding: 40px; color: white;
+  margin-bottom: 24px;
+}
+.welcome-card h1 { font-size: 28px; margin-bottom: 8px; }
+.welcome-card p { opacity: 0.9; font-size: 15px; }
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; }
+.stat-card {
+  background: white; border: 1px solid #e2e2e2; border-radius: 10px;
+  padding: 24px;
+}
+.stat-label { font-size: 13px; color: #888; margin-bottom: 8px; }
+.stat-value { font-size: 32px; font-weight: 700; color: #333; }
+.stat-change { font-size: 13px; color: #16a34a; margin-top: 8px; }
+
+/* ===== 复选框样式 ===== */
+input[type="checkbox"] {
+  width: 16px; height: 16px;
+  accent-color: #22c55e;
+  cursor: pointer;
+}
+</style>
+</head>
+<body>
+
+<!-- ========== 顶部全局导航 ========== -->
+<nav class="top-nav">
+  <a href="#" class="logo" onclick="showPage('dashboard')">📁 gitfolio</a>
+  <div class="global-menu">
+    <a href="#" class="active" onclick="showPage('dashboard')">🏠 Home</a>
+    <a href="#" onclick="showPage('projects')">📂 Projects</a>
+    <a href="#" onclick="showPage('groups')">👥 Groups</a>
+    <a href="#" onclick="showPage('activity')">📊 Activity</a>
+    <a href="#" onclick="showPage('snippets')">📝 Snippets</a>
+  </div>
+  <div class="nav-right">
+    <input type="text" class="search-box" placeholder="Search projects...">
+    <span class="nav-link">🔔</span>
+    <span class="nav-link">Log in</span>
+  </div>
+</nav>
+
+<!-- ========== 项目二级导航 ========== -->
+<nav class="project-nav" id="projectNav">
+  <div class="project-breadcrumb">
+    gitfolio-team / <strong>gitfolio-core</strong>
+  </div>
+  <div class="project-tabs">
+    <a href="#" class="active" onclick="showProjectTab('files', this)">📂 Files</a>
+    <a href="#" onclick="showProjectTab('issues', this)">⚠️ Issues</a>
+    <a href="#" onclick="showProjectTab('prs', this)">🔀 Merge Requests</a>
+    <a href="#" onclick="showProjectTab('ci', this)">🚀 CI/CD</a>
+    <a href="#" onclick="showProjectTab('wiki', this)">📖 Wiki</a>
+    <a href="#" onclick="showProjectTab('settings', this)">⚙️ Settings</a>
+  </div>
+</nav>
+
+<!-- ========== 左侧项目菜单 ========== -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-section">
+    <div class="sidebar-title">Navigate</div>
+    <a href="#" class="sidebar-item active">🏠 Project overview</a>
+    <a href="#" class="sidebar-item">📂 Repository</a>
+    <a href="#" class="sidebar-item">⚠️ Issues</a>
+    <a href="#" class="sidebar-item">🔀 Merge requests</a>
+    <a href="#" class="sidebar-item">🚀 CI/CD</a>
+  </div>
+  <div class="sidebar-section">
+    <div class="sidebar-title">Manage</div>
+    <a href="#" class="sidebar-item">⭐ Star</a>
+    <a href="#" class="sidebar-item">👁 Watch</a>
+    <a href="#" class="sidebar-item">🌿 Branches</a>
+    <a href="#" class="sidebar-item">🏷️ Tags</a>
+  </div>
+  <div class="sidebar-section">
+    <div class="sidebar-title">Information</div>
+    <a href="#" class="sidebar-item">👥 Members</a>
+    <a href="#" class="sidebar-item">📊 Analytics</a>
+    <a href="#" class="sidebar-item">⚙️ Settings</a>
+  </div>
+</aside>
+
+<!-- ========== 主内容区 ========== -->
+<main class="main-content" id="mainContent">
+
+  <!-- Dashboard 视图 -->
+  <div id="page-dashboard">
+    <div class="welcome-card">
+      <h1>Welcome to GitFolio 🚀</h1>
+      <p>Your personal code portfolio platform — manage repos, track activity, showcase your work.</p>
+    </div>
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">Total Repositories</div>
+        <div class="stat-value">42</div>
+        <div class="stat-change">↑ 12% from last month</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Open Issues</div>
+        <div class="stat-value">18</div>
+        <div class="stat-change">↓ 5% from last month</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Merge Requests</div>
+        <div class="stat-value">7</div>
+        <div class="stat-change">↑ 3 new today</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Commits This Week</div>
+        <div class="stat-value">156</div>
+        <div class="stat-change">↑ 23% vs last week</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Project Files 视图 (FileGator 风格) -->
+  <div id="page-project" style="display:none;">
+    <div class="file-table-container">
+      <!-- 工具栏 -->
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <span class="toolbar-title">📂 Files</span>
+          <button class="btn-xs primary">+ Add file</button>
+          <button class="btn-xs">+ New</button>
+        </div>
+        <select class="page-select">
+          <option>No pagination</option>
+          <option>20 per page</option>
+          <option>50 per page</option>
+        </select>
+      </div>
+
+      <!-- FileGator 表格 -->
+      <table class="file-table">
+        <thead>
+          <tr>
+            <th style="width:36px;"><input type="checkbox"></th>
+            <th>Name ▼</th>
+            <th style="width:120px;">Size</th>
+            <th style="width:160px;">Time</th>
+            <th style="width:60px;"></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><input type="checkbox"></td>
+            <td><div class="file-name-cell"><span class="file-icon">📁</span><span class="file-name">src/</span></div></td>
+            <td class="file-size">Folder</td>
+            <td class="file-time">10/06/21 19:00:05</td>
+            <td class="file-actions"><span>⋮</span></td>
+          </tr>
+          <tr>
+            <td><input type="checkbox"></td>
+            <td><div class="file-name-cell"><span class="file-icon">📄</span><span class="file-name">main.go</span></div></td>
+            <td class="file-size">4.2 KB</td>
+            <td class="file-time">10/06/21 17:00:16</td>
+            <td class="file-actions"><span>⋮</span></td>
+          </tr>
+          <tr>
+            <td><input type="checkbox"></td>
+            <td><div class="file-name-cell"><span class="file-icon">📄</span><span class="file-name">go.mod</span></div></td>
+            <td class="file-size">1.1 KB</td>
+            <td class="file-time">10/06/20 22:27:58</td>
+            <td class="file-actions"><span>⋮</span></td>
+          </tr>
+          <tr>
+            <td><input type="checkbox"></td>
+            <td><div class="file-name-cell"><span class="file-icon">📄</span><span class="file-name">routes.go</span></div></td>
+            <td class="file-size">8.8 KB</td>
+            <td class="file-time">10/06/21 11:26:25</td>
+            <td class="file-actions"><span>⋮</span></td>
+          </tr>
+          <tr>
+            <td><input type="checkbox"></td>
+            <td><div class="file-name-cell"><span class="file-icon">📄</span><span class="file-name">config.go</span></div></td>
+            <td class="file-size">277 Bytes</td>
+            <td class="file-time">10/06/21 03:00:15</td>
+            <td class="file-actions"><span>⋮</span></td>
+          </tr>
+          <tr>
+            <td><input type="checkbox"></td>
+            <td><div class="file-name-cell"><span class="file-icon">📄</span><span class="file-name">README.md</span></div></td>
+            <td class="file-size">2.3 KB</td>
+            <td class="file-time">10/06/15 07:57:39</td>
+            <td class="file-actions"><span>⋮</span></td>
+          </tr>
+          <tr>
+            <td><input type="checkbox"></td>
+            <td><div class="file-name-cell"><span class="file-icon">📄</span><span class="file-name">Makefile</span></div></td>
+            <td class="file-size">13.3 KB</td>
+            <td class="file-time">10/06/15 07:56:01</td>
+            <td class="file-actions"><span>⋮</span></td>
+          </tr>
+          <tr>
+            <td><input type="checkbox"></td>
+            <td><div class="file-name-cell"><span class="file-icon">📄</span><span class="file-name">.env.example</span></div></td>
+            <td class="file-size">311 Bytes</td>
+            <td class="file-time">10/06/21 01:01:17</td>
+            <td class="file-actions"><span>⋮</span></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="table-footer">Selected 0 of 8</div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+function showPage(page) {
+  event.preventDefault()
+  const projectNav = document.getElementById('projectNav')
+  const sidebar = document.getElementById('sidebar')
+  const mainContent = document.getElementById('mainContent')
+
+  if (page === 'project') {
+    projectNav.classList.add('show')
+    sidebar.classList.add('show')
+    mainContent.style.marginTop = '100px'
+    mainContent.classList.add('with-sidebar')
+    document.getElementById('page-dashboard').style.display = 'none'
+    document.getElementById('page-project').style.display = 'block'
+  } else {
+    projectNav.classList.remove('show')
+    sidebar.classList.remove('show')
+    mainContent.style.marginTop = '52px'
+    mainContent.classList.remove('with-sidebar')
+    document.getElementById('page-dashboard').style.display = 'block'
+    document.getElementById('page-project').style.display = 'none'
+  }
+}
+
+function showProjectTab(tab, el) {
+  event.preventDefault()
+  document.querySelectorAll('.project-tabs a').forEach(a => a.classList.remove('active'))
+  el.classList.add('active')
+}
+
+// 默认显示 dashboard
+document.querySelectorAll('.global-menu a').forEach(a => {
+  a.addEventListener('click', function() {
+    document.querySelectorAll('.global-menu a').forEach(x => x.classList.remove('active'))
+    this.classList.add('active')
+  })
+})
+</script>
+
+<div style="position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:white;padding:12px 24px;border-radius:8px;border:1px solid #e2e2e2;box-shadow:0 4px 12px rgba(0,0,0,0.08);z-index:2000;display:flex;gap:12px;">
+  <button onclick="showPage('dashboard')" style="padding:8px 16px;background:#22c55e;color:white;border:none;border-radius:6px;cursor:pointer;font-size:13px;">🏠 Home 模式</button>
+  <button onclick="showPage('project')" style="padding:8px 16px;background:#16a34a;color:white;border:none;border-radius:6px;cursor:pointer;font-size:13px;">📂 项目模式</button>
+</div>
+
+</body>
+</html>
