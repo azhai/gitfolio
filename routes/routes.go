@@ -142,6 +142,9 @@ func setupAdminRoutes(api fiber.Router) {
 	admin.Post("/import", handlers.ImportFromRemote)
 
 	admin.Post("/maintenance/update-commit-times", handlers.UpdateCommitTimes)
+
+	admin.Get("/sync-points", handlers.ListAllSyncPoints)
+	admin.Put("/sync-points/:id", handlers.AdminUpdateSyncPoint)
 }
 
 // setupRepositoryRoutes 注册仓库资源路由（含子模块）
@@ -192,6 +195,9 @@ func setupRepoGitRoutes(repo fiber.Router) {
 func setupRepoSyncRoutes(repo fiber.Router) {
 	repo.Post("/sync/pull", middleware.AuthMiddleware(), handlers.SyncPullRepository)
 	repo.Post("/sync/push", middleware.AuthMiddleware(), handlers.SyncPushRepository)
+	repo.Get("/sync/config", middleware.AuthMiddleware(), handlers.GetSyncConfig)
+	repo.Put("/sync/config", middleware.AuthMiddleware(), handlers.UpdateSyncConfig)
+	repo.Get("/sync/logs", middleware.AuthMiddleware(), handlers.GetSyncLogs)
 }
 
 // setupRepoStarRoutes 注册仓库收藏和关注路由

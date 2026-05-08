@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react'
-import { Box, Text, Flex, VStack, HStack, Badge, Button, Spinner, Textarea, Avatar, Divider, Input, useToast } from '@chakra-ui/react'
+import { Box, Text, Flex, VStack, HStack, Badge, Button, Spinner, Avatar, Divider, useToast } from '@chakra-ui/react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { issuesAPI, labelsAPI } from '../../api/index'
-import { timeAgo } from '../../i18n/zh'
+import SimpleRenderer from '../../components/SimpleRenderer'
+import SimpleEditor from '../../components/SimpleEditor'
+import { t, timeAgo, getLanguage } from '../../i18n/index'
+import { LuTriangleAlert as TriangleAlert, LuMessageSquare as MessageSquare, LuLock as Lock } from 'react-icons/lu'
 
 const IssueDetail = () => {
   const { owner, repo, number } = useParams()
@@ -36,7 +39,7 @@ const IssueDetail = () => {
       setComments(function(prev) { return prev.concat([newComment]) })
       setCommentText('')
     }).catch(function(err) {
-      toast({ title: err.message || '评论失败', status: 'error', duration: 3000 })
+      toast({ title: err.message || t('issue.commentFailed'), status: 'error', duration: 3000 })
     }).finally(function() { setSubmitting(false) })
   }
 
@@ -45,7 +48,7 @@ const IssueDetail = () => {
     issuesAPI.update(owner, repo, number, { is_closed: !issue.is_closed }).then(function(data) {
       setIssue(data)
     }).catch(function(err) {
-      toast({ title: err.message || '操作失败', status: 'error', duration: 3000 })
+      toast({ title: err.message || t('issue.operationFailed'), status: 'error', duration: 3000 })
     })
   }
 
@@ -62,7 +65,7 @@ const IssueDetail = () => {
     issuesAPI.update(owner, repo, number, { labels: newLabels }).then(function(data) {
       setIssue(data)
     }).catch(function(err) {
-      toast({ title: err.message || '更新标签失败', status: 'error', duration: 3000 })
+      toast({ title: err.message || t('issue.updateLabelsFailed'), status: 'error', duration: 3000 })
     }).finally(function() { setUpdatingLabels(false) })
   }
 
@@ -77,8 +80,8 @@ const IssueDetail = () => {
   if (!issue) {
     return (
       <Box textAlign="center" py="50px" color="#aaa">
-        <Text fontSize="36px" mb="6px">⚠️</Text>
-        <Text fontSize="14px">未找到该议题</Text>
+        <TriangleAlert size={36} color="#ccc" mb="6px" />
+        <Text fontSize="14px">{t('issue.notFound')}</Text>
       </Box>
     )
   }
@@ -91,22 +94,22 @@ const IssueDetail = () => {
         <Box flex={1}>
           <HStack gap="10px" mb="6px" align="center">
             {issue.is_closed ? (
-              <Badge fontSize="12px" px="8px" py="2px" rounded="4px" bg="#fef2f2" color="#dc2626">已关闭</Badge>
+              <Badge fontSize="12px" px="8px" py="2px" rounded="4px" bg="#fef2f2" color="#dc2626">{t('issue.closed')}</Badge>
             ) : (
-              <Badge fontSize="12px" px="8px" py="2px" rounded="4px" bg="#dcfce7" color="#16a34a">开启中</Badge>
+              <Badge fontSize="12px" px="8px" py="2px" rounded="4px" bg="#dcfce7" color="#16a34a">{t('issue.open')}</Badge>
             )}
             <Text fontSize="18px" fontWeight="700" color="#333">{issue.title}</Text>
           </HStack>
           <Text fontSize="13px" color="#888">
-            #{issue.number} 由 {issue.author || '未知用户'} 创建于 {timeAgo(issue.created_at)}
-            {issue.assignee && ' · 指派给 ' + issue.assignee}
+            #{issue.number} {t('issue.createdBy', { author: issue.author || t('common.unknownUser'), time: timeAgo(issue.created_at) })}
+            {issue.assignee && ' · ' + t('issue.assignedTo') + ' ' + issue.assignee}
           </Text>
         </Box>
         <Button h="30px" px="14px" fontSize="13px" rounded="6px"
           bg={issue.is_closed ? '#22c55e' : '#dc2626'} color="white"
           _hover={{ bg: issue.is_closed ? '#16a34a' : '#b91c1c' }}
           onClick={handleToggleClose}>
-          {issue.is_closed ? '重新开启' : '关闭议题'}
+          {issue.is_closed ? t('issue.reopenIssue') : t('issue.closeIssue')}
         </Button>
       </Flex>
 
@@ -116,17 +119,18 @@ const IssueDetail = () => {
             <Box bg="white" border="1px solid" borderColor="#e2e2e2" rounded="10px" p="20px" mb="16px">
               <Flex align="center" gap="8px" mb="10px">
                 <Avatar size="sm" name={issue.author} bg="#22c55e" color="white" />
-                <Text fontSize="13px" fontWeight="600" color="#333">{issue.author || '未知用户'}</Text>
-                <Text fontSize="12px" color="#aaa">发表于 {timeAgo(issue.created_at)}</Text>
+                <Text fontSize="13px" fontWeight="600" color="#333">{issue.author || t('common.unknownUser')}</Text>
+                <Text fontSize="12px" color="#aaa">{t('issue.postedAt', { time: timeAgo(issue.created_at) })}</Text>
               </Flex>
               <Divider borderColor="#f0f0f0" mb="12px" />
-              <Text fontSize="13.5px" color="#333" whiteSpace="pre-wrap" lineHeight="1.7">{issue.body}</Text>
+              <SimpleRenderer source={issue.body} owner={owner} repo={repo} />
             </Box>
           )}
 
-          <Text fontSize="13px" fontWeight="600" color="#333" mb="10px">
-            💬 评论 ({comments.length})
-          </Text>
+          <HStack gap="6px" mb="10px">
+            <MessageSquare size={14} color="#333" />
+            <Text fontSize="13px" fontWeight="600" color="#333">{t('issue.comments')} ({comments.length})</Text>
+          </HStack>
 
           <VStack spacing="10px" align="stretch" mb="16px">
             {comments.map(function(c) {
@@ -134,25 +138,30 @@ const IssueDetail = () => {
                 <Box key={c.id} bg="white" border="1px solid" borderColor="#e2e2e2" rounded="8px" p="16px">
                   <Flex align="center" gap="8px" mb="8px">
                     <Avatar size="sm" name={c.author} bg="#22c55e" color="white" />
-                    <Text fontSize="13px" fontWeight="600" color="#333">{c.author || '未知用户'}</Text>
+                    <Text fontSize="13px" fontWeight="600" color="#333">{c.author || t('common.unknownUser')}</Text>
                     <Text fontSize="12px" color="#aaa">{timeAgo(c.created_at)}</Text>
                   </Flex>
                   <Divider borderColor="#f0f0f0" mb="10px" />
-                  <Text fontSize="13.5px" color="#444" whiteSpace="pre-wrap" lineHeight="1.6">{c.body}</Text>
+                  <SimpleRenderer source={c.body} fontSize="13.5px" owner={owner} repo={repo} />
                 </Box>
               )
             })}
           </VStack>
 
           <Box bg="white" border="1px solid" borderColor="#e2e2e2" rounded="8px" p="16px">
-            <Textarea value={commentText} onChange={function(e) { setCommentText(e.target.value) }}
-              placeholder="写下你的评论..." fontSize="13.5px" borderRadius="8px" borderColor="#d1d5db" rows={4}
-              _focus={{ borderColor: '#22c55e', boxShadow: '0 0 0 3px rgba(34,197,94,0.1)' }} />
+            <SimpleEditor
+              value={commentText}
+              onChange={setCommentText}
+              placeholder={t('issue.writeComment')}
+              height={180}
+              owner={owner}
+              repo={repo}
+            />
             <Flex justify="flex-end" mt="10px">
               <Button h="30px" px="14px" fontSize="13px" rounded="6px" bg="#22c55e" color="white"
                 _hover={{ bg: '#16a34a' }} onClick={handleComment} isLoading={submitting}
                 isDisabled={!commentText.trim()}>
-                发表评论
+                {t('issue.submitComment')}
               </Button>
             </Flex>
           </Box>
@@ -162,24 +171,24 @@ const IssueDetail = () => {
           <Box bg="white" border="1px solid" borderColor="#e2e2e2" rounded="8px" p="16px">
             <VStack spacing="12px" align="stretch">
               <Box>
-                <Text fontSize="11px" fontWeight="600" color="#aaa" textTransform="uppercase" mb="4px">状态</Text>
+                <Text fontSize="11px" fontWeight="600" color="#aaa" textTransform="uppercase" mb="4px">{t('issue.status')}</Text>
                 <Badge fontSize="12px" px="8px" py="2px" rounded="4px"
                   bg={issue.is_closed ? '#fef2f2' : '#dcfce7'} color={issue.is_closed ? '#dc2626' : '#16a34a'}>
-                  {issue.is_closed ? '已关闭' : '开启中'}
+                  {issue.is_closed ? t('issue.closed') : t('issue.open')}
                 </Badge>
               </Box>
 
               <Box>
-                <Text fontSize="11px" fontWeight="600" color="#aaa" textTransform="uppercase" mb="4px">创建者</Text>
+                <Text fontSize="11px" fontWeight="600" color="#aaa" textTransform="uppercase" mb="4px">{t('issue.author')}</Text>
                 <HStack gap="6px">
                   <Avatar size="xs" name={issue.author} bg="#22c55e" color="white" />
-                  <Text fontSize="13px" color="#333">{issue.author || '未知'}</Text>
+                  <Text fontSize="13px" color="#333">{issue.author || t('common.unknown')}</Text>
                 </HStack>
               </Box>
 
               {issue.assignee && (
                 <Box>
-                  <Text fontSize="11px" fontWeight="600" color="#aaa" textTransform="uppercase" mb="4px">指派给</Text>
+                  <Text fontSize="11px" fontWeight="600" color="#aaa" textTransform="uppercase" mb="4px">{t('issue.assignedTo')}</Text>
                   <HStack gap="6px">
                     <Avatar size="xs" name={issue.assignee} bg="#2563eb" color="white" />
                     <Text fontSize="13px" color="#333">{issue.assignee}</Text>
@@ -189,10 +198,10 @@ const IssueDetail = () => {
 
               <Box>
                 <Flex justify="space-between" align="center" mb="6px">
-                  <Text fontSize="11px" fontWeight="600" color="#aaa" textTransform="uppercase">标签</Text>
+                  <Text fontSize="11px" fontWeight="600" color="#aaa" textTransform="uppercase">{t('issue.labels')}</Text>
                   <Button h="18px" px="4px" fontSize="10px" variant="link" color="#22c55e"
                     onClick={function() { setShowLabelPicker(!showLabelPicker) }}>
-                    {showLabelPicker ? '收起' : '编辑'}
+                    {showLabelPicker ? t('common.collapse') : t('common.edit')}
                   </Button>
                 </Flex>
                 {currentLabelNames.length > 0 && (
@@ -227,25 +236,27 @@ const IssueDetail = () => {
                         </Flex>
                       )
                     }) : (
-                      <Text fontSize="12px" color="#aaa" py="4px">暂无标签</Text>
+                      <Text fontSize="12px" color="#aaa" py="4px">{t('issue.noLabels')}</Text>
                     )}
                   </Box>
                 )}
               </Box>
 
               <Box>
-                <Text fontSize="11px" fontWeight="600" color="#aaa" textTransform="uppercase" mb="4px">创建时间</Text>
-                <Text fontSize="12.5px" color="#666">{new Date(issue.created_at).toLocaleString('zh-CN')}</Text>
+                <Text fontSize="11px" fontWeight="600" color="#aaa" textTransform="uppercase" mb="4px">{t('issue.createdAt')}</Text>
+                <Text fontSize="12.5px" color="#666">{new Date(issue.created_at).toLocaleString(getLanguage() === 'zh' ? 'zh-CN' : 'en-US')}</Text>
               </Box>
 
               <Box>
-                <Text fontSize="11px" fontWeight="600" color="#aaa" textTransform="uppercase" mb="4px">更新时间</Text>
-                <Text fontSize="12.5px" color="#666">{new Date(issue.updated_at).toLocaleString('zh-CN')}</Text>
+                <Text fontSize="11px" fontWeight="600" color="#aaa" textTransform="uppercase" mb="4px">{t('issue.updatedAt')}</Text>
+                <Text fontSize="12.5px" color="#666">{new Date(issue.updated_at).toLocaleString(getLanguage() === 'zh' ? 'zh-CN' : 'en-US')}</Text>
               </Box>
 
               {issue.is_locked && (
                 <Box>
-                  <Badge fontSize="11px" px="8px" py="2px" rounded="4px" bg="#fef3c7" color="#d97706">🔒 已锁定</Badge>
+                  <Badge fontSize="11px" px="8px" py="2px" rounded="4px" bg="#fef3c7" color="#d97706">
+                    <HStack gap="4px"><Lock size={11} /><Text>{t('issue.locked')}</Text></HStack>
+                  </Badge>
                 </Box>
               )}
             </VStack>

@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react'
 import { Box, Text, Flex, HStack, Badge, Button, Spinner, Textarea, Input, Select, useToast } from '@chakra-ui/react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { snippetsAPI } from '../api/index'
-import { timeAgo } from '../i18n/zh'
-import { highlightLine } from './project/FileViewer'
+import { t, timeAgo } from '../i18n/index'
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
+import { getThemeStyle } from '../codeThemes'
+import { LuFileCode as FileCode, LuGlobe as Globe, LuLock as Lock } from 'react-icons/lu'
 
 var LANG_COLORS = {
   Go: '#00ADD8', JavaScript: '#F7DF1E', TypeScript: '#3178C6',
@@ -39,9 +41,9 @@ const SnippetDetail = () => {
   if (!snippet) {
     return (
       <Box textAlign="center" py="60px" color="#aaa">
-        <Text fontSize="40px" mb="8px">📝</Text>
-        <Text fontSize="15px">未找到该代码片段</Text>
-      </Box>
+          <FileCode size={40} color="#ccc" mb="8px" />
+          <Text fontSize="15px">{t('snippet.notFound')}</Text>
+        </Box>
     )
   }
 
@@ -65,29 +67,29 @@ const SnippetDetail = () => {
               <Badge fontSize="10px" px="6px" py="1px" rounded="4px"
                 bg={snippet.visibility === 'public' ? '#dcfce7' : '#fef2f2'}
                 color={snippet.visibility === 'public' ? '#16a34a' : '#dc2626'}>
-                {snippet.visibility === 'public' ? '公开' : '私有'}
+                {snippet.visibility === 'public' ? t('common.public') : t('common.private')}
               </Badge>
             )}
           </HStack>
           {snippet.description && <Text fontSize="14px" color="#666" mb="8px">{snippet.description}</Text>}
           <HStack gap="14px" fontSize="12px" color="#aaa">
             {snippet.username && <Text>@{snippet.username}</Text>}
-            <Text>第{version}次修改</Text>
-            <Text>更新于 {timeAgo(snippet.updated_at)}</Text>
+            <Text>{t('snippet.revision', { version })}</Text>
+            <Text>{t('snippet.updatedAt')} {timeAgo(snippet.updated_at)}</Text>
           </HStack>
         </Box>
         <HStack gap="8px">
           <Button h="30px" px="14px" fontSize="13px" rounded="6px" variant="outline"
             borderColor="#d1d5db" color="#666" onClick={function() { navigate('/snippets/' + id + '/edit') }}>
-            编辑
+            {t('snippet.edit')}
           </Button>
           <Button h="30px" px="14px" fontSize="13px" rounded="6px" variant="outline"
             borderColor="#fecaca" color="#dc2626" _hover={{ bg: '#fef2f2' }}
             onClick={function() {
-              if (!window.confirm('确定要删除此代码片段吗？')) return
+              if (!window.confirm(t('snippet.confirmDelete'))) return
               snippetsAPI.del(id).then(function() { navigate('/snippets') })
             }}>
-            删除
+            {t('snippet.delete')}
           </Button>
         </HStack>
       </Flex>
@@ -97,25 +99,32 @@ const SnippetDetail = () => {
           <Text fontSize="13px" fontWeight="600" color="#555">{snippet.filename || 'snippet'}</Text>
           <Button h="24px" px="8px" fontSize="11px" rounded="4px" variant="outline" borderColor="#d1d5db"
             onClick={function() { navigator.clipboard.writeText(code) }}>
-            复制
+            {t('snippet.copy')}
           </Button>
         </Flex>
-        <Box overflow="auto" maxH="60vh">
-          <Box as="pre" fontSize="13px" fontFamily="'JetBrains Mono', 'Fira Code', Consolas, monospace" lineHeight="1.6" m={0} p={0}>
-            {code.split('\n').map(function(line, idx) {
-              return (
-                <Flex key={idx} _hover={{ bg: '#f0fdf4' }} transition="background-color 0.1s" align="flex-start">
-                  <Box w="44px" textAlign="right" pr="12px" pl="12px" color="#bbb" userSelect="none" flexShrink={0} fontSize="12px" lineHeight="1.6" py="0" pos="sticky" left="0" bg="white" zIndex={1}>
-                    {idx + 1}
-                  </Box>
-                  <Box flex={1} pr="16px" py="0" whiteSpace="pre-wrap" wordBreak="break-all" overflowWrap="break-word">
-                    <span dangerouslySetInnerHTML={{ __html: highlightLine(line, lang) || ' ' }} />
-                  </Box>
-                </Flex>
-              )
-            })}
-          </Box>
-        </Box>
+        <SyntaxHighlighter
+          language={(lang || '').toLowerCase()}
+          style={getThemeStyle()}
+          showLineNumbers={true}
+          customStyle={{
+            margin: 0,
+            borderRadius: 0,
+            fontSize: '13px',
+            lineHeight: '1.6',
+            fontFamily: "'JetBrains Mono', 'Fira Code', Consolas, monospace",
+            maxHeight: '60vh',
+            overflow: 'auto',
+          }}
+          lineNumberStyle={{
+            color: '#4b5263',
+            minWidth: '44px',
+            paddingRight: '12px',
+            paddingLeft: '12px',
+            fontSize: '12px',
+          }}
+        >
+          {code}
+        </SyntaxHighlighter>
       </Box>
     </Box>
   )
@@ -136,45 +145,45 @@ const NewSnippet = () => {
 
   function handleSubmit() {
     if (!form.title.trim()) {
-      toast({ title: '请输入标题', status: 'error', duration: 3000 })
+      toast({ title: t('snippet.titleRequired'), status: 'error', duration: 3000 })
       return
     }
     setSubmitting(true)
     snippetsAPI.create(form).then(function(data) {
       navigate('/snippets/' + data.id)
     }).catch(function(err) {
-      toast({ title: err.message || '创建失败', status: 'error', duration: 3000 })
+      toast({ title: err.message || t('snippet.createFailed'), status: 'error', duration: 3000 })
     }).finally(function() { setSubmitting(false) })
   }
 
   return (
     <Box maxW="800px" mx="auto">
-      <Text fontSize="22px" fontWeight="700" color="#333" mb="24px">新建代码片段</Text>
+      <Text fontSize="22px" fontWeight="700" color="#333" mb="24px">{t('snippet.newSnippet')}</Text>
 
       <Box bg="white" border="1px solid" borderColor="#e2e2e2" rounded="10px" p="28px">
         <Box mb="16px">
-          <Text fontSize="13.5px" fontWeight="600" color="#555" mb="6px">标题 *</Text>
+          <Text fontSize="13.5px" fontWeight="600" color="#555" mb="6px">{t('snippet.title')} *</Text>
           <Input value={form.title} onChange={function(e) { setForm(function(p) { return Object.assign({}, p, { title: e.target.value }) }) }}
-            placeholder="代码片段标题" h="40px" fontSize="14px" borderRadius="8px" borderColor="#d1d5db"
+            placeholder={t('snippet.titlePlaceholder')} h="40px" fontSize="14px" borderRadius="8px" borderColor="#d1d5db"
             _focus={{ borderColor: '#22c55e', boxShadow: '0 0 0 3px rgba(34,197,94,0.1)' }} />
         </Box>
 
         <Box mb="16px">
-          <Text fontSize="13.5px" fontWeight="600" color="#555" mb="6px">描述</Text>
+          <Text fontSize="13.5px" fontWeight="600" color="#555" mb="6px">{t('snippet.description')}</Text>
           <Input value={form.description} onChange={function(e) { setForm(function(p) { return Object.assign({}, p, { description: e.target.value }) }) }}
-            placeholder="简短描述" h="40px" fontSize="14px" borderRadius="8px" borderColor="#d1d5db"
+            placeholder={t('snippet.descriptionPlaceholder')} h="40px" fontSize="14px" borderRadius="8px" borderColor="#d1d5db"
             _focus={{ borderColor: '#22c55e', boxShadow: '0 0 0 3px rgba(34,197,94,0.1)' }} />
         </Box>
 
         <Flex gap="16px" mb="16px">
           <Box flex={1}>
-            <Text fontSize="13.5px" fontWeight="600" color="#555" mb="6px">文件名</Text>
+            <Text fontSize="13.5px" fontWeight="600" color="#555" mb="6px">{t('snippet.filename')}</Text>
             <Input value={form.filename} onChange={function(e) { setForm(function(p) { return Object.assign({}, p, { filename: e.target.value }) }) }}
               placeholder="example.go" h="40px" fontSize="14px" borderRadius="8px" borderColor="#d1d5db"
               _focus={{ borderColor: '#22c55e', boxShadow: '0 0 0 3px rgba(34,197,94,0.1)' }} />
           </Box>
           <Box w="180px">
-            <Text fontSize="13.5px" fontWeight="600" color="#555" mb="6px">语言</Text>
+            <Text fontSize="13.5px" fontWeight="600" color="#555" mb="6px">{t('snippet.language')}</Text>
             <Select value={form.language} onChange={function(e) { setForm(function(p) { return Object.assign({}, p, { language: e.target.value }) }) }}
               h="40px" fontSize="14px" borderColor="#d1d5db" borderRadius="8px">
               {LANGUAGES.map(function(l) { return <option key={l} value={l}>{l}</option> })}
@@ -183,27 +192,33 @@ const NewSnippet = () => {
         </Flex>
 
         <Box mb="16px">
-          <Text fontSize="13.5px" fontWeight="600" color="#555" mb="6px">可见性</Text>
+          <Text fontSize="13.5px" fontWeight="600" color="#555" mb="6px">{t('snippet.visibility')}</Text>
           <Flex gap="12px">
             <Button h="32px" px="14px" fontSize="13px" rounded="6px"
               bg={form.visibility === 'public' ? '#22c55e' : '#f3f4f6'} color={form.visibility === 'public' ? 'white' : '#666'}
               _hover={{ bg: form.visibility === 'public' ? '#16a34a' : '#e5e7eb' }}
               onClick={function() { setForm(function(p) { return Object.assign({}, p, { visibility: 'public' }) }) }}>
-              🌐 公开
+              <HStack gap="6px" justify="center">
+                <Globe size={18} />
+                <Text>{t('common.public')}</Text>
+              </HStack>
             </Button>
             <Button h="32px" px="14px" fontSize="13px" rounded="6px"
               bg={form.visibility === 'private' ? '#22c55e' : '#f3f4f6'} color={form.visibility === 'private' ? 'white' : '#666'}
               _hover={{ bg: form.visibility === 'private' ? '#16a34a' : '#e5e7eb' }}
               onClick={function() { setForm(function(p) { return Object.assign({}, p, { visibility: 'private' }) }) }}>
-              🔒 私有
+              <HStack gap="6px" justify="center">
+                <Lock size={18} />
+                <Text>{t('common.private')}</Text>
+              </HStack>
             </Button>
           </Flex>
         </Box>
 
         <Box mb="24px">
-          <Text fontSize="13.5px" fontWeight="600" color="#555" mb="6px">代码内容 *</Text>
+          <Text fontSize="13.5px" fontWeight="600" color="#555" mb="6px">{t('snippet.codeContent')} *</Text>
           <Textarea value={form.code} onChange={function(e) { setForm(function(p) { return Object.assign({}, p, { code: e.target.value }) }) }}
-            placeholder="在此输入代码..." fontSize="13px" fontFamily="'JetBrains Mono', 'Fira Code', Consolas, monospace"
+            placeholder={t('snippet.codePlaceholder')} fontSize="13px" fontFamily="'JetBrains Mono', 'Fira Code', Consolas, monospace"
             borderRadius="8px" borderColor="#d1d5db" rows={15}
             _focus={{ borderColor: '#22c55e', boxShadow: '0 0 0 3px rgba(34,197,94,0.1)' }} />
         </Box>
@@ -211,11 +226,11 @@ const NewSnippet = () => {
         <Flex justify="flex-end" gap="10px">
           <Button h="36px" px="16px" fontSize="13px" rounded="6px" variant="outline"
             borderColor="#d1d5db" color="#666" onClick={function() { navigate(-1) }}>
-            取消
+            {t('common.cancel')}
           </Button>
           <Button h="36px" px="24px" fontSize="14px" rounded="6px" bg="#22c55e" color="white"
             _hover={{ bg: '#16a34a' }} onClick={handleSubmit} isLoading={submitting}>
-            创建片段
+            {t('snippet.createSnippet')}
           </Button>
         </Flex>
       </Box>
@@ -256,7 +271,7 @@ const EditSnippet = () => {
     snippetsAPI.update(id, form).then(function(data) {
       navigate('/snippets/' + id)
     }).catch(function(err) {
-      toast({ title: err.message || '更新失败', status: 'error', duration: 3000 })
+      toast({ title: err.message || t('snippet.updateFailed'), status: 'error', duration: 3000 })
     }).finally(function() { setSubmitting(false) })
   }
 
@@ -270,18 +285,18 @@ const EditSnippet = () => {
 
   return (
     <Box maxW="800px" mx="auto">
-      <Text fontSize="22px" fontWeight="700" color="#333" mb="24px">编辑代码片段</Text>
+      <Text fontSize="22px" fontWeight="700" color="#333" mb="24px">{t('snippet.editSnippet')}</Text>
 
       <Box bg="white" border="1px solid" borderColor="#e2e2e2" rounded="10px" p="28px">
         <Box mb="16px">
-          <Text fontSize="13.5px" fontWeight="600" color="#555" mb="6px">标题 *</Text>
+          <Text fontSize="13.5px" fontWeight="600" color="#555" mb="6px">{t('snippet.title')} *</Text>
           <Input value={form.title} onChange={function(e) { setForm(function(p) { return Object.assign({}, p, { title: e.target.value }) }) }}
             h="40px" fontSize="14px" borderRadius="8px" borderColor="#d1d5db"
             _focus={{ borderColor: '#22c55e', boxShadow: '0 0 0 3px rgba(34,197,94,0.1)' }} />
         </Box>
 
         <Box mb="16px">
-          <Text fontSize="13.5px" fontWeight="600" color="#555" mb="6px">描述</Text>
+          <Text fontSize="13.5px" fontWeight="600" color="#555" mb="6px">{t('snippet.description')}</Text>
           <Input value={form.description} onChange={function(e) { setForm(function(p) { return Object.assign({}, p, { description: e.target.value }) }) }}
             h="40px" fontSize="14px" borderRadius="8px" borderColor="#d1d5db"
             _focus={{ borderColor: '#22c55e', boxShadow: '0 0 0 3px rgba(34,197,94,0.1)' }} />
@@ -289,13 +304,13 @@ const EditSnippet = () => {
 
         <Flex gap="16px" mb="16px">
           <Box flex={1}>
-            <Text fontSize="13.5px" fontWeight="600" color="#555" mb="6px">文件名</Text>
+            <Text fontSize="13.5px" fontWeight="600" color="#555" mb="6px">{t('snippet.filename')}</Text>
             <Input value={form.filename} onChange={function(e) { setForm(function(p) { return Object.assign({}, p, { filename: e.target.value }) }) }}
               h="40px" fontSize="14px" borderRadius="8px" borderColor="#d1d5db"
               _focus={{ borderColor: '#22c55e', boxShadow: '0 0 0 3px rgba(34,197,94,0.1)' }} />
           </Box>
           <Box w="180px">
-            <Text fontSize="13.5px" fontWeight="600" color="#555" mb="6px">语言</Text>
+            <Text fontSize="13.5px" fontWeight="600" color="#555" mb="6px">{t('snippet.language')}</Text>
             <Select value={form.language} onChange={function(e) { setForm(function(p) { return Object.assign({}, p, { language: e.target.value }) }) }}
               h="40px" fontSize="14px" borderColor="#d1d5db" borderRadius="8px">
               {LANGUAGES.map(function(l) { return <option key={l} value={l}>{l}</option> })}
@@ -304,7 +319,7 @@ const EditSnippet = () => {
         </Flex>
 
         <Box mb="24px">
-          <Text fontSize="13.5px" fontWeight="600" color="#555" mb="6px">代码内容 *</Text>
+          <Text fontSize="13.5px" fontWeight="600" color="#555" mb="6px">{t('snippet.codeContent')} *</Text>
           <Textarea value={form.code} onChange={function(e) { setForm(function(p) { return Object.assign({}, p, { code: e.target.value }) }) }}
             fontSize="13px" fontFamily="'JetBrains Mono', 'Fira Code', Consolas, monospace"
             borderRadius="8px" borderColor="#d1d5db" rows={15}
@@ -314,11 +329,11 @@ const EditSnippet = () => {
         <Flex justify="flex-end" gap="10px">
           <Button h="36px" px="16px" fontSize="13px" rounded="6px" variant="outline"
             borderColor="#d1d5db" color="#666" onClick={function() { navigate(-1) }}>
-            取消
+            {t('common.cancel')}
           </Button>
           <Button h="36px" px="24px" fontSize="14px" rounded="6px" bg="#22c55e" color="white"
             _hover={{ bg: '#16a34a' }} onClick={handleSubmit} isLoading={submitting}>
-            保存更改
+            {t('snippet.saveChanges')}
           </Button>
         </Flex>
       </Box>

@@ -208,17 +208,15 @@ func CreateMirror(c fiber.Ctx) error {
 
 	if len(repos) > 0 {
 		repo = *repos[0]
-		repo.IsMirror = true
 		repo.MirrorURL = req.CloneURL
-		repo.ProjectType = "mirror"
+		repo.ProjectType = "public"
 		repo.LastSyncAt = &now
 		db.Repository.Save().One(&repo)
 	} else {
 		repo = models.Repository{
 			Name:          req.Repo,
 			OwnerID:       owner.ID,
-			IsMirror:      true,
-			ProjectType:   "mirror",
+			ProjectType:   "public",
 			MirrorURL:     req.CloneURL,
 			LastSyncAt:    &now,
 			DefaultBranch: "main",
@@ -421,7 +419,7 @@ func UpdateCommitTimes(c fiber.Ctx) error {
 
 	for _, repo := range repos {
 		localPath := repo.LocalPath
-		if localPath == "" || repo.IsMirror {
+		if localPath == "" || repo.IsMirror() {
 			skipped++
 			continue
 		}

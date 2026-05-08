@@ -88,10 +88,8 @@ type Repository struct {
 	Readme      string
 	OwnerID     int64 `goe:"index"`
 
-	ProjectType string `goe:"default:'owned';index"`
-	IsPrivate   bool   `goe:"default:false"`
+	ProjectType string `goe:"default:'local';index"`
 	IsFork      bool   `goe:"default:false"`
-	IsMirror    bool   `goe:"default:false"`
 
 	MirrorURL  string
 	LastSyncAt *time.Time
@@ -99,6 +97,18 @@ type Repository struct {
 
 	DefaultBranch string `goe:"default:'main'"`
 	LastCommitAt  *time.Time
+}
+
+func (r *Repository) IsMirror() bool {
+	return r.ProjectType == "public" || r.ProjectType == "private" || r.ProjectType == "mirror"
+}
+
+func (r *Repository) IsPrivate() bool {
+	return r.ProjectType == "private"
+}
+
+func (r *Repository) IsLocal() bool {
+	return r.ProjectType == "local" || r.ProjectType == "owned"
 }
 
 type RepositoryStats struct {
@@ -113,6 +123,7 @@ type RepositoryStats struct {
 	ForksCount        int `goe:"default:0"`
 	WatchCount        int `goe:"default:0"`
 	CommitsCount      int `goe:"default:0"`
+	BranchesCount     int `goe:"default:0"`
 	TagsCount         int `goe:"default:0"`
 	ContributorsCount int `goe:"default:0"`
 
@@ -382,16 +393,16 @@ type GitCommandLog struct {
 	ID        int64 `goe:"pk"`
 	CreatedAt time.Time
 
-	Command     string
-	WorkingDir  string
-	Output      string
-	Status      string `goe:"default:'pending'"`
-	StartedAt   *time.Time
-	FinishedAt  *time.Time
-	DurationMs  int64
-	ExitCode    int
+	Command      string
+	WorkingDir   string
+	Output       string
+	Status       string `goe:"default:'pending'"`
+	StartedAt    *time.Time
+	FinishedAt   *time.Time
+	DurationMs   int64
+	ExitCode     int
 	RepositoryID *int64 `goe:"index"`
-	ErrorMsg    string
+	ErrorMsg     string
 }
 
 type Group struct {

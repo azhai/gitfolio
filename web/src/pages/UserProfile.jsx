@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react'
 import { Box, Text, Flex, HStack, Badge, Spinner, SimpleGrid } from '@chakra-ui/react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { usersAPI } from '../api/index'
-import { timeAgo } from '../i18n/zh'
+import { timeAgo, t } from '../i18n'
+import { LuUser as User, LuMapPin as MapPin, LuLink2 as Link2, LuStar as Star, LuGitFork as GitFork, LuMail as Mail } from 'react-icons/lu'
 
 const UserProfile = () => {
   const { username } = useParams()
@@ -32,9 +33,9 @@ const UserProfile = () => {
   if (!user) {
     return (
       <Box textAlign="center" py="60px" color="#aaa">
-        <Text fontSize="40px" mb="8px">👤</Text>
-        <Text fontSize="15px">未找到该用户</Text>
-      </Box>
+          <User size={40} color="#ccc" mb="8px" />
+          <Text fontSize="15px">{t('user.notFound')}</Text>
+        </Box>
     )
   }
 
@@ -50,20 +51,20 @@ const UserProfile = () => {
               <Text fontSize="22px" fontWeight="700" color="#333">{user.full_name || user.username}</Text>
               <Text fontSize="15px" color="#888">@{user.username}</Text>
               {user.is_admin && (
-                <Badge fontSize="11px" px="6px" py="1px" rounded="4px" bg="#ede9fe" color="#7c3aed">管理员</Badge>
+                <Badge fontSize="11px" px="6px" py="1px" rounded="4px" bg="#ede9fe" color="#7c3aed">{t('common.administrator')}</Badge>
               )}
             </HStack>
             {user.bio && <Text fontSize="14px" color="#666" mb="8px">{user.bio}</Text>}
             <HStack gap="16px" fontSize="13px" color="#888">
-              {user.email && <Text>📧 {user.email}</Text>}
-              {user.location && <Text>📍 {user.location}</Text>}
-              {user.website && <Text>🔗 {user.website}</Text>}
+              {user.email && <HStack gap="4px"><Mail size={13} /><Text>{user.email}</Text></HStack>}
+              {user.location && <HStack gap="4px"><MapPin size={13} /><Text>{user.location}</Text></HStack>}
+              {user.website && <HStack gap="4px"><Link2 size={13} /><Text>{user.website}</Text></HStack>}
             </HStack>
           </Box>
         </Flex>
       </Box>
 
-      <Text fontSize="16px" fontWeight="600" color="#333" mb="14px">项目 ({repos.length})</Text>
+      <Text fontSize="16px" fontWeight="600" color="#333" mb="14px">{t('user.projects')} ({repos.length})</Text>
 
       <SimpleGrid columns={2} spacing="14px">
         {repos.map(function(repo) {
@@ -79,16 +80,28 @@ const UserProfile = () => {
               <HStack gap="8px" mb="6px">
                 <Text fontSize="15px" fontWeight="600" color="#16a34a">{owner}/{name}</Text>
                 <Badge fontSize="10px" px="6px" py="1px" rounded="4px"
-                  bg={repo.is_private ? '#fef2f2' : '#dcfce7'}
-                  color={repo.is_private ? '#dc2626' : '#16a34a'}>
-                  {repo.is_private ? '私有' : '公开'}
+                  bg={repo.project_type === 'private' ? '#fef2f2' : repo.project_type === 'public' ? '#dcfce7' : '#f3f4f6'}
+                  color={repo.project_type === 'private' ? '#dc2626' : repo.project_type === 'public' ? '#16a34a' : '#6b7280'}>
+                  {repo.project_type === 'private' ? t('common.private') : repo.project_type === 'public' ? t('common.public') : t('common.local')}
                 </Badge>
+                {repo.is_mirror && (
+                  <Badge fontSize="10px" px="6px" py="1px" rounded="4px" bg="#eff6ff" color="#2563eb">
+                    {t('project.mirror')}
+                  </Badge>
+                )}
               </HStack>
-              <Text fontSize="13px" color="#666" mb="10px" noOfLines={2}>{repo.description || '暂无描述'}</Text>
+              <Text fontSize="13px" color="#666" mb="10px" noOfLines={2}>{repo.description || t('project.noDescription')}</Text>
+              {repo.mirror_url && (
+                <Text fontSize="12px" color="#2563eb" mb="8px" noOfLines={1}
+                  as="a" href={repo.mirror_url} target="_blank" rel="noopener noreferrer"
+                  _hover={{ textDecoration: 'underline' }}>
+                  {repo.mirror_url.replace(/\.git$/, '')}
+                </Text>
+              )}
               <HStack gap="16px" fontSize="12px" color="#aaa">
-                <Text>⭐ {repo.stars_count || 0}</Text>
-                <Text>🔀 {repo.forks_count || 0}</Text>
-                <Text>更新于 {timeAgo(repo.updated_at)}</Text>
+                <HStack gap="3px"><Star size={13} /><Text>{repo.stars_count || 0}</Text></HStack>
+                <HStack gap="3px"><GitFork size={13} /><Text>{repo.forks_count || 0}</Text></HStack>
+                <Text>{t('project.updatedAt', { time: timeAgo(repo.updated_at) })}</Text>
               </HStack>
             </Box>
           )
@@ -97,7 +110,7 @@ const UserProfile = () => {
 
       {repos.length === 0 && (
         <Box textAlign="center" py="40px" color="#aaa">
-          <Text fontSize="14px">暂无公开项目</Text>
+          <Text fontSize="14px">{t('user.noPublicProjects')}</Text>
         </Box>
       )}
     </Box>

@@ -2,12 +2,12 @@ import React, { useState, useEffect } from 'react'
 import { Box, Text, Flex, VStack, HStack, Badge, Button, Spinner, Input } from '@chakra-ui/react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { issuesAPI } from '../../api/index'
-import { timeAgo } from '../../i18n/zh'
+import { t, timeAgo } from '../../i18n/index'
 
 var STATUS_TABS = [
-  { key: 'open', label: '🟢 开启中' },
-  { key: 'closed', label: '✅ 已关闭' },
-  { key: 'all', label: '📋 全部' },
+  { key: 'open', label: '🟢 ' + t('issue.open') },
+  { key: 'closed', label: '✅ ' + t('issue.closed') },
+  { key: 'all', label: '📋 ' + t('common.all') },
 ]
 
 const ProjectIssues = () => {
@@ -63,12 +63,12 @@ const ProjectIssues = () => {
         </HStack>
         <Button h="30px" px="14px" fontSize="13px" rounded="6px" bg="#22c55e" color="white" _hover={{ bg: '#16a34a' }}
           onClick={function() { navigate('/' + owner + '/' + repo + '/issues/new') }}>
-          新建议题
+          {t('issue.newIssue')}
         </Button>
       </Flex>
 
       <Box bg="white" border="1px solid" borderColor="#e2e2e2" rounded="10px" p="16px" mb="16px">
-        <Input placeholder="搜索议题..." value={search} onChange={function(e) { setSearch(e.target.value) }}
+        <Input placeholder={t('issue.searchPlaceholder')} value={search} onChange={function(e) { setSearch(e.target.value) }}
           h="34px" fontSize="13.5px" borderRadius="8px" borderColor="#d1d5db"
           _focus={{ borderColor: '#22c55e', boxShadow: '0 0 0 3px rgba(34,197,94,0.1)' }} />
       </Box>
@@ -85,14 +85,14 @@ const ProjectIssues = () => {
                 <Box flex={1}>
                   <HStack gap="8px" mb="4px" align="center">
                     {issue.is_closed ? (
-                      <Badge fontSize="11px" px="7px" py="1px" rounded="4px" bg="#fef2f2" color="#dc2626">已关闭</Badge>
+                      <Badge fontSize="11px" px="7px" py="1px" rounded="4px" bg="#fef2f2" color="#dc2626">{t('issue.closed')}</Badge>
                     ) : (
-                      <Badge fontSize="11px" px="7px" py="1px" rounded="4px" bg="#dcfce7" color="#16a34a">开启中</Badge>
+                      <Badge fontSize="11px" px="7px" py="1px" rounded="4px" bg="#dcfce7" color="#16a34a">{t('issue.open')}</Badge>
                     )}
                     <Text fontSize="13.5px" fontWeight="600" color="#333">{issue.title}</Text>
                   </HStack>
                   <Text fontSize="12.5px" color="#888" noOfLines={1}>
-                    #{issue.number} 由 {issue.author || '未知'} 创建于 {timeAgo(issue.created_at)}
+                    #{issue.number} {t('common.by')} {issue.author || t('common.unknown')} {t('common.createdAt')} {timeAgo(issue.created_at)}
                     {issue.comments_count > 0 && ' · 💬 ' + issue.comments_count}
                   </Text>
                 </Box>
@@ -105,7 +105,7 @@ const ProjectIssues = () => {
       {!loading && filtered.length === 0 && (
         <Box textAlign="center" py="50px" color="#aaa">
           <Text fontSize="36px" mb="6px">⚠️</Text>
-          <Text fontSize="14px">暂无议题</Text>
+          <Text fontSize="14px">{t('issue.noIssues')}</Text>
         </Box>
       )}
     </Box>

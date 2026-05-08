@@ -31,18 +31,18 @@ func TestCreateRepository(t *testing.T) {
 		{
 			name: "Valid public repository",
 			payload: map[string]any{
-				"name":        "test-repo",
-				"description": "Test repository",
-				"is_private":  false,
+				"name":         "test-repo",
+				"description":  "Test repository",
+				"project_type": "public",
 			},
 			wantStatus: http.StatusCreated,
 		},
 		{
 			name: "Valid private repository",
 			payload: map[string]any{
-				"name":        "private-repo",
-				"description": "Private repository",
-				"is_private":  true,
+				"name":         "private-repo",
+				"description":  "Private repository",
+				"project_type": "private",
 			},
 			wantStatus: http.StatusCreated,
 		},
@@ -123,9 +123,9 @@ func TestListRepositories(t *testing.T) {
 	db.User.Insert().One(&user)
 
 	repos := []models.Repository{
-		{Name: "repo1", OwnerID: user.ID, IsPrivate: false},
-		{Name: "repo2", OwnerID: user.ID, IsPrivate: false},
-		{Name: "repo3", OwnerID: user.ID, IsPrivate: true},
+		{Name: "repo1", OwnerID: user.ID, ProjectType: "public"},
+		{Name: "repo2", OwnerID: user.ID, ProjectType: "public"},
+		{Name: "repo3", OwnerID: user.ID, ProjectType: "private"},
 	}
 	for _, repo := range repos {
 		db.Repository.Insert().One(&repo)
@@ -158,7 +158,7 @@ func TestGetRepository(t *testing.T) {
 	repo := models.Repository{
 		Name:      "get-repo",
 		OwnerID:   user.ID,
-		IsPrivate: false,
+		ProjectType: "public",
 	}
 	db.Repository.Insert().One(&repo)
 
@@ -191,7 +191,7 @@ func TestGetPrivateRepository(t *testing.T) {
 	repo := models.Repository{
 		Name:      "private-repo",
 		OwnerID:   owner.ID,
-		IsPrivate: true,
+		ProjectType: "private",
 	}
 	db.Repository.Insert().One(&repo)
 
@@ -222,7 +222,7 @@ func TestUpdateRepository(t *testing.T) {
 	repo := models.Repository{
 		Name:      "update-repo",
 		OwnerID:   user.ID,
-		IsPrivate: false,
+		ProjectType: "public",
 	}
 	db.Repository.Insert().One(&repo)
 
@@ -254,7 +254,7 @@ func TestDeleteRepository(t *testing.T) {
 	repo := models.Repository{
 		Name:      "delete-repo",
 		OwnerID:   user.ID,
-		IsPrivate: false,
+		ProjectType: "public",
 	}
 	db.Repository.Insert().One(&repo)
 
@@ -282,7 +282,7 @@ func TestStarRepository(t *testing.T) {
 	repo := models.Repository{
 		Name:      "star-repo",
 		OwnerID:   owner.ID,
-		IsPrivate: false,
+		ProjectType: "public",
 	}
 	db.Repository.Insert().One(&repo)
 

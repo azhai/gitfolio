@@ -1,0 +1,154 @@
+.gitfolio-datepicker {
+  width: 100%;
+  height: 38px;
+  font-size: 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 0 12px;
+  outline: none;
+  color: #333;
+  background: white;
+  box-sizing: border-box;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.gitfolio-datepicker:focus {
+  border-color: #22c55e;
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.1);
+}
+
+.gitfolio-datepicker::placeholder {
+  color: #aaa;
+}
+
+.gitfolio-calendar {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 13px;
+  border: 1px solid #e2e2e2;
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+.gitfolio-calendar .react-datepicker__header {
+  background: #f9fafb;
+  border-bottom: 1px solid #e2e2e2;
+  padding: 10px 10px 6px;
+}
+
+.gitfolio-calendar .react-datepicker__current-month {
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 6px;
+}
+
+.gitfolio-calendar .react-datepicker__day-name {
+  color: #888;
+  font-size: 12px;
+  width: 32px;
+  line-height: 28px;
+}
+
+.gitfolio-calendar .react-datepicker__day {
+  width: 32px;
+  height: 32px;
+  line-height: 32px;
+  margin: 1px;
+  border-radius: 6px;
+  color: #333;
+  font-size: 13px;
+  transition: background 0.15s, color 0.15s;
+}
+
+.gitfolio-calendar .react-datepicker__day:hover {
+  background: #f0fdf4;
+  color: #16a34a;
+  border-radius: 6px;
+}
+
+.gitfolio-calendar .react-datepicker__day--selected,
+.gitfolio-calendar .react-datepicker__day--keyboard-selected {
+  background: #22c55e !important;
+  color: white !important;
+  border-radius: 6px;
+  font-weight: 600;
+}
+
+.gitfolio-calendar .react-datepicker__day--today {
+  font-weight: 600;
+  color: #22c55e;
+}
+
+.gitfolio-calendar .react-datepicker__day--outside-month {
+  color: #c0c0c0;
+}
+
+.gitfolio-calendar .react-datepicker__navigation {
+  top: 10px;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  border: none;
+  outline: none;
+}
+
+.gitfolio-calendar .react-datepicker__navigation:hover {
+  background: #f0fdf4;
+}
+
+.gitfolio-calendar .react-datepicker__navigation-icon::before {
+  border-color: #555;
+  border-width: 2px 2px 0 0;
+  height: 7px;
+  width: 7px;
+  top: 5px;
+}
+
+.gitfolio-calendar .react-datepicker__triangle {
+  display: none;
+}
+
+.gitfolio-calendar .react-datepicker__time-container {
+  border-left: 1px solid #e2e2e2;
+}
+
+.gitfolio-calendar .react-datepicker__time-box {
+  width: 100px;
+}
+
+.gitfolio-calendar .react-datepicker__time-list-item {
+  font-size: 12px;
+  padding: 6px 10px;
+  height: auto;
+  line-height: 1.4;
+}
+
+.gitfolio-calendar .react-datepicker__time-list-item:hover {
+  background: #f0fdf4 !important;
+  color: #16a34a;
+}
+
+.gitfolio-calendar .react-datepicker__time-list-item--selected {
+  background: #22c55e !important;
+  color: white !important;
+  font-weight: 600;
+}
+
+.gitfolio-calendar .react-datepicker__month {
+  margin: 8px 0;
+  padding: 0 6px;
+}
+
+.gitfolio-calendar .react-datepicker__week {
+  display: flex;
+  justify-content: center;
+}
+
+.gitfolio-calendar .react-datepicker__month-container {
+  float: left;
+}
+
+.gitfolio-popper {
+  z-index: 9999 !important;
+}

@@ -25,7 +25,7 @@ func SyncPullRepository(c fiber.Ctx) error {
 
 	db := models.GetDB()
 
-	if !result.Repo.IsMirror || result.Repo.LocalPath == "" {
+	if !result.Repo.IsMirror() || result.Repo.LocalPath == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Not a mirror repository or local path not set"})
 	}
 

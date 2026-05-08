@@ -2,16 +2,17 @@ import React, { useState, useEffect } from 'react'
 import { Box, Text, Flex, VStack, HStack, Badge, Button, Spinner, Tabs, TabList, Tab, TabPanels, TabPanel } from '@chakra-ui/react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { prsAPI } from '../../api/index'
-import { timeAgo } from '../../i18n/zh'
+import { t, timeAgo } from '../../i18n/index'
+import { LuGitPullRequest as GitPullRequest } from 'react-icons/lu'
 
 function shortHash(hash) {
   return hash ? hash.substring(0, 7) : ''
 }
 
 var STATUS_MAP = {
-  open: { label: '开启中', bg: '#dcfce7', color: '#16a34a' },
-  merged: { label: '已合并', bg: '#ede9fe', color: '#7c3aed' },
-  closed: { label: '已关闭', bg: '#fef2f2', color: '#dc2626' },
+  open: { bg: '#dcfce7', color: '#16a34a' },
+  merged: { bg: '#ede9fe', color: '#7c3aed' },
+  closed: { bg: '#fef2f2', color: '#dc2626' },
 }
 
 const PRDetail = () => {
@@ -64,14 +65,15 @@ const PRDetail = () => {
   if (!pr) {
     return (
       <Box textAlign="center" py="50px" color="#aaa">
-        <Text fontSize="36px" mb="6px">🔀</Text>
-        <Text fontSize="14px">未找到合并请求</Text>
+        <GitPullRequest size={36} color="#ccc" mb="6px" />
+        <Text fontSize="14px">{t('prDetail.notFound')}</Text>
       </Box>
     )
   }
 
   var status = pr.is_merged ? 'merged' : (pr.is_closed ? 'closed' : 'open')
   var cfg = STATUS_MAP[status] || STATUS_MAP.open
+  var statusLabel = status === 'open' ? t('common.open') : (status === 'merged' ? t('common.merged') : t('common.closed'))
 
   return (
     <Box>
@@ -79,12 +81,12 @@ const PRDetail = () => {
         <Box flex={1}>
           <HStack gap="10px" mb="6px" align="center">
             <Badge fontSize="12px" px="8px" py="2px" rounded="4px" bg={cfg.bg} color={cfg.color}>
-              {cfg.label}
+              {statusLabel}
             </Badge>
             <Text fontSize="18px" fontWeight="700" color="#333">{pr.title}</Text>
           </HStack>
           <Text fontSize="13px" color="#888">
-            #{pr.number} 由 {pr.author || '未知'} 创建于 {timeAgo(pr.created_at)}
+            #{pr.number} {t('prDetail.createdBy', { author: pr.author || t('common.unknown'), time: timeAgo(pr.created_at) })}
           </Text>
           <HStack gap="8px" mt="6px" fontSize="13px">
             <Text color="#16a34a" fontWeight="500">{pr.source_branch}</Text>
@@ -97,19 +99,19 @@ const PRDetail = () => {
             <>
               <Button h="30px" px="14px" fontSize="13px" rounded="6px" bg="#7c3aed" color="white"
                 _hover={{ bg: '#6d28d9' }} onClick={function() { handleAction('merge') }} isLoading={actionLoading}>
-                合并
+                {t('pr.merge')}
               </Button>
               <Button h="30px" px="14px" fontSize="13px" rounded="6px" variant="outline"
                 borderColor="#d1d5db" color="#666" _hover={{ borderColor: '#dc2626', color: '#dc2626' }}
                 onClick={function() { handleAction('close') }} isLoading={actionLoading}>
-                关闭
+                {t('pr.close')}
               </Button>
             </>
           )}
           {status === 'closed' && !pr.is_merged && (
             <Button h="30px" px="14px" fontSize="13px" rounded="6px" bg="#22c55e" color="white"
               _hover={{ bg: '#16a34a' }} onClick={function() { handleAction('reopen') }} isLoading={actionLoading}>
-              重新开启
+              {t('pr.reopen')}
             </Button>
           )}
         </HStack>
@@ -125,11 +127,11 @@ const PRDetail = () => {
         <TabList borderColor="#e5e7eb">
           <Tab fontSize="13px" fontWeight="500" _selected={{ color: '#16a34a', borderColor: '#16a34a' }}
             onClick={loadCommits}>
-            提交记录
+            {t('pr.commits')}
           </Tab>
           <Tab fontSize="13px" fontWeight="500" _selected={{ color: '#16a34a', borderColor: '#16a34a' }}
             onClick={loadFiles}>
-            文件变更
+            {t('pr.filesChanged')}
           </Tab>
         </TabList>
         <TabPanels>
@@ -153,7 +155,7 @@ const PRDetail = () => {
                 )
               })}
               {prCommits.length === 0 && (
-                <Text textAlign="center" py="20px" fontSize="13px" color="#aaa">点击标签加载提交记录</Text>
+                <Text textAlign="center" py="20px" fontSize="13px" color="#aaa">{t('prDetail.clickToLoad')}</Text>
               )}
             </VStack>
           </TabPanel>
@@ -176,7 +178,7 @@ const PRDetail = () => {
                 )
               })}
               {prFiles.length === 0 && (
-                <Text textAlign="center" py="20px" fontSize="13px" color="#aaa">点击标签加载文件变更</Text>
+                <Text textAlign="center" py="20px" fontSize="13px" color="#aaa">{t('prDetail.clickToLoad')}</Text>
               )}
             </VStack>
           </TabPanel>

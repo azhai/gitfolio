@@ -14,7 +14,7 @@ func SeedRepos() {
 		Description string
 		Homepage    string
 		Readme      string
-		IsPrivate   bool
+		ProjectType string
 		StarsCount  int
 		ForksCount  int
 		WatchCount  int
@@ -60,10 +60,10 @@ go install github.com/ryan/gx@latest
 ## 许可证
 
 MIT 许可证`,
-			IsPrivate:  false,
-			StarsCount: 42,
-			ForksCount: 8,
-			WatchCount: 12,
+			ProjectType: "public",
+			StarsCount:  42,
+			ForksCount:  8,
+			WatchCount:  12,
 		},
 		{
 			Owner:       "xorm",
@@ -189,10 +189,10 @@ builder.NotNull{"a"}.ToSQL()
 ## License
 
 MIT License`,
-			IsPrivate:  false,
-			StarsCount: 89,
-			ForksCount: 45,
-			WatchCount: 12,
+			ProjectType: "public",
+			StarsCount:  89,
+			ForksCount:  45,
+			WatchCount:  12,
 		},
 	}
 
@@ -210,7 +210,7 @@ MIT License`,
 			Homepage:      repoData.Homepage,
 			Readme:        repoData.Readme,
 			OwnerID:       owner.ID,
-			IsPrivate:     repoData.IsPrivate,
+			ProjectType:   repoData.ProjectType,
 			DefaultBranch: "main",
 		}
 

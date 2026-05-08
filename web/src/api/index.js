@@ -96,6 +96,9 @@ export const reposAPI = {
   create(data) {
     return api.post('/repos', data)
   },
+  detectRepo(url) {
+    return api.get('/repos/github-info', { url: url })
+  },
   update(owner, repo, data) {
     return api.put('/' + owner + '/' + repo, data)
   },
@@ -165,6 +168,15 @@ export const reposAPI = {
   },
   refreshStats(owner, repo) {
     return api.post('/' + owner + '/' + repo + '/refresh-stats')
+  },
+  getSyncConfig(owner, repo) {
+    return api.get('/' + owner + '/' + repo + '/sync/config')
+  },
+  updateSyncConfig(owner, repo, data) {
+    return api.put('/' + owner + '/' + repo + '/sync/config', data)
+  },
+  getSyncLogs(owner, repo) {
+    return api.get('/' + owner + '/' + repo + '/sync/logs')
   },
 }
 
@@ -328,6 +340,24 @@ export const tasksAPI = {
   timeSummary(owner, repo, id) {
     return api.get('/' + owner + '/' + repo + '/tasks/' + id + '/time-summary')
   },
+  uploadAttachment(owner, repo, id, file) {
+    var formData = new FormData()
+    formData.append('file', file)
+    return fetch('/api/v1/' + owner + '/' + repo + '/tasks/' + id + '/attachments', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + getToken() },
+      body: formData,
+    }).then(function(res) { return res.json() })
+  },
+  deleteAttachment(owner, repo, id, attachmentId) {
+    return api.del('/' + owner + '/' + repo + '/tasks/' + id + '/attachments/' + attachmentId)
+  },
+  linkIssue(owner, repo, id, issueId) {
+    return api.post('/' + owner + '/' + repo + '/tasks/' + id + '/issues', { issue_id: issueId })
+  },
+  unlinkIssue(owner, repo, id, issueId) {
+    return api.del('/' + owner + '/' + repo + '/tasks/' + id + '/issues/' + issueId)
+  },
 }
 
 export const releasesAPI = {
@@ -364,7 +394,7 @@ export const usersAPI = {
   uploadAvatar(username, file) {
     var formData = new FormData()
     formData.append('avatar', file)
-    return fetch('/api/users/' + username + '/avatar', {
+    return fetch('/api/v1/users/' + username + '/avatar', {
       method: 'POST',
       headers: { 'Authorization': 'Bearer ' + getToken() },
       body: formData,
@@ -372,4 +402,13 @@ export const usersAPI = {
   },
 }
 
-export default { getToken, setToken, authAPI, statsAPI, reposAPI, groupsAPI, activitiesAPI, snippetsAPI, issuesAPI, labelsAPI, prsAPI, tasksAPI, releasesAPI, usersAPI }
+export const adminAPI = {
+  listSyncPoints() {
+    return api.get('/admin/sync-points')
+  },
+  updateSyncPoint(id, data) {
+    return api.put('/admin/sync-points/' + id, data)
+  },
+}
+
+export default { getToken, setToken, authAPI, statsAPI, reposAPI, groupsAPI, activitiesAPI, snippetsAPI, issuesAPI, labelsAPI, prsAPI, tasksAPI, releasesAPI, usersAPI, adminAPI }

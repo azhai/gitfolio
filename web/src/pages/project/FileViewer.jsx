@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { Box, Text, Flex, Spinner, Button } from '@chakra-ui/react'
 import { useParams, useLocation } from 'react-router-dom'
 import { reposAPI } from '../../api/index'
+import { t } from '../../i18n/index'
 
 var BINARY_EXTS = ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'ico', 'webp', 'mp4', 'mp3', 'wav', 'avi', 'mov', 'zip', 'tar', 'gz', 'rar', '7z', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'exe', 'dll', 'so', 'dylib', 'woff', 'woff2', 'ttf', 'eot', 'o', 'obj', 'pyc', 'class', 'jar', 'wasm']
 
@@ -383,7 +384,7 @@ const FileViewer = ({ filePath: propFilePath, owner: propOwner, repo: propRepo, 
         setContent('')
       }
     }).catch(function(err) {
-      setError(err.message || '加载文件失败')
+      setError(err.message || t('fileViewer.loadFailed'))
     }).finally(function() { setLoading(false) })
   }, [owner, repo, filePath, ref, binary])
 
@@ -412,7 +413,7 @@ const FileViewer = ({ filePath: propFilePath, owner: propOwner, repo: propRepo, 
           maxW="100%" maxH="600px" borderRadius="6px"
           onError={function(e) { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block' }}
           sx={{ display: 'block', mx: 'auto' }} />
-        <Text fontSize="13px" color="#aaa" mt="12px" display="none">图片加载失败</Text>
+        <Text fontSize="13px" color="#aaa" mt="12px" display="none">{t('fileViewer.imageLoadFailed')}</Text>
       </Box>
     )
   }
@@ -421,11 +422,11 @@ const FileViewer = ({ filePath: propFilePath, owner: propOwner, repo: propRepo, 
     return (
       <Box bg="white" border="1px solid" borderColor="#e2e2e2" rounded="10px" py="60px" textAlign="center" color="#888">
         <Text fontSize="36px" mb="8px">📦</Text>
-        <Text fontSize="14px" mb="12px">二进制文件无法预览</Text>
+        <Text fontSize="14px" mb="12px">{t('fileViewer.binaryFile')}</Text>
         <Button h="30px" px="14px" fontSize="13px" rounded="6px" bg="#22c55e" color="white"
           _hover={{ bg: '#16a34a' }}
           as="a" href={getRawUrl(owner, repo, filePath, ref)} target="_blank">
-          下载文件
+          {t('fileViewer.downloadFile')}
         </Button>
       </Box>
     )
@@ -466,7 +467,7 @@ const FileViewer = ({ filePath: propFilePath, owner: propOwner, repo: propRepo, 
 
   return (
     <Box textAlign="center" py="40px" color="#aaa">
-      <Text fontSize="14px">空文件</Text>
+      <Text fontSize="14px">{t('fileViewer.emptyFile')}</Text>
     </Box>
   )
 }

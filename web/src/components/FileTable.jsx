@@ -1,49 +1,56 @@
-import React, { useState, useEffect, useCallback } from 'react'
-import { Box, Flex, Text, Button, Select, HStack, Spinner } from '@chakra-ui/react'
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { Box, Flex, Text, Input, HStack, Spinner, Menu, MenuButton, MenuList, MenuItem, Tabs, TabList, Tab, Button } from '@chakra-ui/react'
 import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import { reposAPI } from '../api/index'
-import { timeAgo } from '../i18n/zh'
-
-function formatSize(bytes) {
-  if (!bytes || bytes === '0') return '-'
-  var n = parseInt(bytes)
-  if (isNaN(n)) return bytes
-  if (n < 1024) return n + ' B'
-  if (n < 1048576) return (n / 1024).toFixed(1) + ' KB'
-  return (n / 1048576).toFixed(1) + ' MB'
-}
+import { t, timeAgo } from '../i18n/index'
+import { FileIcons, IconMap } from '../components/Icons'
 
 function getFileIcon(name, isDir) {
-  if (isDir) return { icon: '📁', color: '#54aeff' }
+  if (isDir) {
+    var folder = FileIcons.find(function(f) { return f.isDir })
+    if (folder) return { Comp: folder.icon, color: folder.color }
+    return { color: '#54aeff' }
+  }
   var lower = (name || '').toLowerCase()
-  if (lower === 'dockerfile') return { icon: '🐳', color: '#384d54' }
-  if (lower === 'makefile' || lower === 'gnumakefile') return { icon: '🔧', color: '#6d8086' }
-  if (lower === '.gitignore') return { icon: '📄', color: '#f54d27' }
-  if (lower === '.dockerignore') return { icon: '🐳', color: '#384d54' }
-  if (lower === 'license' || lower === 'license.md' || lower === 'license.txt') return { icon: '⚖️', color: '#26aa76' }
-  if (lower.startsWith('readme')) return { icon: '📖', color: '#083fa1' }
-  if (lower.endsWith('.go')) return { icon: '🔷', color: '#00ADD8' }
-  if (lower.endsWith('.rs')) return { icon: '🦀', color: '#DEA584' }
-  if (lower.endsWith('.py')) return { icon: '🐍', color: '#3572A5' }
-  if (lower.endsWith('.js') || lower.endsWith('.jsx')) return { icon: '📜', color: '#f1e05a' }
-  if (lower.endsWith('.ts') || lower.endsWith('.tsx')) return { icon: '💠', color: '#3178c6' }
-  if (lower.endsWith('.java')) return { icon: '☕', color: '#b07219' }
-  if (lower.endsWith('.html')) return { icon: '🌐', color: '#e34c26' }
-  if (lower.endsWith('.css') || lower.endsWith('.scss')) return { icon: '🎨', color: '#563d7c' }
-  if (lower.endsWith('.json')) return { icon: '📋', color: '#292929' }
-  if (lower.endsWith('.yaml') || lower.endsWith('.yml')) return { icon: '⚙️', color: '#cb171e' }
-  if (lower.endsWith('.md')) return { icon: '📖', color: '#083fa1' }
-  if (lower.endsWith('.sh') || lower.endsWith('.bash')) return { icon: '🖥️', color: '#89e051' }
-  if (lower.endsWith('.sql')) return { icon: '🗃️', color: '#e38c00' }
-  if (lower.endsWith('.vue')) return { icon: '💚', color: '#41b883' }
-  if (lower.endsWith('.png') || lower.endsWith('.jpg') || lower.endsWith('.jpeg') || lower.endsWith('.gif') || lower.endsWith('.svg') || lower.endsWith('.webp')) return { icon: '🖼️', color: '#a855f7' }
-  if (lower.endsWith('.lock')) return { icon: '🔒', color: '#9ca3af' }
-  if (lower.endsWith('.mod')) return { icon: '📦', color: '#00ADD8' }
-  if (lower.endsWith('.sum')) return { icon: '✅', color: '#9ca3af' }
-  return { icon: '📄', color: '#888' }
+  for (var i = 0; i < FileIcons.length; i++) {
+    var fi = FileIcons[i]
+    if (fi.isDir) continue
+    for (var j = 0; j < fi.exts.length; j++) {
+      if (lower === fi.exts[j] || lower.endsWith(fi.exts[j])) {
+        return { Comp: fi.icon, color: fi.color }
+      }
+    }
+  }
+  return { color: '#888' }
+}
+
+function formatSize(size) {
+  if (!size || size === '-') return ''
+  var num = parseInt(size, 10)
+  if (isNaN(num) || num === 0) return ''
+  if (num < 1024) return num + ' B'
+  if (num < 1024 * 1024) return (num / 1024).toFixed(1) + ' KB'
+  if (num < 1024 * 1024 * 1024) return (num / (1024 * 1024)).toFixed(1) + ' MB'
+  return (num / (1024 * 1024 * 1024)).toFixed(1) + ' GB'
+}
+
+function FileIconComp({ name, size = 15, color: iconColor }) {
+  var result = typeof name === 'string' ? null : name
+  if (result && result.Comp) {
+    var C = result.Comp
+    return <C size={size} strokeWidth={2} color={iconColor || result.color || '#888'} />
+  }
+  return <Text fontSize={size} color={iconColor || '#888'}>{typeof name === 'string' ? name : '📄'}</Text>
 }
 
 const FileTable = ({ owner: propOwner, repo: propRepo }) => {
+  var BranchIcon = IconMap.branch
+  var TagIcon = IconMap.tag
+  var PlusIcon = IconMap.plus
+  var FileIcon = IconMap.fileCode
+  var UploadIcon = IconMap.upload
+  var IssueIcon = IconMap.issue
+  var PRIcon = IconMap.pr
   const navigate = useNavigate()
   const params = useParams()
   const location = useLocation()
@@ -52,13 +59,31 @@ const FileTable = ({ owner: propOwner, repo: propRepo }) => {
 
   const [files, setFiles] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [branches, setBranches] = useState([])
   const [tags, setTags] = useState([])
   const [currentRef, setCurrentRef] = useState('')
+  const [lastCommit, setLastCommit] = useState(null)
+  const [refTab, setRefTab] = useState('branches')
+  const [refSearch, setRefSearch] = useState('')
+  const [commitExpanded, setCommitExpanded] = useState(false)
+  const [commitOverflow, setCommitOverflow] = useState(false)
+  const commitTextRef = useRef(null)
 
   var basePath = '/' + owner + '/' + repo
   var urlPath = location.pathname.replace(basePath + '/tree/', '').replace(basePath + '/tree', '').replace(basePath, '')
-  var currentPath = decodeURIComponent(urlPath || '')
+  var decodedUrlPath = decodeURIComponent(urlPath || '')
+
+  var parsedUrl = useMemo(function() {
+    if (!decodedUrlPath) return { ref: '', path: '' }
+    var firstSegment = decodedUrlPath.split('/')[0]
+    if (branches.indexOf(firstSegment) >= 0 || tags.indexOf(firstSegment) >= 0) {
+      return { ref: firstSegment, path: decodedUrlPath.substring(firstSegment.length + 1) }
+    }
+    return { ref: '', path: decodedUrlPath }
+  }, [decodedUrlPath, branches, tags])
+
+  var currentPath = parsedUrl.path
 
   useEffect(() => {
     Promise.all([
@@ -71,14 +96,52 @@ const FileTable = ({ owner: propOwner, repo: propRepo }) => {
         ? (tagData.tags || tagData) : []
       setBranches(branchList.map(function(b) { return typeof b === 'string' ? b : (b.name || '') }))
       setTags(tagList.map(function(t) { return typeof t === 'string' ? t : (t.name || '') }))
-      var defaultBranch = branchList.find(function(b) {
-        var name = typeof b === 'string' ? b : b.name
-        return name === 'main' || name === 'master'
-      })
-      var ref = typeof defaultBranch === 'string' ? defaultBranch : (defaultBranch && defaultBranch.name) || 'HEAD'
-      setCurrentRef(ref)
+
+      var decodedUrl = decodeURIComponent(urlPath || '')
+      var firstSeg = decodedUrl ? decodedUrl.split('/')[0] : ''
+      var allRefs = []
+        .concat(branchList.map(function(b) { return typeof b === 'string' ? b : (b.name || '') }))
+        .concat(tagList.map(function(t) { return typeof t === 'string' ? t : (t.name || '') }))
+
+      if (firstSeg && allRefs.indexOf(firstSeg) >= 0) {
+        setCurrentRef(firstSeg)
+      } else {
+        var defaultBranch = branchList.find(function(b) {
+          var name = typeof b === 'string' ? b : b.name
+          return name === 'main' || name === 'master'
+        })
+        var ref = typeof defaultBranch === 'string' ? defaultBranch : (defaultBranch && defaultBranch.name) || 'HEAD'
+        setCurrentRef(ref)
+      }
     })
   }, [owner, repo])
+
+  useEffect(function() {
+    if (parsedUrl.ref) {
+      setCurrentRef(parsedUrl.ref)
+    }
+  }, [parsedUrl.ref])
+
+  useEffect(function() {
+    if (!currentRef) return
+    reposAPI.lastCommit(owner, repo, currentRef).then(function(commitData) {
+      console.log('[FileTable] lastCommit data:', commitData)
+      setLastCommit(commitData || null)
+    }).catch(function(err) {
+      console.error('[FileTable] lastCommit error:', err)
+      setLastCommit(null)
+    })
+  }, [owner, repo, currentRef])
+
+  useEffect(function() {
+    setCommitExpanded(false)
+    if (lastCommit && lastCommit.message && commitTextRef.current) {
+      var el = commitTextRef.current
+      setCommitOverflow(el.scrollWidth > el.clientWidth)
+    } else {
+      setCommitOverflow(false)
+    }
+  }, [lastCommit])
 
   const loadTree = useCallback(function(path, ref) {
     setLoading(true)
@@ -102,7 +165,12 @@ const FileTable = ({ owner: propOwner, repo: propRepo }) => {
         return a.name.localeCompare(b.name)
       })
       setFiles(entries)
-    }).catch(function() { setFiles([]) }).finally(function() { setLoading(false) })
+      setError(null)
+    }).catch(function(err) {
+      console.error('[FileTable] Failed to load tree:', err)
+      setFiles([])
+      setError(err.message || t('fileTable.loadFailed'))
+    }).finally(function() { setLoading(false) })
   }, [owner, repo, currentRef])
 
   useEffect(() => {
@@ -111,15 +179,12 @@ const FileTable = ({ owner: propOwner, repo: propRepo }) => {
     }
   }, [currentRef, currentPath, loadTree])
 
-  function handleRefChange(e) {
-    setCurrentRef(e.target.value)
-  }
-
   function handleRowClick(file) {
+    var refPrefix = currentRef ? currentRef + '/' : ''
     if (file.isDir) {
-      navigate('/' + owner + '/' + repo + '/tree/' + file.path)
+      navigate('/' + owner + '/' + repo + '/tree/' + refPrefix + file.path)
     } else {
-      navigate('/' + owner + '/' + repo + '/tree/' + file.path)
+      navigate('/' + owner + '/' + repo + '/tree/' + refPrefix + file.path)
     }
   }
 
@@ -137,22 +202,142 @@ const FileTable = ({ owner: propOwner, repo: propRepo }) => {
 
   return (
     <Box bg="white" border="1px solid" borderColor="#e2e2e2" rounded="10px" overflow="hidden">
-      <Flex justify="space-between" align="center" px="16px" py="12px" borderBottom="1px solid" borderColor="#f0f0f0">
-        <HStack spacing="10px">
-          <Select h="30px" w="160px" fontSize="13px" borderColor="#d1d5db" rounded="6px"
-            value={currentRef} onChange={handleRefChange}>
-            <optgroup label="分支">
-              {branches.map(function(b) { return <option key={b} value={b}>{b}</option> })}
-            </optgroup>
-            <optgroup label="标签">
-              {tags.map(function(t) { return <option key={t} value={t}>{t}</option> })}
-            </optgroup>
-          </Select>
-          <Text fontSize="13px" color="#888">{files.length} 个代码</Text>
-        </HStack>
-        <HStack spacing="8px">
-          <Button h="28px" px="12px" fontSize="12px" rounded="6px" bg="#22c55e" color="white" _hover={{ bg: '#16a34a' }}>+ 添加文件</Button>
-          <Button h="28px" px="12px" fontSize="12px" rounded="6px" variant="outline" borderColor="#d1d5db" _hover={{ bg: '#f9fafb' }}>+ 新建</Button>
+      <Flex align="center" px="16px" py="10px" borderBottom="1px solid" borderColor="#f0f0f0" justify="space-between">
+        <Menu placement="bottom-start" onClose={function() { setRefSearch('') }}>
+          <MenuButton as={Button}
+            h="30px" px="10px" fontSize="13px" fontWeight="500"
+            bg="#f6f8fa" border="1px solid" borderColor="#d1d5db" rounded="6px"
+            color="#333" _hover={{ bg: '#eff2f5' }} _active={{ bg: '#eff2f5' }}
+            rightIcon={null}
+            leftIcon={(branches.indexOf(currentRef) >= 0 ? <BranchIcon size={14} color="#555" /> : <TagIcon size={14} color="#555" />)}>
+            <HStack gap="4px" display="inline-flex">
+              <Text>{currentRef || 'HEAD'}</Text>
+              <Text color="#888" fontSize="11px">▾</Text>
+            </HStack>
+          </MenuButton>
+          <MenuList minW="280px" p="0" overflow="hidden" borderColor="#d1d5db">
+            <Box px="8px" pt="8px" pb="4px">
+              <Input h="30px" fontSize="13px" placeholder={t('fileTable.filterRef')}
+                value={refSearch} onChange={function(e) { setRefSearch(e.target.value) }}
+                borderColor="#d1d5db" _focus={{ borderColor: '#16a34a', boxShadow: '0 0 0 1px #16a34a' }} />
+            </Box>
+            <Tabs index={refTab === 'branches' ? 0 : 1} onChange={function(i) { setRefTab(i === 0 ? 'branches' : 'tags'); setRefSearch('') }} colorScheme="green" size="sm">
+              <TabList px="8px" borderBottom="1px solid" borderColor="#e5e7eb">
+                <Tab fontSize="12px" px="10px" py="4px" _selected={{ color: '#16a34a', borderColor: '#16a34a' }}>{t('fileTable.branches')}</Tab>
+                <Tab fontSize="12px" px="10px" py="4px" _selected={{ color: '#16a34a', borderColor: '#16a34a' }}>{t('fileTable.tags')}</Tab>
+              </TabList>
+            </Tabs>
+            <Box maxH="240px" overflowY="auto">
+              {(refTab === 'branches' ? branches : tags)
+                .filter(function(item) { return !refSearch || item.toLowerCase().indexOf(refSearch.toLowerCase()) >= 0 })
+                .map(function(item) {
+                  var isActive = item === currentRef
+                  return (
+                    <MenuItem key={item}
+                      fontSize="13px" py="6px" px="12px"
+                      bg={isActive ? '#f0fdf4' : 'transparent'}
+                      color={isActive ? '#16a34a' : '#333'}
+                      fontWeight={isActive ? '600' : 'normal'}
+                      _hover={{ bg: '#f0fdf4' }}
+                      onClick={function() { navigate('/' + owner + '/' + repo + '/tree/' + item) }}
+                      icon={refTab === 'branches' ? <BranchIcon size={14} color={isActive ? '#16a34a' : '#888'} /> : <TagIcon size={14} color={isActive ? '#16a34a' : '#888'} />}>
+                      {item}
+                    </MenuItem>
+                  )
+                })}
+              {(refTab === 'branches' ? branches : tags)
+                .filter(function(item) { return !refSearch || item.toLowerCase().indexOf(refSearch.toLowerCase()) >= 0 }).length === 0 && (
+                <Text fontSize="12px" color="#aaa" py="16px" textAlign="center">
+                  {refSearch ? t('fileTable.noMatch') : (refTab === 'branches' ? t('fileTable.noBranches') : t('fileTable.noTags'))}
+                </Text>
+              )}
+            </Box>
+          </MenuList>
+        </Menu>
+        {lastCommit && (
+          <HStack gap="10px" flex="1" ml="16px" minW={0}>
+            {lastCommit.hash && (
+              <Text fontSize="12px" color="#16a34a" fontFamily="monospace" flexShrink={0}
+                bg="#f0fdf4" px="6px" py="1px" rounded="4px" fontWeight="500">
+                {lastCommit.hash}
+              </Text>
+            )}
+            {lastCommit.author && (
+              <Text fontSize="13px" color="#555" fontWeight="500" flexShrink={0}>
+                {lastCommit.author}
+              </Text>
+            )}
+            <Text ref={commitTextRef} fontSize="13px" color="#888" noOfLines={commitExpanded ? undefined : 1}
+              flex="1" minW={0}
+              overflow={commitExpanded ? 'visible' : 'hidden'} textOverflow="ellipsis" whiteSpace={commitExpanded ? 'normal' : 'nowrap'}>
+              {lastCommit.message || ''}
+            </Text>
+            {commitOverflow && !commitExpanded && (
+              <Text fontSize="12px" color="#16a34a" cursor="pointer" flexShrink={0}
+                onClick={function(e) { e.stopPropagation(); setCommitExpanded(true) }}
+                _hover={{ textDecoration: 'underline' }}>
+                {t('fileTable.expand')}
+              </Text>
+            )}
+            {commitExpanded && (
+              <Text fontSize="12px" color="#16a34a" cursor="pointer" flexShrink={0}
+                onClick={function(e) { e.stopPropagation(); setCommitExpanded(false) }}
+                _hover={{ textDecoration: 'underline' }}>
+                {t('fileTable.collapse')}
+              </Text>
+            )}
+            {lastCommit.time && (
+              <Text fontSize="12px" color="#aaa" whiteSpace="nowrap" flexShrink={0}>
+                {timeAgo(lastCommit.time)}
+              </Text>
+            )}
+          </HStack>
+        )}
+        <HStack gap="6px" flexShrink={0} ml="16px">
+          <Menu placement="bottom-end">
+            <MenuButton as={Button}
+              h="28px" px="10px" fontSize="12px" rounded="6px"
+              bg="#f6f8fa" border="1px solid" borderColor="#d1d5db" color="#555"
+              _hover={{ bg: '#eff2f5' }} _active={{ bg: '#eff2f5' }}
+              rightIcon={<Text fontSize="10px" ml="2px">▾</Text>}
+              leftIcon={<PlusIcon size={12} />}>
+              {t('fileTable.addFile')}
+            </MenuButton>
+            <MenuList minW="160px" borderColor="#d1d5db">
+              <MenuItem fontSize="13px" py="6px"
+                onClick={function() { navigate('/' + owner + '/' + repo + '/tree/new') }}
+                icon={<FileIcon size={14} color="#888" />}>
+                {t('fileTable.createNewFile')}
+              </MenuItem>
+              <MenuItem fontSize="13px" py="6px"
+                onClick={function() { navigate('/' + owner + '/' + repo + '/tree/upload') }}
+                icon={<UploadIcon size={14} color="#888" />}>
+                {t('fileTable.uploadFile')}
+              </MenuItem>
+            </MenuList>
+          </Menu>
+          <Menu placement="bottom-end">
+            <MenuButton as={Button}
+              h="28px" px="10px" fontSize="12px" rounded="6px"
+              bg="#16a34a" color="white"
+              _hover={{ bg: '#15803d' }} _active={{ bg: '#15803d' }}
+              rightIcon={<Text fontSize="10px" ml="2px">▾</Text>}
+              leftIcon={<PlusIcon size={12} />}>
+              {t('fileTable.newBtn')}
+            </MenuButton>
+            <MenuList minW="160px" borderColor="#d1d5db">
+              <MenuItem fontSize="13px" py="6px"
+                onClick={function() { navigate('/' + owner + '/' + repo + '/issues/new') }}
+                icon={<IssueIcon size={14} color="#888" />}>
+                {t('fileTable.newIssue')}
+              </MenuItem>
+              <MenuItem fontSize="13px" py="6px"
+                onClick={function() { navigate('/' + owner + '/' + repo + '/pull_requests/new') }}
+                icon={<PRIcon size={14} color="#888" />}>
+                {t('fileTable.newMR')}
+              </MenuItem>
+            </MenuList>
+          </Menu>
         </HStack>
       </Flex>
 
@@ -190,7 +375,9 @@ const FileTable = ({ owner: propOwner, repo: propRepo }) => {
               _hover={{ bg: '#f9fafb' }}
               borderBottom="1px solid #f5f5f5"
               onClick={function() { handleRowClick(file) }}>
-              <Text fontSize="13px" w="20px" flexShrink={0} textAlign="center" lineHeight="1">{fi.icon}</Text>
+              <Box w="20px" flexShrink={0} textAlign="center" lineHeight="1">
+                <FileIconComp name={fi} size={14} color={fi.color} />
+              </Box>
               <Text fontSize="13.5px" fontWeight="500" w="220px" flexShrink={0} ml="8px"
                 color={file.isDir ? '#16a34a' : '#333'}
                 _hover={{ textDecoration: 'underline' }}>
@@ -198,11 +385,11 @@ const FileTable = ({ owner: propOwner, repo: propRepo }) => {
               </Text>
               <Text fontSize="13px" color="#888" flex="1" truncate
                 overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap"
-                mx="16px">
+                mx="16px" textAlign="left">
                 {file.commitMsg}
               </Text>
               {file.time && (
-                <Text fontSize="12px" color="#aaa" w="120px" flexShrink={0} textAlign="right">{file.time}</Text>
+                <Text fontSize="12px" color="#aaa" w="120px" flexShrink={0} textAlign="left">{file.time}</Text>
               )}
             </Flex>
           )
@@ -211,7 +398,14 @@ const FileTable = ({ owner: propOwner, repo: propRepo }) => {
 
       {files.length === 0 && !loading && (
         <Box textAlign="center" py="40px" color="#aaa">
-          <Text fontSize="14px">此目录为空</Text>
+          {error ? (
+            <>
+              <Text fontSize="14px" color="#dc2626" mb="2">{t('fileTable.loadFailed')}</Text>
+              <Text fontSize="12px">{error}</Text>
+            </>
+          ) : (
+            <Text fontSize="14px">{t('fileTable.emptyDir')}</Text>
+          )}
         </Box>
       )}
     </Box>

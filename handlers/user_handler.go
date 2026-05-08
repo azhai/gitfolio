@@ -299,7 +299,7 @@ func GetUserRepositories(c fiber.Ctx) error {
 	query := db.Repository.Select().Where("owner_id = ?", userModel.ID)
 	currentUserID := middleware.GetCurrentUserID(c)
 	if currentUserID != userModel.ID {
-		query = query.Where("is_private = ?", false)
+		query = query.Where("project_type != ?", "private")
 	}
 
 	repos, err := query.Skip((page - 1) * perPage).Take(perPage).All()

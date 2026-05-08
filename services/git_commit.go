@@ -86,8 +86,8 @@ func (s *GitService) GetCommits(owner, name, branch string, limit int) ([]Commit
 func (s *GitService) GetCommitCount(owner, name, ref string) (int, error) {
 	repoPath := s.getRepoPath(owner, name)
 
-	if ref == "" || ref == "HEAD" {
-		ref = "main"
+	if ref == "" {
+		ref = "HEAD"
 	}
 
 	cmd := exec.Command("git", "-C", repoPath, "rev-list", "--count", ref)
@@ -151,20 +151,20 @@ func (s *GitService) GetCommitList(owner, name, ref string, page, perPage int) (
 }
 
 // GetLastCommitInfo 获取指定引用的最新提交信息（消息、时间、作者）
-func (s *GitService) GetLastCommitInfo(owner, name, ref string) (message, time, author string, err error) {
+func (s *GitService) GetLastCommitInfo(owner, name, ref string) (message, time, author, hash string, err error) {
 	repoPath := s.getRepoPath(owner, name)
 
-	cmd := exec.Command("git", "-C", repoPath, "log", "-1", "--format=%s|%ci|%an", ref)
+	cmd := exec.Command("git", "-C", repoPath, "log", "-1", "--format=%s|%ci|%an|%h", ref)
 	output, err := cmd.Output()
 	if err != nil {
-		return "", "", "", fmt.Errorf("failed to get last commit info: %w", err)
+		return "", "", "", "", fmt.Errorf("failed to get last commit info: %w", err)
 	}
 
 	parts := strings.Split(strings.TrimSpace(string(output)), "|")
-	if len(parts) >= 3 {
-		return parts[0], parts[1], parts[2], nil
+	if len(parts) >= 4 {
+		return parts[0], parts[1], parts[2], parts[3], nil
 	}
-	return strings.TrimSpace(string(output)), "", "", nil
+	return strings.TrimSpace(string(output)), "", "", "", nil
 }
 
 // GetPRCommits 分页获取 PR 源分支相对于目标分支的提交
@@ -338,22 +338,46 @@ func (s *GitService) parseGitShortlog(output string) []GitContributor {
 	return contributors
 }
 
+// GetBranchCount 获取仓库分支总数
+func (s *GitService) GetBranchCount(owner, name string) (int, error) {
+	repoPath := s.getRepoPath(owner, name)
+
+	cmd := exec.Command("git", "-C", repoPath, "branch", "--list")
+	output, err := cmd.Output()
+	if err != nil {
+		return 0, fmt.Errorf("failed to list branches: %w", err)
+	}
+
+	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+	count := 0
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		trimmed = strings.TrimPrefix(trimmed, "* ")
+		if trimmed != "" {
+			count++
+		}
+	}
+	return count, nil
+}
+
 // GetTagCount 获取仓库标签总数
 func (s *GitService) GetTagCount(owner, name string) (int, error) {
 	repoPath := s.getRepoPath(owner, name)
 
-	cmd := exec.Command("git", "-C", repoPath, "tag")
+	cmd := exec.Command("git", "-C", repoPath, "tag", "--list")
 	output, err := cmd.Output()
 	if err != nil {
 		return 0, fmt.Errorf("failed to list tags: %w", err)
 	}
 
-	if strings.TrimSpace(string(output)) == "" {
-		return 0, nil
+	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+	count := 0
+	for _, line := range lines {
+		if strings.TrimSpace(line) != "" {
+			count++
+		}
 	}
-
-	tags := strings.Split(strings.TrimSpace(string(output)), "\n")
-	return len(tags), nil
+	return count, nil
 }
 
 // matchesDatePattern 检查字符串是否为 YYYY-MM-DD 日期格式

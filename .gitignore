@@ -31,6 +31,7 @@ go.work
 dist/
 projs/
 repos/
+uploads/
 
 # IDE
 .idea/

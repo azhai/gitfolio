@@ -1,7 +1,10 @@
 import React, { useState } from 'react'
-import { Box, Text, Input, Button, Flex, Link, Alert, AlertIcon, Spinner } from '@chakra-ui/react'
+import { Box, Text, Input, Button, Flex, Link, Alert, AlertIcon, Spinner, HStack } from '@chakra-ui/react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import { LuRocket as Rocket } from 'react-icons/lu'
+import { t } from '../i18n'
+import LanguageSwitcher from '../components/LanguageSwitcher'
 
 const LoginPage = () => {
   const navigate = useNavigate()
@@ -28,13 +31,13 @@ const LoginPage = () => {
     setError('')
 
     if (mode === 'login') {
-      if (!form.username.trim()) { setError('Please enter your username'); return }
-      if (!form.password) { setError('Please enter your password'); return }
+      if (!form.username.trim()) { setError(t('auth.enterUsername')); return }
+      if (!form.password) { setError(t('auth.enterPassword')); return }
     } else {
-      if (!form.username.trim()) { setError('Username is required'); return }
-      if (!form.email.trim()) { setError('Email is required'); return }
-      if (form.password.length < 6) { setError('Password must be at least 6 characters'); return }
-      if (form.password !== form.confirmPassword) { setError('Passwords do not match'); return }
+      if (!form.username.trim()) { setError(t('auth.usernameRequired')); return }
+      if (!form.email.trim()) { setError(t('auth.emailRequired')); return }
+      if (form.password.length < 6) { setError(t('auth.passwordMinLength')); return }
+      if (form.password !== form.confirmPassword) { setError(t('auth.passwordNotMatch')); return }
     }
 
     setLoading(true)
@@ -53,7 +56,7 @@ const LoginPage = () => {
         setForm({ username: '', email: '', password: '', confirmPassword: '' })
       }
     } catch (err) {
-      setError(err.message || (mode === 'login' ? 'Invalid credentials' : 'Registration failed'))
+      setError(err.message || (mode === 'login' ? t('auth.invalidCredentials') : t('auth.registrationFailed')))
     } finally {
       setLoading(false)
     }
@@ -72,9 +75,16 @@ const LoginPage = () => {
     >
       <Box w="100%" maxW="420px">
         <Box textAlign="center" mb="36px">
-          <Text fontSize="32px" fontWeight="bold" color="#16a34a">🚀 GitFolio</Text>
+          <Flex justify="space-between" align="flex-end" mb={2}>
+            <Box />
+            <LanguageSwitcher width="110px" height="34px" />
+          </Flex>
+          <HStack gap="8px" justifyContent="center">
+            <Rocket size={32} color="#16a34a" />
+            <Text fontSize="32px" fontWeight="bold" color="#16a34a">GitFolio</Text>
+          </HStack>
           <Text fontSize="14px" color="#888" mt={2}>
-            {isLogin ? 'Sign in to continue' : 'Create your account'}
+            {isLogin ? t('auth.signInToContinue') : t('auth.createYourAccount')}
           </Text>
         </Box>
 
@@ -96,7 +106,7 @@ const LoginPage = () => {
                   _hover={{ bg: active ? 'white' : 'rgba(255,255,255,0.5)' }}
                   onClick={() => { setMode(m); setError('') }}
                 >
-                  {m === 'login' ? 'Sign In' : 'Register'}
+                  {m === 'login' ? t('auth.signIn') : t('auth.signUp')}
                 </Button>
               )
             })}
@@ -104,11 +114,11 @@ const LoginPage = () => {
 
           <form onSubmit={handleSubmit}>
             <Box mb="16px">
-              <Text fontSize="13.5px" fontWeight="600" color="#333" mb="6px">Username</Text>
+              <Text fontSize="13.5px" fontWeight="600" color="#333" mb="6px">{t('auth.username')}</Text>
               <Input
                 value={form.username}
                 onChange={updateField('username')}
-                placeholder="Enter username"
+                placeholder={t('auth.placeholderUsername')}
                 h="40px" fontSize="14px"
                 borderRadius="8px" borderColor="#d1d5db"
                 _focus={{ borderColor: '#22c55e', boxShadow: '0 0 0 3px rgba(34,197,94,0.1)' }}
@@ -117,12 +127,12 @@ const LoginPage = () => {
 
             {!isLogin && (
               <Box mb="16px">
-                <Text fontSize="13.5px" fontWeight="600" color="#333" mb="6px">Email</Text>
+                <Text fontSize="13.5px" fontWeight="600" color="#333" mb="6px">{t('auth.email')}</Text>
                 <Input
                   type="email"
                   value={form.email}
                   onChange={updateField('email')}
-                  placeholder="you@example.com"
+                  placeholder={t('auth.placeholderEmail')}
                   h="40px" fontSize="14px"
                   borderRadius="8px" borderColor="#d1d5db"
                   _focus={{ borderColor: '#22c55e', boxShadow: '0 0 0 3px rgba(34,197,94,0.1)' }}
@@ -132,10 +142,10 @@ const LoginPage = () => {
 
             <Box mb="18px">
               <Flex justify="space-between" align="center" mb="6px">
-                <Text fontSize="13.5px" fontWeight="600" color="#333">Password</Text>
+                <Text fontSize="13.5px" fontWeight="600" color="#333">{t('auth.password')}</Text>
                 {isLogin && (
                   <Link href="#" fontSize="12.5px" color="#16a34a" _hover={{ textDecoration: 'underline' }}>
-                    Forgot password?
+                    {t('auth.forgotPassword')}
                   </Link>
                 )}
               </Flex>
@@ -143,7 +153,7 @@ const LoginPage = () => {
                 type="password"
                 value={form.password}
                 onChange={updateField('password')}
-                placeholder={isLogin ? 'Enter password' : 'Min 6 characters'}
+                placeholder={isLogin ? t('auth.placeholderPassword') : t('auth.placeholderPasswordMin')}
                 h="40px" fontSize="14px"
                 borderRadius="8px" borderColor="#d1d5db"
                 _focus={{ borderColor: '#22c55e', boxShadow: '0 0 0 3px rgba(34,197,94,0.1)' }}
@@ -152,12 +162,12 @@ const LoginPage = () => {
 
             {!isLogin && (
               <Box mb="20px">
-                <Text fontSize="13.5px" fontWeight="600" color="#333" mb="6px">Confirm Password</Text>
+                <Text fontSize="13.5px" fontWeight="600" color="#333" mb="6px">{t('auth.confirmPassword')}</Text>
                 <Input
                   type="password"
                   value={form.confirmPassword}
                   onChange={updateField('confirmPassword')}
-                  placeholder="Repeat password"
+                  placeholder={t('auth.placeholderConfirmPassword')}
                   h="40px" fontSize="14px"
                   borderRadius="8px" borderColor="#d1d5db"
                   _focus={{ borderColor: '#22c55e', boxShadow: '0 0 0 3px rgba(34,197,94,0.1)' }}
@@ -184,15 +194,15 @@ const LoginPage = () => {
               _hover={{ bg: '#16a34a' }}
               _active={{ bg: '#15803d' }}
               isLoading={loading}
-              loadingText={isLogin ? 'Signing in...' : 'Creating account...'}
+              loadingText={isLogin ? t('auth.signingIn') : t('auth.creatingAccount')}
               spinner={<Spinner size="sm" color="white" />}
             >
-              {isLogin ? 'Sign in' : 'Create account'}
+              {isLogin ? t('auth.signIn') : t('auth.createAccount')}
             </Button>
           </form>
 
           <Text textAlign="center" mt="20px" fontSize="13px" color="#888">
-            {isLogin ? "Don't have an account? " : 'Already have an account? '}
+            {isLogin ? t('auth.noAccount') : t('auth.hasAccount')}
             <Link
               color="#16a34a"
               fontWeight="500"
@@ -200,7 +210,7 @@ const LoginPage = () => {
               cursor="pointer"
               onClick={() => { setMode(isLogin ? 'register' : 'login'); setError('') }}
             >
-              {isLogin ? 'Sign up' : 'Sign in'}
+              {isLogin ? t('auth.signUp') : t('auth.signIn')}
             </Link>
           </Text>
         </Box>

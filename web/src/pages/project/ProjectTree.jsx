@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { useParams, useLocation } from 'react-router-dom'
 import { Box, Spinner } from '@chakra-ui/react'
 import FileTable from '../../components/FileTable'
@@ -10,6 +10,7 @@ const ProjectTree = () => {
   const location = useLocation()
   const [readmePath, setReadmePath] = useState(null)
   const [readmeLoading, setReadmeLoading] = useState(false)
+  const [refNames, setRefNames] = useState([])
 
   var basePath = '/' + owner + '/' + repo
   var path = location.pathname
@@ -22,9 +23,33 @@ const ProjectTree = () => {
     pathAfterBase = pathAfterBase.replace('/tree', '')
   }
 
-  var hasExtension = pathAfterBase.lastIndexOf('.') > pathAfterBase.lastIndexOf('/')
-  var isFile = hasExtension && pathAfterBase.length > 0
+  useEffect(function() {
+    Promise.all([
+      reposAPI.branches(owner, repo).catch(function() { return [] }),
+      reposAPI.tags(owner, repo).catch(function() { return [] }),
+    ]).then(function([branchData, tagData]) {
+      var branchList = Array.isArray(branchData && branchData.branches ? branchData.branches : branchData)
+        ? (branchData.branches || branchData) : []
+      var tagList = Array.isArray(tagData && tagData.tags ? tagData.tags : tagData)
+        ? (tagData.tags || tagData) : []
+      var names = []
+        .concat(branchList.map(function(b) { return typeof b === 'string' ? b : (b.name || '') }))
+        .concat(tagList.map(function(t) { return typeof t === 'string' ? t : (t.name || '') }))
+      setRefNames(names)
+    })
+  }, [owner, repo])
 
+  var parsed = useMemo(function() {
+    if (!pathAfterBase) return { ref: '', filePath: '' }
+    var firstSegment = pathAfterBase.split('/')[0]
+    if (refNames.indexOf(firstSegment) >= 0) {
+      return { ref: firstSegment, filePath: pathAfterBase.substring(firstSegment.length + 1) }
+    }
+    return { ref: '', filePath: pathAfterBase }
+  }, [pathAfterBase, refNames])
+
+  var hasExtension = parsed.filePath.lastIndexOf('.') > parsed.filePath.lastIndexOf('/')
+  var isFile = hasExtension && parsed.filePath.length > 0
   var isDir = !isFile
 
   useEffect(() => {
@@ -33,8 +58,9 @@ const ProjectTree = () => {
       return
     }
     setReadmeLoading(true)
-    var dirPath = pathAfterBase || ''
-    reposAPI.tree(owner, repo, dirPath).then(function(data) {
+    var dirPath = parsed.filePath || ''
+    var useRef = parsed.ref || 'HEAD'
+    reposAPI.tree(owner, repo, dirPath, useRef).then(function(data) {
       var entries = data && Array.isArray(data.entries) ? data.entries : []
       var readme = entries.find(function(e) {
         var n = (e.name || '').toLowerCase()
@@ -47,7 +73,7 @@ const ProjectTree = () => {
         setReadmePath(null)
       }
     }).catch(function() { setReadmePath(null) }).finally(function() { setReadmeLoading(false) })
-  }, [owner, repo, pathAfterBase, isFile])
+  }, [owner, repo, parsed.filePath, parsed.ref, isFile])
 
   if (isFile) {
     return <FileViewer />

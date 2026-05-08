@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react'
 import { Box, Text, Input, Flex, HStack, Badge, Button, Spinner, SimpleGrid } from '@chakra-ui/react'
 import { useNavigate } from 'react-router-dom'
 import { snippetsAPI } from '../api/index'
-import { timeAgo } from '../i18n/zh'
+import { timeAgo, t } from '../i18n'
+import { LuFileCode as FileCode } from 'react-icons/lu'
 
 var LANG_COLORS = {
   Go: '#00ADD8', JavaScript: '#F7DF1E', TypeScript: '#3178C6',
@@ -41,15 +42,18 @@ const Snippets = () => {
   return (
     <Box>
       <Flex justify="space-between" align="center" mb="20px">
-        <Text fontSize="22px" fontWeight="700" color="#333">📝 代码片段</Text>
+        <HStack gap="8px">
+          <FileCode size={22} color="#16a34a" />
+          <Text fontSize="22px" fontWeight="700" color="#333">{t('snippets.title')}</Text>
+        </HStack>
         <Button h="32px" px="16px" fontSize="13px" rounded="6px" bg="#22c55e" color="white"
           _hover={{ bg: '#16a34a' }} onClick={function() { navigate('/snippets/new') }}>
-          + 新建片段
+          {t('snippets.newSnippet')}
         </Button>
       </Flex>
 
       <Box bg="white" border="1px solid" borderColor="#e2e2e2" rounded="10px" p="20px" mb="24px">
-        <Input placeholder="搜索代码片段..." value={search} onChange={function(e) { setSearch(e.target.value) }}
+        <Input placeholder={t('snippets.searchPlaceholder')} value={search} onChange={function(e) { setSearch(e.target.value) }}
           h="36px" fontSize="14px" borderRadius="8px" borderColor="#d1d5db"
           _focus={{ borderColor: '#22c55e', boxShadow: '0 0 0 3px rgba(34,197,94,0.1)' }} />
       </Box>
@@ -77,15 +81,15 @@ const Snippets = () => {
                     <Badge fontSize="10px" px="6px" py="1px" rounded="4px"
                       bg={s.visibility === 'public' ? '#dcfce7' : '#fef2f2'}
                       color={s.visibility === 'public' ? '#16a34a' : '#dc2626'}>
-                      {s.visibility === 'public' ? '公开' : '私有'}
+                      {s.visibility === 'public' ? t('common.public') : t('common.private')}
                     </Badge>
                   )}
                 </HStack>
-                <Text fontSize="13px" color="#666" mb="10px" noOfLines={2}>{s.description || '暂无描述'}</Text>
+                <Text fontSize="13px" color="#666" mb="10px" noOfLines={2}>{s.description || t('dashboard.noDescription')}</Text>
                 <HStack gap="14px" fontSize="12px" color="#aaa">
                   {s.username && <Text>@{s.username}</Text>}
-                  {version > 1 && <Text>第{version}次修改</Text>}
-                  <Text>更新于 {timeAgo(s.updated_at)}</Text>
+                  {version > 1 && <Text>{t('snippets.versionN', { n: version })}</Text>}
+                  <Text>{t('snippets.updatedAt')} {timeAgo(s.updated_at)}</Text>
                 </HStack>
               </Box>
             </Box>
@@ -95,8 +99,8 @@ const Snippets = () => {
 
       {!loading && filtered.length === 0 && (
         <Box textAlign="center" py="60px" color="#aaa">
-          <Text fontSize="40px" mb="8px">📝</Text>
-          <Text fontSize="15px">未找到代码片段</Text>
+          <FileCode size={40} color="#ccc" mb="8px" />
+          <Text fontSize="15px">{t('snippets.notFound')}</Text>
         </Box>
       )}
     </Box>

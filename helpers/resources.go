@@ -88,7 +88,7 @@ func GetOwnerAndRepoWithPrivateAccess(c fiber.Ctx, ownerUsername, repoName strin
 		return nil, JSONError(c, HTTPStatusNotFound, "Repository not found")
 	}
 
-	if err := RequirePrivateAccess(c, result.Repo.IsPrivate, result.Repo.OwnerID); err != nil {
+	if err := RequirePrivateAccess(c, result.Repo.IsPrivate(), result.Repo.OwnerID); err != nil {
 		return nil, err
 	}
 

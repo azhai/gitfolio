@@ -1,16 +1,33 @@
 package main
 
 import (
+	"embed"
 	"fmt"
+	"io/fs"
 	"log"
 	"os"
 
+	"github.com/azhai/gitfolio/cmd/seed"
 	"github.com/azhai/gitfolio/config"
 	"github.com/azhai/gitfolio/models"
 	"github.com/azhai/gitfolio/routes"
-	"github.com/azhai/gitfolio/cmd/seed"
+	"github.com/azhai/gitfolio/services"
 	"github.com/azhai/goent/utils"
 )
+
+//go:embed web/dist
+var efs embed.FS
+
+func getEmbedFS(prefix string) fs.FS {
+	if prefix == "" {
+		return efs
+	}
+	fsys, err := fs.Sub(efs, prefix)
+	if err != nil {
+		panic(err)
+	}
+	return fsys
+}
 
 func main() {
 	cfg := config.Load(utils.NewEnv())
@@ -27,6 +44,10 @@ func main() {
 	}
 
 	app := routes.SetupRouter()
+
+	scheduler := services.NewSchedulerService(models.GetDB())
+	scheduler.Start()
+	defer scheduler.Stop()
 
 	port, url := config.GetServerInfo()
 	addr := fmt.Sprintf(":%d", port)

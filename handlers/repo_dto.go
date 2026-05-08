@@ -4,27 +4,24 @@ import (
 	"github.com/azhai/gitfolio/models"
 )
 
-// CreateRepositoryRequest 创建仓库请求
 type CreateRepositoryRequest struct {
 	Name          string `json:"name" validate:"required,min=1,max=255"`
 	Description   string `json:"description"`
 	Homepage      string `json:"homepage"`
-	IsPrivate     bool   `json:"is_private"`
+	ProjectType   string `json:"project_type"`
 	DefaultBranch string `json:"default_branch"`
 	CloneURL      string `json:"clone_url"`
 }
 
-// UpdateRepositoryRequest 更新仓库请求
 type UpdateRepositoryRequest struct {
 	Name          string `json:"name"`
 	Description   string `json:"description"`
 	Homepage      string `json:"homepage"`
-	IsPrivate     *bool  `json:"is_private"`
+	ProjectType   string `json:"project_type"`
 	DefaultBranch string `json:"default_branch"`
 	MirrorURL     string `json:"mirror_url"`
 }
 
-// RepositoryResponse 仓库详情响应，包含统计信息
 type RepositoryResponse struct {
 	ID            int64  `json:"id"`
 	Name          string `json:"name"`
@@ -34,7 +31,6 @@ type RepositoryResponse struct {
 	Owner         string `json:"owner"`
 	OwnerID       int64  `json:"owner_id"`
 	ProjectType   string `json:"project_type"`
-	IsPrivate     bool   `json:"is_private"`
 	IsFork        bool   `json:"is_fork"`
 	IsMirror      bool   `json:"is_mirror"`
 	MirrorURL     string `json:"mirror_url"`
@@ -48,6 +44,7 @@ type RepositoryResponse struct {
 	UpdatedAt     string `json:"updated_at"`
 
 	CommitsCount      int    `json:"commits_count"`
+	BranchesCount     int    `json:"branches_count"`
 	TagsCount         int    `json:"tags_count"`
 	ContributorsCount int    `json:"contributors_count"`
 	LastCommitAt      string `json:"last_commit_at"`
@@ -56,9 +53,10 @@ type RepositoryResponse struct {
 	OpenPRsCount      int    `json:"open_prs_count"`
 	ClosedPRsCount    int    `json:"closed_prs_count"`
 	MergedPRsCount    int    `json:"merged_prs_count"`
+	IsStarred         bool   `json:"is_starred"`
+	IsWatched         bool   `json:"is_watched"`
 }
 
-// ContributorResponse 贡献者响应
 type ContributorResponse struct {
 	ID           int64  `json:"id"`
 	Name         string `json:"name"`
@@ -69,7 +67,6 @@ type ContributorResponse struct {
 	UpdatedAt    string `json:"updated_at"`
 }
 
-// ToRepositoryResponse 将仓库模型转换为 API 响应，自动填充统计数据
 func ToRepositoryResponse(repo *models.Repository, owner *models.User) *RepositoryResponse {
 	var lastSyncAt string
 	if repo.LastSyncAt != nil {
@@ -85,9 +82,8 @@ func ToRepositoryResponse(repo *models.Repository, owner *models.User) *Reposito
 		Owner:         owner.Username,
 		OwnerID:       repo.OwnerID,
 		ProjectType:   repo.ProjectType,
-		IsPrivate:     repo.IsPrivate,
 		IsFork:        repo.IsFork,
-		IsMirror:      repo.IsMirror,
+		IsMirror:      repo.IsMirror(),
 		MirrorURL:     repo.MirrorURL,
 		LocalPath:     repo.LocalPath,
 		LastSyncAt:    lastSyncAt,
@@ -106,6 +102,7 @@ func ToRepositoryResponse(repo *models.Repository, owner *models.User) *Reposito
 		response.ForksCount = stats.ForksCount
 		response.WatchCount = stats.WatchCount
 		response.CommitsCount = stats.CommitsCount
+		response.BranchesCount = stats.BranchesCount
 		response.TagsCount = stats.TagsCount
 		response.ContributorsCount = stats.ContributorsCount
 		response.OpenIssuesCount = stats.OpenIssuesCount

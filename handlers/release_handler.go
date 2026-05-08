@@ -194,7 +194,7 @@ func SyncReleases(c fiber.Ctx) error {
 		return err
 	}
 
-	if !result.Repo.IsMirror {
+	if !result.Repo.IsMirror() {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "Only mirror repositories can sync releases",
 		})

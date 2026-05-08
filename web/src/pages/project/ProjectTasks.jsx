@@ -2,13 +2,13 @@ import React, { useState, useEffect } from 'react'
 import { Box, Text, Flex, VStack, HStack, Badge, Button, Spinner, Select } from '@chakra-ui/react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { tasksAPI } from '../../api/index'
-import { timeAgo } from '../../i18n/zh'
+import { t, timeAgo } from '../../i18n/index'
 
 var STATUS_CONFIG = {
-  draft: { label: '草稿', bg: '#f3f4f6', color: '#666', icon: '📝' },
-  progress: { label: '进行中', bg: '#dbeafe', color: '#2563eb', icon: '🔄' },
-  review: { label: '审核中', bg: '#fef3c7', color: '#d97706', icon: '👀' },
-  completed: { label: '已完成', bg: '#dcfce7', color: '#16a34a', icon: '✅' },
+  draft: { label: t('task.draft'), bg: '#f3f4f6', color: '#666', icon: '📝' },
+  progress: { label: t('task.inProgress'), bg: '#dbeafe', color: '#2563eb', icon: '🔄' },
+  review: { label: t('task.review'), bg: '#fef3c7', color: '#d97706', icon: '👀' },
+  completed: { label: t('task.done'), bg: '#dcfce7', color: '#16a34a', icon: '✅' },
 }
 
 var PRIORITY_COLORS = {
@@ -47,22 +47,22 @@ const ProjectTasks = () => {
     <Box>
       <Flex justify="space-between" align="center" mb="16px">
         <HStack gap="12px" fontSize="14px" fontWeight="600">
-          <Text color="#333">📋 任务</Text>
+          <Text color="#333">📋 {t('task.title')}</Text>
           <Text color="#888" fontSize="13px">({tasks.length})</Text>
         </HStack>
         <HStack gap="10px">
           <Select h="30px" w="150px" fontSize="13px" borderColor="#d1d5db" rounded="6px"
             value={statusFilter} onChange={function(e) { setStatusFilter(e.target.value) }}>
-            <option value="">全部状态</option>
-            <option value="draft">草稿</option>
-            <option value="progress">进行中</option>
-            <option value="review">审核中</option>
-            <option value="completed">已完成</option>
+            <option value="">{t('common.all')}</option>
+            <option value="draft">{t('task.draft')}</option>
+            <option value="progress">{t('task.inProgress')}</option>
+            <option value="review">{t('task.review')}</option>
+            <option value="completed">{t('task.done')}</option>
           </Select>
           <Button h="30px" px="14px" fontSize="13px" rounded="6px" bg="#22c55e" color="white"
             _hover={{ bg: '#16a34a' }}
             onClick={function() { navigate('/' + owner + '/' + repo + '/tasks/new') }}>
-            + 新建任务
+            + {t('task.newTask')}
           </Button>
         </HStack>
       </Flex>
@@ -105,7 +105,7 @@ const ProjectTasks = () => {
       {!loading && tasks.length === 0 && (
         <Box textAlign="center" py="50px" color="#aaa">
           <Text fontSize="36px" mb="6px">📋</Text>
-          <Text fontSize="14px">暂无任务</Text>
+          <Text fontSize="14px">{t('task.noTasks')}</Text>
         </Box>
       )}
     </Box>

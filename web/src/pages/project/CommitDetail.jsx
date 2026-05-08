@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react'
 import { Box, Text, Flex, VStack, HStack, Badge, Spinner } from '@chakra-ui/react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { reposAPI } from '../../api/index'
-import { timeAgo } from '../../i18n/zh'
+import { t, timeAgo } from '../../i18n/index'
+import { LuFileDiff as FileDiff, LuUser as User } from 'react-icons/lu'
 
 const CommitDetail = () => {
   const { owner, repo, sha } = useParams()
@@ -27,8 +28,8 @@ const CommitDetail = () => {
   if (!commit) {
     return (
       <Box textAlign="center" py="50px" color="#aaa">
-        <Text fontSize="36px" mb="6px">📝</Text>
-        <Text fontSize="14px">未找到提交</Text>
+        <FileDiff size={36} color="#ccc" mb="6px" />
+        <Text fontSize="14px">{t('commitDetail.notFound')}</Text>
       </Box>
     )
   }
@@ -44,7 +45,7 @@ const CommitDetail = () => {
   return (
     <Box>
       <Flex align="center" gap="10px" mb="6px">
-        <Text fontSize="18px" fontWeight="700" color="#333">提交详情</Text>
+        <Text fontSize="18px" fontWeight="700" color="#333">{t('commitDetail.title')}</Text>
         <Badge fontSize="13px" px="10px" py="2px" rounded="6px" bg="#f0fdf4" color="#16a34a" fontFamily="monospace">
           {hash.substring(0, 12)}
         </Badge>
@@ -58,13 +59,13 @@ const CommitDetail = () => {
           </Text>
         )}
         <HStack gap="16px" fontSize="13px" color="#888">
-          <Text>👤 {author}</Text>
+          <HStack gap="4px"><User size={13} /><Text>{author}</Text></HStack>
           {authorEmail && <Text>{authorEmail}</Text>}
           <Text>{timeAgo(date)}</Text>
         </HStack>
         {parents.length > 0 && (
           <HStack gap="8px" mt="8px" fontSize="12.5px" color="#888">
-            <Text>父提交:</Text>
+            <Text>{t('commitDetail.parentCommit')}</Text>
             {parents.map(function(p, idx) {
               var parentHash = typeof p === 'string' ? p : (p.hash || p.sha || '')
               return (
@@ -83,7 +84,7 @@ const CommitDetail = () => {
       {files.length > 0 && (
         <Box>
           <Text fontSize="13px" fontWeight="600" color="#333" mb="10px">
-            变更文件 ({files.length})
+            {t('commitDetail.changedFiles')} ({files.length})
           </Text>
           <VStack spacing="0" align="stretch" border="1px solid" borderColor="#e2e2e2" rounded="8px" overflow="hidden">
             {files.map(function(f, idx) {
@@ -96,7 +97,7 @@ const CommitDetail = () => {
                   borderBottom={idx < files.length - 1 ? '1px solid' : 'none'} borderColor="#f0f0f0"
                   _hover={{ bg: '#f9fafb' }}>
                   <Text fontSize="12px" color="#888" w="50px">
-                    {status === 'added' ? '新增' : status === 'deleted' ? '删除' : status === 'renamed' ? '重命名' : '修改'}
+                    {status === 'added' ? t('commitDetail.added') : status === 'deleted' ? t('commitDetail.deleted') : status === 'renamed' ? t('commitDetail.renamed') : t('commitDetail.modified')}
                   </Text>
                   <Text fontSize="13px" color="#333" flex={1} fontFamily="monospace" noOfLines={1}>{name}</Text>
                   <HStack gap="8px" fontSize="12px">

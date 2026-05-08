@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react'
 import { Box, Text, Flex, VStack, HStack, Badge, Button, Spinner } from '@chakra-ui/react'
 import { useParams } from 'react-router-dom'
 import { releasesAPI } from '../../api/index'
-import { timeAgo } from '../../i18n/zh'
+import { t, timeAgo } from '../../i18n/index'
+import { LuRocket as Rocket, LuUser as User } from 'react-icons/lu'
 
 const ProjectReleases = () => {
   const { owner, repo } = useParams()
@@ -36,14 +37,16 @@ const ProjectReleases = () => {
   return (
     <Box>
       <Flex justify="space-between" align="center" mb="16px">
-        <Text fontSize="14px" fontWeight="600" color="#333">
-          🚀 发行版 <Text as="span" color="#888" fontWeight="400">({releases.length})</Text>
-        </Text>
+        <HStack gap="8px" fontSize="14px" fontWeight="600" color="#333">
+          <Rocket size={16} color="#333" />
+          <Text>{t('release.title')}</Text>
+          <Text as="span" color="#888" fontWeight="400">({releases.length})</Text>
+        </HStack>
         <Button h="30px" px="14px" fontSize="13px" rounded="6px" variant="outline"
           borderColor="#d1d5db" color="#666"
           _hover={{ borderColor: '#22c55e', color: '#16a34a' }}
           onClick={handleSync} isLoading={syncing}>
-          从远程同步
+          {t('projectReleases.syncFromRemote')}
         </Button>
       </Flex>
 
@@ -65,12 +68,12 @@ const ProjectReleases = () => {
                     </Badge>
                     {r.is_draft && (
                       <Badge fontSize="11px" px="7px" py="1px" rounded="4px" bg="#fef2f2" color="#dc2626">
-                        草稿
+                        {t('projectReleases.draft')}
                       </Badge>
                     )}
                     {r.is_prerelease && (
                       <Badge fontSize="11px" px="7px" py="1px" rounded="4px" bg="#fffbeb" color="#f59e0b">
-                        预发布
+                        {t('projectReleases.prerelease')}
                       </Badge>
                     )}
                   </HStack>
@@ -80,7 +83,7 @@ const ProjectReleases = () => {
                     </Text>
                   )}
                   <HStack gap="14px" fontSize="12.5px" color="#888">
-                    {r.author && <Text>👤 {r.author.username || r.author.full_name || '未知'}</Text>}
+                    {r.author && <HStack gap="4px"><User size={13} /><Text>{r.author.username || r.author.full_name || t('common.unknownUser')}</Text></HStack>}
                     <Text>{timeAgo(r.created_at)}</Text>
                   </HStack>
                 </Box>
@@ -92,8 +95,8 @@ const ProjectReleases = () => {
 
       {!loading && releases.length === 0 && (
         <Box textAlign="center" py="50px" color="#aaa">
-          <Text fontSize="36px" mb="6px">🚀</Text>
-          <Text fontSize="14px">暂无发行版</Text>
+          <Rocket size={36} color="#ccc" mb="6px" />
+          <Text fontSize="14px">{t('projectReleases.noReleases')}</Text>
         </Box>
       )}
     </Box>

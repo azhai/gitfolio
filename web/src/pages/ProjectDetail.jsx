@@ -1,18 +1,25 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { useParams, Outlet } from 'react-router-dom'
-import { Box, Text, Spinner, Breadcrumb, BreadcrumbItem, BreadcrumbLink, HStack, Tabs, TabList, Tab, Badge } from '@chakra-ui/react'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { Box, Text, Spinner, HStack, Tabs, TabList, Tab, Badge, Flex, Button } from '@chakra-ui/react'
+import { useNavigate, useLocation, Link as RouterLink } from 'react-router-dom'
 import { reposAPI } from '../api/index'
-import { timeAgo } from '../i18n/zh'
+import { t, timeAgo } from '../i18n/index'
+import { ProjectTabIcons, IconMap } from '../components/Icons'
 
 const TABS = [
-  { key: 'tree', label: '📂 文件' },
-  { key: 'issues', label: '⚠️ 议题' },
-  { key: 'pull_requests', label: '🔀 合并请求' },
-  { key: 'commits', label: '📝 提交' },
-  { key: 'tasks', label: '📋 任务' },
-  { key: 'settings', label: '⚙️ 设置' },
+  { key: 'tree', labelKey: 'project.files', icon: 'code' },
+  { key: 'commits', labelKey: 'project.commits', icon: 'commits' },
+  { key: 'pull_requests', labelKey: 'project.mergeRequests', icon: 'pull_requests' },
+  { key: 'issues', labelKey: 'project.issues', icon: 'issues' },
+  { key: 'tasks', labelKey: 'project.tasks', icon: 'tasks' },
+  { key: 'settings', labelKey: 'project.settings', icon: 'settings' },
 ]
+
+function TabIcon({ name, size = 14 }) {
+  var Comp = ProjectTabIcons[name]
+  if (!Comp) return null
+  return <Comp size={size} strokeWidth={2} />
+}
 
 const ProjectDetail = () => {
   const { owner, repo } = useParams()
@@ -20,22 +27,69 @@ const ProjectDetail = () => {
   const location = useLocation()
   const [repoInfo, setRepoInfo] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [isStarred, setIsStarred] = useState(false)
+  const [isWatched, setIsWatched] = useState(false)
+  const [starCount, setStarCount] = useState(0)
+  const [watchCount, setWatchCount] = useState(0)
+  const [actionLoading, setActionLoading] = useState(false)
 
-  useEffect(() => {
+  var fetchRepo = useCallback(function() {
     reposAPI.get(owner, repo)
-      .then(setRepoInfo)
-      .catch(() => setRepoInfo(null))
-      .finally(() => setLoading(false))
+      .then(function(info) {
+        setRepoInfo(info)
+        setIsStarred(!!info.is_starred)
+        setIsWatched(!!info.is_watched)
+        setStarCount(info.stars_count || 0)
+        setWatchCount(info.watch_count || 0)
+      })
+      .catch(function() { setRepoInfo(null) })
+      .finally(function() { setLoading(false) })
+    reposAPI.refreshStats(owner, repo).then(function() {
+      reposAPI.get(owner, repo).then(function(info) {
+        setRepoInfo(info)
+        setStarCount(info.stars_count || 0)
+        setWatchCount(info.watch_count || 0)
+      })
+    }).catch(function() {})
   }, [owner, repo])
+
+  useEffect(function() {
+    setLoading(true)
+    fetchRepo()
+  }, [fetchRepo])
+
+  function handleStar() {
+    if (actionLoading) return
+    setActionLoading(true)
+    var api = isStarred ? reposAPI.unstar(owner, repo) : reposAPI.star(owner, repo)
+    api.then(function() {
+      setIsStarred(!isStarred)
+      setStarCount(function(prev) { return isStarred ? Math.max(0, prev - 1) : prev + 1 })
+    })
+    .catch(function() {})
+    .finally(function() { setActionLoading(false) })
+  }
+
+  function handleWatch() {
+    if (actionLoading) return
+    setActionLoading(true)
+    var api = isWatched ? reposAPI.unwatch(owner, repo) : reposAPI.watch(owner, repo)
+    api.then(function() {
+      setIsWatched(!isWatched)
+      setWatchCount(function(prev) { return isWatched ? Math.max(0, prev - 1) : prev + 1 })
+    })
+    .catch(function() {})
+    .finally(function() { setActionLoading(false) })
+  }
 
   var basePath = '/' + owner + '/' + repo
   var path = location.pathname
 
   function getActiveTab() {
     if (path === basePath || path.startsWith(basePath + '/tree')) return 0
-    if (path.startsWith(basePath + '/issues')) return 1
+    if (path.startsWith(basePath + '/commits')) return 1
     if (path.startsWith(basePath + '/pull_requests')) return 2
-    if (path.startsWith(basePath + '/commits')) return 3
+    if (path.startsWith(basePath + '/issues')) return 3
     if (path.startsWith(basePath + '/tasks')) return 4
     if (path.startsWith(basePath + '/settings')) return 5
     return 0
@@ -46,6 +100,13 @@ const ProjectDetail = () => {
     if (tab.key === 'tree') navigate(basePath)
     else navigate(basePath + '/' + tab.key)
   }
+
+  var StarIcon = IconMap.star
+  var ForkIcon = IconMap.pr
+  var EyeIcon = IconMap.eye
+  var CommitIcon = IconMap.commit
+  var BranchIcon = IconMap.branch
+  var TagIcon = IconMap.tag
 
   if (loading) {
     return (
@@ -58,60 +119,94 @@ const ProjectDetail = () => {
   var info = repoInfo || {}
   return (
     <Box>
-      <Breadcrumb fontSize="13px" color="#888" mb="12px" separator="/">
-        <BreadcrumbItem><BreadcrumbLink href="/">GitFolio</BreadcrumbLink></BreadcrumbItem>
-        <BreadcrumbItem isCurrentPage>
-          <Text color="#333">{owner} / <Text as="span" fontWeight="600">{repo}</Text></Text>
-        </BreadcrumbItem>
-      </Breadcrumb>
-
       <HStack gap="10px" mb="16px" align="center" flexWrap="wrap">
         <Text fontSize="20px" fontWeight="700" color="#333">{info.name || repo}</Text>
-        <Text fontSize="13px" color="#666">{info.description || ''}</Text>
-        {info.is_private && (
-          <Badge fontSize="11px" px="8px" py="1px" rounded="4px"
-            bg="#fef2f2" color="#dc2626" fontWeight="500">私有</Badge>
-        )}
         {info.is_mirror && (
-          <Box as="a" href={info.mirror_url || '#'} target="_blank" rel="noopener noreferrer"
-            fontSize="11px" px="8px" py="2px" bg="#eff6ff" color="#2563eb" fontWeight="600"
-            border="1px solid #bfdbfe" rounded="4px" cursor="pointer"
-            _hover={{ bg: '#dbeafe', borderColor: '#93c5fd', textDecoration: 'none' }}
-            transition="all 0.15s">
-            镜像
-          </Box>
+            <Box as="a" href={info.mirror_url || '#'} target="_blank" rel="noopener noreferrer"
+              fontSize="11px" px="8px" py="2px" bg="#eff6ff" color="#2563eb" fontWeight="600"
+              border="1px solid #bfdbfe" rounded="4px" cursor="pointer"
+              _hover={{ bg: '#dbeafe', borderColor: '#93c5fd', textDecoration: 'none' }}
+              transition="all 0.15s">
+              {t('project.mirror')}
+            </Box>
         )}
-        {info.default_branch && (
+        <Text fontSize="13px" color="#666">{info.description || ''}</Text>
+        {info.project_type === 'private' && (
           <Badge fontSize="11px" px="8px" py="1px" rounded="4px"
-            bg="#f3f4f6" color="#666" fontWeight="500">🌿 {info.default_branch}</Badge>
+            bg="#fef2f2" color="#dc2626" fontWeight="500">{t('common.private')}</Badge>
+        )}
+        {info.project_type === 'public' && (
+          <Badge fontSize="11px" px="8px" py="1px" rounded="4px"
+            bg="#dcfce7" color="#16a34a" fontWeight="500">{t('common.public')}</Badge>
+        )}
+        {info.project_type === 'local' && (
+          <Badge fontSize="11px" px="8px" py="1px" rounded="4px"
+            bg="#f3f4f6" color="#6b7280" fontWeight="500">{t('common.local')}</Badge>
         )}
       </HStack>
 
-      <HStack gap="16px" mb="16px" fontSize="12.5px" color="#888">
-        <Text>⭐ {info.stars_count || 0}</Text>
-        <Text>🔀 {info.forks_count || 0}</Text>
-        <Text>👁 {info.watch_count || 0}</Text>
-        <Text>📝 {info.commits_count || 0} 次提交</Text>
-        <Text>🌿 {info.branches_count || 0} 个分支</Text>
-        <Text>🏷️ {info.tags_count || 0} 个标签</Text>
+      <HStack gap="8px" mb="16px" fontSize="12.5px" flexWrap="wrap">
+        <RouterLink to={basePath + '/branches'}>
+          <HStack gap="3px" color="#888" _hover={{ color: '#16a34a' }} transition="color 0.15s">
+            <BranchIcon size={13} /><Text>{t('project.branchesCount', { count: info.branches_count || 0 })}</Text>
+          </HStack>
+        </RouterLink>
+        <RouterLink to={basePath + '/tags'}>
+          <HStack gap="3px" color="#888" _hover={{ color: '#16a34a' }} transition="color 0.15s">
+            <TagIcon size={13} /><Text>{t('project.tagsCount', { count: info.tags_count || 0 })}</Text>
+          </HStack>
+        </RouterLink>
+        <RouterLink to={basePath + '/commits'}>
+          <HStack gap="3px" color="#888" _hover={{ color: '#16a34a' }} transition="color 0.15s">
+            <CommitIcon size={13} /><Text>{t('project.commitsCount', { count: info.commits_count || 0 })}</Text>
+          </HStack>
+        </RouterLink>
+        <HStack gap="3px" ml="8px">
+          <Button size="xs" h="24px" px="8px" fontSize="12px" rounded="4px"
+            bg={isStarred ? '#fff7ed' : '#f6f8fa'} border="1px solid" borderColor={isStarred ? '#fdba74' : '#d1d5db'}
+            color={isStarred ? '#ea580c' : '#555'}
+            _hover={{ bg: isStarred ? '#ffedd5' : '#eff2f5' }}
+            _active={{ bg: isStarred ? '#ffedd5' : '#eff2f5' }}
+            leftIcon={<StarIcon size={12} color={isStarred ? '#ea580c' : '#888'} />}
+            onClick={handleStar} isLoading={actionLoading}>
+            {isStarred ? t('project.starred') : t('project.star')} {starCount}
+          </Button>
+        </HStack>
+        <HStack gap="3px">
+          <Button size="xs" h="24px" px="8px" fontSize="12px" rounded="4px"
+            bg="#f6f8fa" border="1px solid" borderColor="#d1d5db" color="#555"
+            _hover={{ bg: '#eff2f5' }} _active={{ bg: '#eff2f5' }}
+            leftIcon={<ForkIcon size={12} color="#888" />}>
+            {t('project.fork')} {info.forks_count || 0}
+          </Button>
+        </HStack>
+        <HStack gap="3px">
+          <Button size="xs" h="24px" px="8px" fontSize="12px" rounded="4px"
+            bg={isWatched ? '#f0fdf4' : '#f6f8fa'} border="1px solid" borderColor={isWatched ? '#86efac' : '#d1d5db'}
+            color={isWatched ? '#16a34a' : '#555'}
+            _hover={{ bg: isWatched ? '#dcfce7' : '#eff2f5' }}
+            _active={{ bg: isWatched ? '#dcfce7' : '#eff2f5' }}
+            leftIcon={<EyeIcon size={12} color={isWatched ? '#16a34a' : '#888'} />}
+            onClick={handleWatch} isLoading={actionLoading}>
+            {isWatched ? t('project.watched') : t('project.watch')} {watchCount}
+          </Button>
+        </HStack>
       </HStack>
 
-      <Tabs index={getActiveTab()} onChange={onTabChange} colorScheme="green" mb="20px">
-        <TabList borderColor="#e5e7eb" pb={0}>
-          {TABS.map(function(tab) {
-            return (
-              <Tab
-                key={tab.key}
-                fontSize="13px"
-                fontWeight="500"
-                _selected={{ color: '#16a34a', borderColor: '#16a34a' }}
-              >
-                {tab.label}
-              </Tab>
-            )
-          })}
-        </TabList>
-      </Tabs>
+      <Flex align="center" justify="space-between" borderBottom="1px solid" borderColor="#e5e7eb" mb="20px">
+        <Tabs index={getActiveTab()} onChange={onTabChange} colorScheme="green">
+          <TabList borderColor="transparent" pb={0}>
+            {TABS.map(function(tab) {
+              return (
+                <Tab key={tab.key} fontSize="13.5px" fontWeight="500" px="18px" pb="10px"
+                  _selected={{ color: '#16a34a', borderColor: '#16a34a' }}>
+                  <HStack gap="5px"><TabIcon name={tab.icon} /><Text>{t(tab.labelKey)}</Text></HStack>
+                </Tab>
+              )
+            })}
+          </TabList>
+        </Tabs>
+      </Flex>
 
       <Outlet key={location.pathname} />
     </Box>

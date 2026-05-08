@@ -44,7 +44,7 @@ func TestCompleteUserFlow(t *testing.T) {
 		payload := map[string]any{
 			"name":        "flow-repo",
 			"description": "Test repository for flow",
-			"is_private":  false,
+			"project_type":  "public",
 		}
 
 		w, _ := MakeRequest(router, "POST", "/api/v1/repos", payload, headers)
@@ -126,7 +126,7 @@ func TestCollaborationFlow(t *testing.T) {
 	repoPayload := map[string]any{
 		"name":        "collab-repo",
 		"description": "Collaboration test repository",
-		"is_private":  false,
+		"project_type":  "public",
 	}
 	w, _ = MakeRequest(router, "POST", "/api/v1/repos", repoPayload, ownerHeaders)
 	AssertStatus(t, http.StatusCreated, w.StatusCode)
@@ -185,7 +185,7 @@ func TestPrivateRepositoryFlow(t *testing.T) {
 	repoPayload := map[string]any{
 		"name":        "private-repo",
 		"description": "Private repository",
-		"is_private":  true,
+		"project_type":  "private",
 	}
 	w, _ = MakeRequest(router, "POST", "/api/v1/repos", repoPayload, ownerHeaders)
 	AssertStatus(t, http.StatusCreated, w.StatusCode)

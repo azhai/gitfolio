@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react'
 import { Box, Text, Flex, VStack, HStack, Badge, Spinner, Button } from '@chakra-ui/react'
-import { useParams } from 'react-router-dom'
+import { useParams, useNavigate, Link as RouterLink } from 'react-router-dom'
 import { reposAPI } from '../../api/index'
+import { t } from '../../i18n/index'
+import { LuGitBranch as GitBranch } from 'react-icons/lu'
 
 var PAGE_SIZE = 20
 
@@ -66,6 +68,7 @@ function PaginationBar(_ref) {
 
 const ProjectBranches = () => {
   const { owner, repo } = useParams()
+  const navigate = useNavigate()
   const [branches, setBranches] = useState([])
   const [stagedFiles, setStagedFiles] = useState([])
   const [workingFiles, setWorkingFiles] = useState([])
@@ -95,9 +98,11 @@ const ProjectBranches = () => {
 
   return (
     <Box>
-      <Text fontSize="14px" fontWeight="600" color="#333" mb="16px">
-        🌿 分支 <Text as="span" color="#888" fontWeight="400">({branches.length})</Text>
-      </Text>
+      <HStack gap="8px" fontSize="14px" fontWeight="600" color="#333" mb="16px">
+        <GitBranch size={16} color="#333" />
+        <Text>{t('branch.title')}</Text>
+        <Text as="span" color="#888" fontWeight="400">({branches.length})</Text>
+      </HStack>
 
       <VStack spacing="0" align="stretch" border="1px solid" borderColor="#e2e2e2" rounded="10px" overflow="hidden">
         {pageBranches.map(function(branch, idx) {
@@ -114,13 +119,17 @@ const ProjectBranches = () => {
               transition="background-color 0.15s"
             >
               <HStack gap="10px">
-                <Text fontSize="14px">🌿</Text>
-                <Text fontSize="13.5px" fontWeight="500" color="#16a34a" fontFamily="monospace">
-                  {name}
-                </Text>
+                <GitBranch size={14} color="#16a34a" />
+                <RouterLink to={'/' + owner + '/' + repo + '/tree/' + name}
+                  style={{ textDecoration: 'none' }}>
+                  <Text fontSize="13.5px" fontWeight="500" color="#16a34a" fontFamily="monospace"
+                    _hover={{ textDecoration: 'underline' }}>
+                    {name}
+                  </Text>
+                </RouterLink>
                 {isDefault && (
                   <Badge fontSize="11px" px="7px" py="1px" rounded="4px" bg="#dcfce7" color="#16a34a">
-                    默认
+                    {t('projectBranches.default')}
                   </Badge>
                 )}
               </HStack>
@@ -133,7 +142,7 @@ const ProjectBranches = () => {
 
       {stagedFiles.length > 0 && (
         <Box mt="20px">
-          <Text fontSize="13px" fontWeight="600" color="#333" mb="8px">已暂存文件 ({stagedFiles.length})</Text>
+          <Text fontSize="13px" fontWeight="600" color="#333" mb="8px">{t('projectBranches.stagedFiles')} ({stagedFiles.length})</Text>
           <VStack spacing="0" align="stretch" border="1px solid" borderColor="#e2e2e2" rounded="8px" overflow="hidden">
             {stagedFiles.map(function(f, idx) {
               return (
@@ -149,7 +158,7 @@ const ProjectBranches = () => {
 
       {workingFiles.length > 0 && (
         <Box mt="16px">
-          <Text fontSize="13px" fontWeight="600" color="#333" mb="8px">已修改文件 ({workingFiles.length})</Text>
+          <Text fontSize="13px" fontWeight="600" color="#333" mb="8px">{t('projectBranches.modifiedFiles')} ({workingFiles.length})</Text>
           <VStack spacing="0" align="stretch" border="1px solid" borderColor="#e2e2e2" rounded="8px" overflow="hidden">
             {workingFiles.map(function(f, idx) {
               return (
@@ -165,8 +174,8 @@ const ProjectBranches = () => {
 
       {!loading && branches.length === 0 && (
         <Box textAlign="center" py="50px" color="#aaa">
-          <Text fontSize="36px" mb="6px">🌿</Text>
-          <Text fontSize="14px">暂无分支</Text>
+          <GitBranch size={36} color="#ccc" mb="6px" />
+          <Text fontSize="14px">{t('projectBranches.noBranches')}</Text>
         </Box>
       )}
     </Box>

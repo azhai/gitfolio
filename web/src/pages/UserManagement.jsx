@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { Box, Text, Flex, VStack, HStack, Badge, Button, Spinner, Input, useToast } from '@chakra-ui/react'
 import { usersAPI } from '../api/index'
-import { timeAgo } from '../i18n/zh'
+import { t, timeAgo } from '../i18n/index'
 
 const UserManagement = () => {
   const [users, setUsers] = useState([])
@@ -31,11 +31,11 @@ const UserManagement = () => {
   return (
     <Box>
       <Flex justify="space-between" align="center" mb="20px">
-        <Text fontSize="22px" fontWeight="700" color="#333">👤 用户管理</Text>
+        <Text fontSize="22px" fontWeight="700" color="#333">👤 {t('userMgmt.title')}</Text>
       </Flex>
 
       <Box bg="white" border="1px solid" borderColor="#e2e2e2" rounded="10px" p="16px" mb="20px">
-        <Input placeholder="搜索用户..." value={search} onChange={function(e) { setSearch(e.target.value) }}
+        <Input placeholder={t('userMgmt.searchPlaceholder')} value={search} onChange={function(e) { setSearch(e.target.value) }}
           h="36px" fontSize="14px" borderRadius="8px" borderColor="#d1d5db"
           _focus={{ borderColor: '#22c55e', boxShadow: '0 0 0 3px rgba(34,197,94,0.1)' }} />
       </Box>
@@ -57,13 +57,13 @@ const UserManagement = () => {
                     <Text fontSize="15px" fontWeight="600" color="#333">{user.full_name || user.username}</Text>
                     <Text fontSize="13px" color="#888">@{user.username}</Text>
                     {user.is_admin && (
-                      <Badge fontSize="11px" px="6px" py="1px" rounded="4px" bg="#ede9fe" color="#7c3aed">管理员</Badge>
+                      <Badge fontSize="11px" px="6px" py="1px" rounded="4px" bg="#ede9fe" color="#7c3aed">{t('userMgmt.admin')}</Badge>
                     )}
                   </HStack>
                   <Text fontSize="13px" color="#666">{user.email || ''}</Text>
                   <HStack gap="14px" mt="6px" fontSize="12px" color="#888">
-                    <Text>注册于 {timeAgo(user.created_at)}</Text>
-                    {user.last_login && <Text>最后登录 {timeAgo(user.last_login)}</Text>}
+                    <Text>{t('common.createdAt')} {timeAgo(user.created_at)}</Text>
+                    {user.last_login && <Text>{t('userMgmt.lastLogin')} {timeAgo(user.last_login)}</Text>}
                   </HStack>
                 </Box>
               </Flex>
@@ -75,7 +75,7 @@ const UserManagement = () => {
       {!loading && filtered.length === 0 && (
         <Box textAlign="center" py="60px" color="#aaa">
           <Text fontSize="40px" mb="8px">👤</Text>
-          <Text fontSize="15px">暂无用户</Text>
+          <Text fontSize="15px">{t('userMgmt.noUsers')}</Text>
         </Box>
       )}
     </Box>

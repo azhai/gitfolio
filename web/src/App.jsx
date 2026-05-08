@@ -15,6 +15,7 @@ import Activity from './pages/Activity'
 import Snippets from './pages/Snippets'
 import { SnippetDetail, NewSnippet, EditSnippet } from './pages/SnippetPages'
 import UserManagement from './pages/UserManagement'
+import AdminPage from './pages/AdminPage'
 import UserProfile from './pages/UserProfile'
 import UserSettings from './pages/UserSettings'
 import ProjectDetail from './pages/ProjectDetail'
@@ -55,6 +56,7 @@ function App() {
           <Route path="snippets/:id" element={<SnippetDetail />} />
           <Route path="snippets/:id/edit" element={<EditSnippet />} />
           <Route path="users" element={<UserManagement />} />
+          <Route path="admin" element={<AdminPage />} />
           <Route path="users/:username" element={<UserProfile />} />
           <Route path="settings" element={<UserSettings />} />
           <Route path=":owner/:repo" element={<ProjectDetail />}>

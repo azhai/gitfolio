@@ -482,8 +482,7 @@ func (s *SyncService) SyncGitHubRepo(ctx context.Context, owner, repo string, to
 		repository.DefaultBranch = ghRepo.DefaultBranch
 		repository.UpdatedAt = ghRepo.UpdatedAt
 		repository.LastSyncAt = &now
-		repository.ProjectType = "mirror"
-		repository.IsMirror = true
+		repository.ProjectType = "public"
 		repository.MirrorURL = ghRepo.HTMLURL
 		if err := s.db.Repository.Save().One(&repository); err != nil {
 			return nil, err
@@ -494,8 +493,7 @@ func (s *SyncService) SyncGitHubRepo(ctx context.Context, owner, repo string, to
 			Description:   ghRepo.Description,
 			Homepage:      ghRepo.Homepage,
 			OwnerID:       repoOwner.ID,
-			ProjectType:   "mirror",
-			IsMirror:      true,
+			ProjectType:   "public",
 			MirrorURL:     ghRepo.HTMLURL,
 			LastSyncAt:    &now,
 			DefaultBranch: ghRepo.DefaultBranch,

@@ -29,10 +29,11 @@ func (s *StatsService) UpdateRepositoryStats(repoID int64, owner, name string) e
 
 	gitSvc := NewGitService()
 	commitsCount, _ := gitSvc.GetCommitCount(owner, name, "")
+	branchesCount, _ := gitSvc.GetBranchCount(owner, name)
 	tagsCount, _ := gitSvc.GetTagCount(owner, name)
 
 	if commitsCount > 0 {
-		_, commitTimeStr, _, err := gitSvc.GetLastCommitInfo(owner, name, "")
+		_, commitTimeStr, _, _, err := gitSvc.GetLastCommitInfo(owner, name, "")
 		if err == nil && commitTimeStr != "" {
 			if commitTime, err := time.Parse("2006-01-02 15:04:05 -0700", commitTimeStr); err == nil {
 				repo, repoErr := s.db.Repository.Select().Where("id = ?", repoID).One()
@@ -51,6 +52,7 @@ func (s *StatsService) UpdateRepositoryStats(repoID int64, owner, name string) e
 	stats.MergedPRsCount = int(mergedPRs)
 	stats.ContributorsCount = int(contributors)
 	stats.CommitsCount = commitsCount
+	stats.BranchesCount = branchesCount
 	stats.TagsCount = tagsCount
 	stats.UpdatedAt = time.Now()
 

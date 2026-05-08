@@ -115,7 +115,7 @@ func GetRepositoryBranches(c fiber.Ctx) error {
 
 	response := fiber.Map{"branches": branches}
 
-	if !result.Repo.IsMirror {
+	if !result.Repo.IsMirror() {
 		isBare := gitSvc.IsBareRepository(result.Owner.Username, result.Repo.Name)
 		if !isBare {
 			stagedFiles, _ := gitSvc.GetStagedFiles(result.Owner.Username, result.Repo.Name)
@@ -157,19 +157,19 @@ func GetRepositoryLastCommit(c fiber.Ctx) error {
 		return err
 	}
 
-	empty := fiber.Map{"message": "", "time": "", "author": ""}
+	empty := fiber.Map{"message": "", "time": "", "author": "", "hash": ""}
 	if result.Repo.LocalPath == "" {
 		return c.Status(fiber.StatusOK).JSON(empty)
 	}
 
 	ref := c.Query("ref", "HEAD")
 	gitSvc := services.NewGitService()
-	message, time, author, err := gitSvc.GetLastCommitInfo(result.Owner.Username, result.Repo.Name, ref)
+	message, time, author, hash, err := gitSvc.GetLastCommitInfo(result.Owner.Username, result.Repo.Name, ref)
 	if err != nil {
 		return c.Status(fiber.StatusOK).JSON(empty)
 	}
 
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": message, "time": time, "author": author})
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": message, "time": time, "author": author, "hash": hash})
 }
 
 // GetRepositoryCommits 获取提交列表，支持单分支或全分支图模式

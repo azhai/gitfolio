@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react'
 import { Box, Text, Flex, VStack, HStack, Spinner } from '@chakra-ui/react'
-import { useParams } from 'react-router-dom'
+import { useParams, Link as RouterLink } from 'react-router-dom'
 import { reposAPI } from '../../api/index'
+import { t } from '../../i18n/index'
 
 const ProjectTags = () => {
   const { owner, repo } = useParams()
@@ -25,7 +26,7 @@ const ProjectTags = () => {
   return (
     <Box>
       <Text fontSize="14px" fontWeight="600" color="#333" mb="16px">
-        🏷️ 标签 <Text as="span" color="#888" fontWeight="400">({tags.length})</Text>
+        🏷️ {t('tag.title')} <Text as="span" color="#888" fontWeight="400">({tags.length})</Text>
       </Text>
 
       <VStack spacing="0" align="stretch" border="1px solid" borderColor="#e2e2e2" rounded="10px" overflow="hidden">
@@ -43,9 +44,13 @@ const ProjectTags = () => {
             >
               <HStack gap="10px">
                 <Text fontSize="14px">🏷️</Text>
-                <Text fontSize="13.5px" fontWeight="500" color="#7c3aed" fontFamily="monospace">
-                  {name}
-                </Text>
+                <RouterLink to={'/' + owner + '/' + repo + '/tree/' + name}
+                  style={{ textDecoration: 'none' }}>
+                  <Text fontSize="13.5px" fontWeight="500" color="#7c3aed" fontFamily="monospace"
+                    _hover={{ textDecoration: 'underline' }}>
+                    {name}
+                  </Text>
+                </RouterLink>
               </HStack>
             </Flex>
           )
@@ -55,7 +60,7 @@ const ProjectTags = () => {
       {!loading && tags.length === 0 && (
         <Box textAlign="center" py="50px" color="#aaa">
           <Text fontSize="36px" mb="6px">🏷️</Text>
-          <Text fontSize="14px">暂无标签</Text>
+          <Text fontSize="14px">{t('projectTags.noTags')}</Text>
         </Box>
       )}
     </Box>

@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react'
 import { Box, Text, Input, Flex, HStack, Badge, Button, Spinner, SimpleGrid } from '@chakra-ui/react'
 import { Link as RouterLink } from 'react-router-dom'
 import { reposAPI } from '../api/index'
-import { timeAgo } from '../i18n/zh'
+import { IconMap, NavIcons } from '../components/Icons'
+import { timeAgo, t } from '../i18n'
 
 var LANG_COLORS = {
   Go: '#00ADD8', JavaScript: '#F7DF1E', TypeScript: '#3178C6',
@@ -14,9 +15,9 @@ var LANG_COLORS = {
 }
 
 var TABS = [
-  { key: 'all', label: '全部' },
-  { key: 'my', label: '我的' },
-  { key: 'starred', label: '星标' },
+  { key: 'all', labelKey: 'projects.tabAll' },
+  { key: 'my', labelKey: 'projects.tabMy' },
+  { key: 'starred', labelKey: 'projects.tabStarred' },
 ]
 
 const Projects = () => {
@@ -51,36 +52,39 @@ const Projects = () => {
   return (
     <Box>
       <Flex justify="space-between" align="center" mb="20px">
-        <Text fontSize="22px" fontWeight="700" color="#333">📂 项目</Text>
+        <Flex align="center" gap="8px">
+          <NavIcons.project size={22} color="#333" />
+          <Text fontSize="22px" fontWeight="700" color="#333">{t('projects.title')}</Text>
+        </Flex>
         <HStack gap="8px">
           <Button h="32px" px="16px" fontSize="13px" rounded="6px" variant="outline"
             borderColor="#d1d5db" color="#666" _hover={{ borderColor: '#22c55e', color: '#16a34a' }}
             as={RouterLink} to="/projects/migrate">
-            迁移项目
+            {t('projects.migrateProject')}
           </Button>
           <Button h="32px" px="16px" fontSize="13px" rounded="6px" bg="#22c55e" color="white"
             _hover={{ bg: '#16a34a' }} as={RouterLink} to="/projects/new">
-            + 新建项目
+            {t('projects.newProject')}
           </Button>
         </HStack>
       </Flex>
 
       <Flex gap="16px" mb="16px">
-        {TABS.map(function(t) {
-          var isActive = tab === t.key
+        {TABS.map(function(item) {
+          var isActive = tab === item.key
           return (
-            <Button key={t.key} h="30px" px="14px" fontSize="13px" rounded="6px"
+            <Button key={item.key} h="30px" px="14px" fontSize="13px" rounded="6px"
               bg={isActive ? '#22c55e' : '#f3f4f6'} color={isActive ? 'white' : '#666'}
               _hover={{ bg: isActive ? '#16a34a' : '#e5e7eb' }}
-              onClick={function() { setTab(t.key) }}>
-              {t.label}
+              onClick={function() { setTab(item.key) }}>
+              {t(item.labelKey)}
             </Button>
           )
         })}
       </Flex>
 
       <Box bg="white" border="1px solid" borderColor="#e2e2e2" rounded="10px" p="20px" mb="24px">
-        <Input placeholder="搜索项目..." value={search} onChange={function(e) { setSearch(e.target.value) }}
+        <Input placeholder={t('projects.searchPlaceholder')} value={search} onChange={function(e) { setSearch(e.target.value) }}
           h="36px" fontSize="14px" borderRadius="8px" borderColor="#d1d5db"
           _focus={{ borderColor: '#22c55e', boxShadow: '0 0 0 3px rgba(34,197,94,0.1)' }} />
       </Box>
@@ -97,16 +101,32 @@ const Projects = () => {
                     <Text fontSize="15px" fontWeight="600" color="#333">
                       {p.owner}/<Text as="span" color="#16a34a">{p.name}</Text>
                     </Text>
-                    <Badge fontSize="11px" px="8px" py="1px" rounded="4px"
-                      colorScheme={p.is_private ? 'red' : 'green'} variant="subtle">
-                      {p.is_private ? '私有' : '公开'}
-                    </Badge>
+                    <HStack gap="6px" flexWrap="wrap">
+                      <Badge fontSize="11px" px="8px" py="1px" rounded="4px"
+                        bg={p.project_type === 'private' ? '#fef2f2' : p.project_type === 'public' ? '#dcfce7' : '#f3f4f6'}
+                        color={p.project_type === 'private' ? '#dc2626' : p.project_type === 'public' ? '#16a34a' : '#6b7280'}
+                        fontWeight="500">
+                        {p.project_type === 'private' ? t('common.private') : p.project_type === 'public' ? t('common.public') : t('common.local')}
+                      </Badge>
+                      {p.is_mirror && (
+                        <Badge fontSize="11px" px="8px" py="1px" rounded="4px" bg="#eff6ff" color="#2563eb" fontWeight="500">
+                          {t('project.mirror')}
+                        </Badge>
+                      )}
+                    </HStack>
                   </HStack>
-                  <Text fontSize="13.5px" color="#666" mb="12px" noOfLines={2}>{p.description || '暂无描述'}</Text>
+                  <Text fontSize="13.5px" color="#666" mb="12px" noOfLines={2}>{p.description || t('dashboard.noDescription')}</Text>
+                  {p.mirror_url && (
+                    <Text fontSize="12px" color="#2563eb" mb="10px" noOfLines={1}
+                      as="a" href={p.mirror_url} target="_blank" rel="noopener noreferrer"
+                      _hover={{ textDecoration: 'underline' }}>
+                      {p.mirror_url.replace(/\.git$/, '')}
+                    </Text>
+                  )}
                 </Box>
                 <HStack gap="18px" fontSize="12.5px" color="#888">
-                  <HStack gap="4px"><Text>⭐</Text><Text>{p.stars_count || 0}</Text></HStack>
-                  <HStack gap="4px"><Text>🔀</Text><Text>{p.forks_count || 0}</Text></HStack>
+                  <HStack gap="4px"><IconMap.star size={13} /><Text>{p.stars_count || 0}</Text></HStack>
+                  <HStack gap="4px"><IconMap.pr size={13} /><Text>{p.forks_count || 0}</Text></HStack>
                   {p.language && (
                     <HStack gap="5px">
                       <Box w="12px" h="12px" rounded="full" bg={LANG_COLORS[p.language] || '#888'} />
@@ -114,7 +134,7 @@ const Projects = () => {
                     </HStack>
                   )}
                 </HStack>
-                <Text fontSize="12px" color="#aaa" mt="8px">更新于 {timeAgo(p.updated_at || p.last_commit_at)}</Text>
+                <Text fontSize="12px" color="#aaa" mt="8px">{t('projects.updatedAt')} {timeAgo(p.updated_at || p.last_commit_at)}</Text>
               </Box>
             </RouterLink>
           )
@@ -123,8 +143,8 @@ const Projects = () => {
 
       {!loading && filtered.length === 0 && (
         <Box textAlign="center" py="60px" color="#aaa">
-          <Text fontSize="40px" mb="8px">🔍</Text>
-          <Text fontSize="15px">未找到项目</Text>
+          <IconMap.search size={40} />
+          <Text fontSize="15px">{t('projects.notFound')}</Text>
         </Box>
       )}
     </Box>

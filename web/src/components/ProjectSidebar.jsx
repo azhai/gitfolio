@@ -1,29 +1,37 @@
 import React from 'react'
 import { Box, VStack, Text, Flex, Divider } from '@chakra-ui/react'
 import { Link as RouterLink, useParams, useLocation } from 'react-router-dom'
+import { SidebarIcons } from './Icons'
+import { t } from '../i18n'
 
 var SECTIONS = [
   {
-    title: '导航',
+    titleKey: 'sidebar.navigate',
     items: [
-      { icon: '📂', label: '文件', path: '' },
-      { icon: '⚠️', label: '议题', path: 'issues' },
-      { icon: '🔀', label: '合并请求', path: 'pull_requests' },
-      { icon: '📝', label: '提交', path: 'commits' },
-      { icon: '📋', label: '任务', path: 'tasks' },
-      { icon: '⚙️', label: '设置', path: 'settings' },
+      { icon: 'code', labelKey: 'sidebar.files', path: '' },
+      { icon: 'commits', labelKey: 'sidebar.commits', path: 'commits' },
+      { icon: 'pull_requests', labelKey: 'sidebar.mergeRequests', path: 'pull_requests' },
+      { icon: 'issues', labelKey: 'sidebar.issues', path: 'issues' },
+      { icon: 'tasks', labelKey: 'sidebar.tasks', path: 'tasks' },
+      { icon: 'settings', labelKey: 'sidebar.settings', path: 'settings' },
     ],
   },
   {
-    title: '仓库',
+    titleKey: 'sidebar.repository',
     items: [
-      { icon: '🌿', label: '分支', path: 'branches' },
-      { icon: '🏷️', label: '标签', path: 'tags' },
-      { icon: '🚀', label: '发行版', path: 'releases' },
-      { icon: '📊', label: '统计', path: 'stats' },
+      { icon: 'branches', labelKey: 'sidebar.branches', path: 'branches' },
+      { icon: 'tags', labelKey: 'sidebar.tags', path: 'tags' },
+      { icon: 'releases', labelKey: 'sidebar.releases', path: 'releases' },
+      { icon: 'stats', labelKey: 'sidebar.statistics', path: 'stats' },
     ],
   },
 ]
+
+function SideIcon({ name, size = 16 }) {
+  var Comp = SidebarIcons[name]
+  if (!Comp) return null
+  return <Comp size={size} strokeWidth={2} />
+}
 
 const ProjectSidebar = () => {
   var params = useParams()
@@ -35,7 +43,7 @@ const ProjectSidebar = () => {
 
   function isActive(itemPath) {
     var currentPath = location.pathname
-    if (itemPath === '') return currentPath === basePath || currentPath === basePath + '/'
+    if (itemPath === '') return currentPath === basePath || currentPath === basePath + '/' || currentPath.startsWith(basePath + '/tree')
     return currentPath === basePath + '/' + itemPath || currentPath.startsWith(basePath + '/' + itemPath + '/')
   }
 
@@ -49,14 +57,14 @@ const ProjectSidebar = () => {
 
         {SECTIONS.map(function(section, sIdx) {
           return (
-            <Box key={section.title} py={3}>
-              <Text fontSize="11px" fontWeight="600" color="#aaa" px={4} mb="6px">{section.title}</Text>
+            <Box key={section.titleKey} py={3}>
+              <Text fontSize="11px" fontWeight="600" color="#aaa" px={4} mb="6px">{t(section.titleKey)}</Text>
               <VStack spacing={1} align="stretch">
                 {section.items.map(function(item) {
                   var active = isActive(item.path)
                   var itemPath = basePath + (item.path ? '/' + item.path : '')
                   return (
-                    <RouterLink key={item.label} to={itemPath}>
+                    <RouterLink key={item.labelKey} to={itemPath}>
                       <Flex align="center" gap="12px" px={4} py={2}
                         fontSize="13.5px"
                         color={active ? '#16a34a' : '#666'}
@@ -66,8 +74,8 @@ const ProjectSidebar = () => {
                         _hover={{ bg: active ? '#f0fdf4' : '#f9fafb', color: active ? '#16a34a' : '#333' }}
                         transition="all 0.15s"
                         fontWeight={active ? '600' : 'normal'}>
-                        <Text>{item.icon}</Text>
-                        <Text>{item.label}</Text>
+                        <SideIcon name={item.icon} />
+                        <Text>{t(item.labelKey)}</Text>
                       </Flex>
                     </RouterLink>
                   )

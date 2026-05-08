@@ -42,7 +42,7 @@ func CreateRepository(c fiber.Ctx) error {
 		Description:   req.Description,
 		Homepage:      req.Homepage,
 		OwnerID:       userID,
-		IsPrivate:     req.IsPrivate,
+		ProjectType:   req.ProjectType,
 		DefaultBranch: "main",
 	}
 
@@ -51,9 +51,10 @@ func CreateRepository(c fiber.Ctx) error {
 	}
 
 	if req.CloneURL != "" {
-		repo.IsMirror = true
 		repo.MirrorURL = req.CloneURL
-		repo.ProjectType = "mirror"
+		if repo.ProjectType != "private" {
+			repo.ProjectType = "public"
+		}
 
 		if strings.Contains(req.CloneURL, "github.com") {
 			syncSvc := services.NewSyncService(db)
@@ -74,6 +75,7 @@ func CreateRepository(c fiber.Ctx) error {
 		}
 		repo.LocalPath = localPath
 	} else {
+		repo.ProjectType = "local"
 		gitSvc := services.NewGitService()
 		if err := gitSvc.InitRepository(ownerUser.Username, repo); err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -92,6 +94,13 @@ func CreateRepository(c fiber.Ctx) error {
 	if err := db.RepositoryStats.Insert().One(stats); err != nil {
 		fmt.Printf("Warning: failed to create repository stats: %v\n", err)
 	}
+
+	schedulerSvc := services.NewSchedulerService(db)
+	syncType := "stats"
+	if repo.IsMirror() {
+		syncType = "mirror"
+	}
+	schedulerSvc.GetOrCreateSyncPoint(repo.ID, syncType)
 
 	return c.Status(fiber.StatusCreated).JSON(ToRepositoryResponse(repo, ownerUser))
 }
@@ -127,7 +136,18 @@ func GetRepository(c fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	return c.Status(fiber.StatusOK).JSON(ToRepositoryResponse(result.Repo, result.Owner))
+	response := ToRepositoryResponse(result.Repo, result.Owner)
+
+	userID := middleware.GetCurrentUserID(c)
+	if userID > 0 {
+		db := models.GetDB()
+		star, _ := db.Star.Select().Where("user_id = ? AND repository_id = ?", userID, result.Repo.ID).One()
+		response.IsStarred = star != nil
+		watch, _ := db.Watch.Select().Where("user_id = ? AND repository_id = ?", userID, result.Repo.ID).One()
+		response.IsWatched = watch != nil
+	}
+
+	return c.Status(fiber.StatusOK).JSON(response)
 }
 
 // ListRepositories 分页获取仓库列表，未登录用户仅可见公开仓库
@@ -143,7 +163,7 @@ func ListRepositories(c fiber.Ctx) error {
 
 	userID := middleware.GetCurrentUserID(c)
 	if userID == 0 {
-		query = query.Where("is_private = ?", false)
+		query = query.Where("project_type != ?", "private")
 	}
 
 	repos, err := query.All()
@@ -231,8 +251,8 @@ func UpdateRepository(c fiber.Ctx) error {
 	if req.Homepage != "" {
 		result.Repo.Homepage = req.Homepage
 	}
-	if req.IsPrivate != nil {
-		result.Repo.IsPrivate = *req.IsPrivate
+	if req.ProjectType != "" {
+		result.Repo.ProjectType = req.ProjectType
 	}
 	if req.DefaultBranch != "" {
 		result.Repo.DefaultBranch = req.DefaultBranch

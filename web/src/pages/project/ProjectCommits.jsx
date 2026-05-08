@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { Box, Text, Flex, VStack, HStack, Badge, Spinner, Button } from '@chakra-ui/react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { reposAPI } from '../../api/index'
-import { timeAgo } from '../../i18n/zh'
+import { t, timeAgo } from '../../i18n/index'
 
 function shortHash(hash) {
   return hash ? hash.substring(0, 7) : ''
@@ -334,8 +334,8 @@ const ProjectCommits = () => {
     <Box>
       <Flex justify="space-between" align="center" mb="16px">
         <HStack gap="12px" fontSize="14px" fontWeight="600">
-          <Text color="#333">📝 提交记录</Text>
-          <Text color="#888" fontSize="13px">共 {total} 条</Text>
+          <Text color="#333">📝 {t('projectCommits.title')}</Text>
+          <Text color="#888" fontSize="13px">{t('projectCommits.total', { count: total })}</Text>
         </HStack>
         <HStack gap="10px">
           <Button h="28px" px="12px" fontSize="12px" rounded="6px"
@@ -345,7 +345,7 @@ const ProjectCommits = () => {
             borderColor="#d1d5db"
             _hover={showGraph ? { bg: '#16a34a' } : { bg: '#f9fafb' }}
             onClick={function() { setShowGraph(!showGraph); setPage(1) }}>
-            {showGraph ? '📊 隐藏图形' : '📊 显示图形'}
+            {showGraph ? '📊 ' + t('projectCommits.hideGraph') : '📊 ' + t('projectCommits.showGraph')}
           </Button>
         </HStack>
       </Flex>
@@ -403,7 +403,7 @@ const ProjectCommits = () => {
       {!loading && commits.length === 0 && (
         <Box textAlign="center" py="50px" color="#aaa">
           <Text fontSize="36px" mb="6px">📝</Text>
-          <Text fontSize="14px">暂无提交记录</Text>
+          <Text fontSize="14px">{t('projectCommits.noCommits')}</Text>
         </Box>
       )}
     </Box>

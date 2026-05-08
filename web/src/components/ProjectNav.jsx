@@ -1,14 +1,15 @@
 import React from 'react'
 import { Box, Flex, Text, HStack } from '@chakra-ui/react'
 import { Link as RouterLink, useParams, useLocation } from 'react-router-dom'
+import { LuFolderOpen as FolderOpen, LuTriangleAlert as TriangleAlert, LuGitPullRequest as GitPullRequest, LuRocket as Rocket, LuBookOpen as BookOpen, LuSettings as Settings } from 'react-icons/lu'
 
 const PROJECT_TABS = [
-  { label: 'Files', path: 'tree', icon: '📂' },
-  { label: 'Issues', path: 'issues', icon: '⚠️' },
-  { label: 'Merge Requests', path: 'pull_requests', icon: '🔀' },
-  { label: 'CI/CD', path: 'ci', icon: '🚀' },
-  { label: 'Wiki', path: 'wiki', icon: '📖' },
-  { label: 'Settings', path: 'settings', icon: '⚙️' },
+  { label: 'Files', path: 'tree', icon: FolderOpen },
+  { label: 'Issues', path: 'issues', icon: TriangleAlert },
+  { label: 'Merge Requests', path: 'pull_requests', icon: GitPullRequest },
+  { label: 'CI/CD', path: 'ci', icon: Rocket },
+  { label: 'Wiki', path: 'wiki', icon: BookOpen },
+  { label: 'Settings', path: 'settings', icon: Settings },
 ]
 
 const ProjectNav = () => {
@@ -52,7 +53,10 @@ const ProjectNav = () => {
                   _hover={{ bg: 'white', color: '#333' }}
                   transition="all 0.15s"
                 >
-                  {tab.icon} {tab.label}
+                  <HStack gap="4px">
+                    {React.createElement(tab.icon, { size: 14 })}
+                    <Text>{tab.label}</Text>
+                  </HStack>
                 </Box>
               </RouterLink>
             )
