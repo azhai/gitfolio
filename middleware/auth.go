@@ -137,3 +137,9 @@ func GetCurrentUserID(c fiber.Ctx) int64 {
 	}
 	return userID.(int64)
 }
+
+// IsCurrentUserAdmin 检查当前用户是否为超级管理员
+func IsCurrentUserAdmin(c fiber.Ctx) bool {
+	isAdmin := c.Locals("is_admin")
+	return isAdmin != nil && isAdmin.(bool)
+}

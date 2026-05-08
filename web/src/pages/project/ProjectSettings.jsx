@@ -49,20 +49,26 @@ const ProjectSettings = () => {
   const [repoInfo, setRepoInfo] = useState(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [syncing, setSyncing] = useState({ pull: false, push: false })
+  const [syncing, setSyncing] = useState({ pull: false, issues: false, push: false })
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState('')
+  const [transferOpen, setTransferOpen] = useState(false)
+  const [transferTarget, setTransferTarget] = useState('')
+  const [transferring, setTransferring] = useState(false)
   const cancelRef = useRef()
+  const transferCancelRef = useRef()
   const [form, setForm] = useState({ name: '', description: '', homepage: '', project_type: 'local', default_branch: '' })
 
   const [syncConfig, setSyncConfig] = useState(null)
   const [syncSaving, setSyncSaving] = useState(false)
   const [syncLogs, setSyncLogs] = useState([])
+  const [remoteUrl, setRemoteUrl] = useState('')
 
   useEffect(() => {
     reposAPI.get(owner, repo).then(function(data) {
       setRepoInfo(data)
+      setRemoteUrl(data.mirror_url || '')
       setForm({
         name: data.name || '',
         description: data.description || '',
@@ -91,7 +97,8 @@ const ProjectSettings = () => {
 
   function handleSave() {
     setSaving(true)
-    reposAPI.update(owner, repo, form).then(function() {
+    var payload = Object.assign({}, form, { mirror_url: remoteUrl })
+    reposAPI.update(owner, repo, payload).then(function() {
       toast({ title: t('projectSettings.settingsSaved'), status: 'success', duration: 3000 })
       if (form.name !== repo) {
         navigate('/' + owner + '/' + form.name + '/settings')
@@ -104,15 +111,33 @@ const ProjectSettings = () => {
   function handleSyncPull() {
     setSyncing(function(p) { return Object.assign({}, p, { pull: true }) })
     reposAPI.syncPull(owner, repo).then(function() {
-      toast({ title: t('projectSettings.pullSyncStarted'), status: 'success', duration: 3000 })
+      toast({ title: t('projectSettings.pullCodeStarted'), status: 'success', duration: 3000 })
     }).catch(function(err) {
       toast({ title: err.message || t('projectSettings.syncFailed'), status: 'error', duration: 3000 })
     }).finally(function() { setSyncing(function(p) { return Object.assign({}, p, { pull: false }) }) })
   }
 
+  function handleSyncIssues() {
+    setSyncing(function(p) { return Object.assign({}, p, { issues: true }) })
+    reposAPI.syncIssues(owner, repo).then(function(data) {
+      var msg = t('projectSettings.issuesSyncStarted')
+      if (data && data.total_synced > 0) {
+        msg = t('projectSettings.issuesSyncResult', { count: data.total_synced })
+      }
+      toast({ title: msg, status: 'success', duration: 3000 })
+    }).catch(function(err) {
+      toast({ title: err.message || t('projectSettings.syncFailed'), status: 'error', duration: 3000 })
+    }).finally(function() { setSyncing(function(p) { return Object.assign({}, p, { issues: false }) }) })
+  }
+
   function handleSyncPush() {
+    var pushUrl = remoteUrl || (repoInfo && repoInfo.mirror_url) || ''
+    if (!pushUrl) {
+      toast({ title: t('projectSettings.remoteUrlRequired'), status: 'warning', duration: 3000 })
+      return
+    }
     setSyncing(function(p) { return Object.assign({}, p, { push: true }) })
-    reposAPI.syncPush(owner, repo).then(function() {
+    reposAPI.syncPush(owner, repo, pushUrl).then(function() {
       toast({ title: t('projectSettings.pushSyncStarted'), status: 'success', duration: 3000 })
     }).catch(function(err) {
       toast({ title: err.message || t('projectSettings.syncFailed'), status: 'error', duration: 3000 })
@@ -127,6 +152,19 @@ const ProjectSettings = () => {
     }).catch(function(err) {
       toast({ title: err.message || t('projectSettings.deleteRepoFailed'), status: 'error', duration: 3000 })
     }).finally(function() { setDeleting(false) })
+  }
+
+  function handleTransfer() {
+    if (!transferTarget.trim()) return
+    setTransferring(true)
+    reposAPI.transfer(owner, repo, transferTarget.trim()).then(function() {
+      setTransferOpen(false)
+      setTransferTarget('')
+      toast({ title: t('projectSettings.transferSuccess'), status: 'success', duration: 3000 })
+      navigate('/projects')
+    }).catch(function(err) {
+      toast({ title: err.message || t('projectSettings.transferFailed'), status: 'error', duration: 3000 })
+    }).finally(function() { setTransferring(false) })
   }
 
   function handleSyncConfigSave() {
@@ -156,7 +194,7 @@ const ProjectSettings = () => {
     )
   }
 
-  var isMirror = repoInfo && (repoInfo.project_type === 'public' || repoInfo.project_type === 'private')
+  var isMirror = repoInfo && repoInfo.project_type === 'mirror'
 
   return (
     <Box>
@@ -207,28 +245,22 @@ const ProjectSettings = () => {
             </Text>
           </Box>
           <HStack gap="6px">
-            {isMirror
-              ? ['public', 'private'].map(function(pt) {
-                  var labelKey = pt === 'public' ? 'common.public' : 'common.private'
-                  var selected = form.project_type === pt
-                  return (
-                    <Box key={pt} as="button" px="10px" py="4px" fontSize="12px" fontWeight="500" rounded="6px"
-                      border="1px solid" cursor="pointer" transition="all 0.15s"
-                      borderColor={selected ? '#22c55e' : '#d1d5db'}
-                      bg={selected ? '#f0fdf4' : 'white'}
-                      color={selected ? '#16a34a' : '#888'}
-                      _hover={{ borderColor: '#22c55e' }}
-                      onClick={function() { setForm(function(p) { return Object.assign({}, p, { project_type: pt }) }) }}
-                    >
-                      {t(labelKey)}
-                    </Box>
-                  )
-                })
-              : <Box px="10px" py="4px" fontSize="12px" fontWeight="500" rounded="6px"
-                  border="1px solid" borderColor="#22c55e" bg="#f0fdf4" color="#16a34a">
-                  {t('common.local')}
+            {['mirror', 'local'].map(function(pt) {
+              var labelKey = pt === 'mirror' ? 'project.mirror' : 'common.local'
+              var selected = form.project_type === pt
+              return (
+                <Box key={pt} as="button" px="10px" py="4px" fontSize="12px" fontWeight="500" rounded="6px"
+                  border="1px solid" cursor="pointer" transition="all 0.15s"
+                  borderColor={selected ? '#22c55e' : '#d1d5db'}
+                  bg={selected ? '#f0fdf4' : 'white'}
+                  color={selected ? '#16a34a' : '#888'}
+                  _hover={{ borderColor: '#22c55e' }}
+                  onClick={function() { setForm(function(p) { return Object.assign({}, p, { project_type: pt }) }) }}
+                >
+                  {t(labelKey)}
                 </Box>
-            }
+              )
+            })}
           </HStack>
         </Flex>
 
@@ -238,12 +270,11 @@ const ProjectSettings = () => {
         </Button>
       </Box>
 
+      {isMirror && (<>
       <Box bg="white" border="1px solid" borderColor="#e2e2e2" rounded="10px" p="24px" mb="20px">
         <Text fontSize="15px" fontWeight="600" color="#333" mb="12px">{t('projectSettings.scheduledSync')}</Text>
         <Text fontSize="13px" color="#666" mb="16px">
-          {isMirror
-            ? t('projectSettings.scheduledSyncMirrorDesc')
-            : t('projectSettings.scheduledSyncLocalDesc')}
+          {t('projectSettings.scheduledSyncMirrorDesc')}
         </Text>
 
         {syncConfig ? (
@@ -365,21 +396,37 @@ const ProjectSettings = () => {
           </VStack>
         )}
       </Box>
+      </>)}
 
       <Box bg="white" border="1px solid" borderColor="#e2e2e2" rounded="10px" p="24px" mb="20px">
         <Text fontSize="15px" fontWeight="600" color="#333" mb="12px">{t('projectSettings.codeSync')}</Text>
         <Text fontSize="13px" color="#666" mb="14px">
-          {t('projectSettings.codeSyncDesc')}
-          {repoInfo && repoInfo.mirror_url && <Text as="span" display="block" mt="6px">{t('projectSettings.mirrorUrl')}: <Text as="span" fontWeight="500" color="#333">{repoInfo.mirror_url}</Text></Text>}
+          {isMirror ? t('projectSettings.codeSyncDesc') : t('projectSettings.codeSyncLocalDesc')}
         </Text>
-        <HStack gap="10px">
+        <Box mb="14px">
+          <Text fontSize="13px" fontWeight="500" color="#555" mb="4px">{t('projectSettings.remoteUrlLabel')}</Text>
+          <Input value={remoteUrl} onChange={function(e) { setRemoteUrl(e.target.value) }}
+            placeholder={t('projectSettings.remoteUrlPlaceholder')}
+            h="36px" fontSize="14px" borderRadius="8px" borderColor="#d1d5db"
+            _focus={{ borderColor: '#22c55e', boxShadow: '0 0 0 3px rgba(34,197,94,0.1)' }} />
+        </Box>
+        <HStack gap="10px" flexWrap="wrap">
+          {isMirror && (
+            <Button h="32px" px="16px" fontSize="13px" rounded="6px" variant="outline"
+              borderColor="#22c55e" color="#16a34a" _hover={{ bg: '#f0fdf4' }}
+              onClick={handleSyncPull} isLoading={syncing.pull}>
+              {t('projectSettings.pullCode')}
+            </Button>
+          )}
+          {isMirror && (
+            <Button h="32px" px="16px" fontSize="13px" rounded="6px" variant="outline"
+              borderColor="#3b82f6" color="#2563eb" _hover={{ bg: '#eff6ff' }}
+              onClick={handleSyncIssues} isLoading={syncing.issues}>
+              {t('projectSettings.pullIssues')}
+            </Button>
+          )}
           <Button h="32px" px="16px" fontSize="13px" rounded="6px" variant="outline"
-            borderColor="#22c55e" color="#16a34a" _hover={{ bg: '#f0fdf4' }}
-            onClick={handleSyncPull} isLoading={syncing.pull}>
-            {t('projectSettings.pullFromRemote')}
-          </Button>
-          <Button h="32px" px="16px" fontSize="13px" rounded="6px" variant="outline"
-            borderColor="#22c55e" color="#16a34a" _hover={{ bg: '#f0fdf4' }}
+            borderColor="#d1d5db" color="#666" _hover={{ borderColor: '#22c55e', color: '#16a34a' }}
             onClick={handleSyncPush} isLoading={syncing.push}>
             {t('projectSettings.pushToRemote')}
           </Button>
@@ -405,11 +452,66 @@ const ProjectSettings = () => {
       <Box bg="white" border="1px solid" borderColor="#fecaca" rounded="10px" p="24px">
         <Text fontSize="15px" fontWeight="600" color="#dc2626" mb="8px">{t('projectSettings.dangerZone')}</Text>
         <Text fontSize="13px" color="#666" mb="14px">{t('projectSettings.dangerZoneDesc')}</Text>
+
+        {isMirror && (
+          <Flex align="center" justify="space-between" mb="14px" py="10px" borderBottom="1px solid" borderColor="#fecaca">
+            <Box>
+              <Text fontSize="13px" fontWeight="500" color="#555">{t('projectSettings.transferOwnership')}</Text>
+              <Text fontSize="12px" color="#888">{t('projectSettings.transferDesc')}</Text>
+            </Box>
+            <Button h="30px" px="14px" fontSize="13px" rounded="6px" variant="outline"
+              borderColor="#f59e0b" color="#d97706" _hover={{ bg: '#fffbeb' }}
+              onClick={function() { setTransferTarget(''); setTransferOpen(true) }}>
+              {t('projectSettings.transferProject')}
+            </Button>
+          </Flex>
+        )}
+
         <Button h="30px" px="14px" fontSize="13px" rounded="6px" bg="#dc2626" color="white"
           _hover={{ bg: '#b91c1c' }} onClick={function() { setDeleteConfirm(''); setDeleteOpen(true) }}>
           {t('projectSettings.deleteProject')}
         </Button>
       </Box>
+
+      <AlertDialog isOpen={transferOpen} leastDestructiveRef={transferCancelRef} onClose={function() { setTransferOpen(false) }}>
+        <AlertDialogOverlay>
+          <AlertDialogContent rounded="12px" maxW="420px">
+            <AlertDialogHeader fontSize="16px" fontWeight="700" pb="0">
+              <Flex align="center" gap="8px" color="#d97706">
+                <AlertTriangle size={20} />
+                <Text>{t('projectSettings.confirmTransfer')}</Text>
+              </Flex>
+            </AlertDialogHeader>
+            <AlertDialogCloseButton top="14px" right="14px" />
+            <AlertDialogBody py="16px">
+              <Text fontSize="13px" color="#666" mb="12px">
+                {t('projectSettings.transferWarning')}
+              </Text>
+              <Text fontSize="13px" color="#666" mb="12px">{t('projectSettings.typeNewOwner')}</Text>
+              <Input
+                value={transferTarget}
+                onChange={function(e) { setTransferTarget(e.target.value) }}
+                placeholder={t('projectSettings.newOwnerPlaceholder')}
+                size="sm"
+                rounded="6px"
+                borderColor="#d1d5db"
+                _focus={{ borderColor: '#f59e0b', boxShadow: '0 0 0 3px rgba(245,158,11,0.1)' }}
+              />
+            </AlertDialogBody>
+            <AlertDialogFooter pt="0">
+              <Button ref={transferCancelRef} onClick={function() { setTransferOpen(false) }}
+                h="32px" px="16px" fontSize="13px" rounded="6px" variant="outline" borderColor="#d1d5db">
+                {t('common.cancel')}
+              </Button>
+              <Button colorScheme="orange" onClick={handleTransfer} isLoading={transferring}
+                isDisabled={!transferTarget.trim()}
+                h="32px" px="16px" fontSize="13px" rounded="6px" ml="10px">
+                {t('projectSettings.confirmTransfer')}
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialogOverlay>
+      </AlertDialog>
 
       <AlertDialog isOpen={deleteOpen} leastDestructiveRef={cancelRef} onClose={function() { setDeleteOpen(false) }}>
         <AlertDialogOverlay>

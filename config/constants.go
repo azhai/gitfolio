@@ -17,9 +17,8 @@ const (
 
 // 项目类型
 const (
+	ProjectTypeLocal  = "local"
 	ProjectTypeMirror = "mirror"
-	ProjectTypeOwned  = "owned"
-	ProjectTypeFork   = "fork"
 )
 
 // 可见性

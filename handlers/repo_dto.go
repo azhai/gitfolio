@@ -30,6 +30,7 @@ type RepositoryResponse struct {
 	Readme        string `json:"readme"`
 	Owner         string `json:"owner"`
 	OwnerID       int64  `json:"owner_id"`
+	OwnerType     string `json:"owner_type"`
 	ProjectType   string `json:"project_type"`
 	IsFork        bool   `json:"is_fork"`
 	IsMirror      bool   `json:"is_mirror"`
@@ -67,10 +68,17 @@ type ContributorResponse struct {
 	UpdatedAt    string `json:"updated_at"`
 }
 
-func ToRepositoryResponse(repo *models.Repository, owner *models.User) *RepositoryResponse {
+func ToRepositoryResponse(repo *models.Repository, owner *models.User, group *models.Group) *RepositoryResponse {
 	var lastSyncAt string
 	if repo.LastSyncAt != nil {
 		lastSyncAt = repo.LastSyncAt.Format("2006-01-02T15:04:05Z07:00")
+	}
+
+	ownerName := ""
+	if repo.OwnerType == "group" && group != nil {
+		ownerName = group.Name
+	} else if owner != nil {
+		ownerName = owner.Username
 	}
 
 	response := &RepositoryResponse{
@@ -79,8 +87,9 @@ func ToRepositoryResponse(repo *models.Repository, owner *models.User) *Reposito
 		Description:   repo.Description,
 		Homepage:      repo.Homepage,
 		Readme:        repo.Readme,
-		Owner:         owner.Username,
+		Owner:         ownerName,
 		OwnerID:       repo.OwnerID,
+		OwnerType:     repo.OwnerType,
 		ProjectType:   repo.ProjectType,
 		IsFork:        repo.IsFork,
 		IsMirror:      repo.IsMirror(),

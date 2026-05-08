@@ -2,11 +2,15 @@ package helpers
 
 import (
 	"github.com/azhai/gitfolio/middleware"
+	"github.com/azhai/gitfolio/models"
 	"github.com/gofiber/fiber/v3"
 )
 
 // CheckOwnerPermission 检查当前用户是否为资源所有者
 func CheckOwnerPermission(c fiber.Ctx, ownerID int64) bool {
+	if middleware.IsCurrentUserAdmin(c) {
+		return true
+	}
 	userID := middleware.GetCurrentUserID(c)
 	return userID != 0 && userID == ownerID
 }
@@ -21,6 +25,9 @@ func RequireOwner(c fiber.Ctx, ownerID int64) error {
 
 // CheckUserPermission 检查当前用户是否为指定用户
 func CheckUserPermission(c fiber.Ctx, userID *int64) bool {
+	if middleware.IsCurrentUserAdmin(c) {
+		return true
+	}
 	if userID == nil {
 		return false
 	}
@@ -66,6 +73,53 @@ func IsAuthenticated(c fiber.Ctx) bool {
 func RequireAuth(c fiber.Ctx) error {
 	if !IsAuthenticated(c) {
 		return JSONError(c, HTTPStatusUnauthorized, "Authentication required")
+	}
+	return nil
+}
+
+// CheckGroupAdminPermission 检查当前用户是否为团队管理员或所有者
+func CheckGroupAdminPermission(c fiber.Ctx, groupID int64) bool {
+	if middleware.IsCurrentUserAdmin(c) {
+		return true
+	}
+	userID := middleware.GetCurrentUserID(c)
+	if userID == 0 {
+		return false
+	}
+	db := models.GetDB()
+	member, err := db.GroupMember.Select().Where("group_id = ? AND user_id = ?", groupID, userID).One()
+	if err != nil || member == nil {
+		return false
+	}
+	return member.Role == "owner" || member.Role == "admin"
+}
+
+// RequireGroupAdmin 要求当前用户为团队管理员或所有者，否则返回 403
+func RequireGroupAdmin(c fiber.Ctx, groupID int64) error {
+	if !CheckGroupAdminPermission(c, groupID) {
+		return JSONError(c, HTTPStatusForbidden, "Access denied")
+	}
+	return nil
+}
+
+// CheckGroupMemberPermission 检查当前用户是否为团队成员
+func CheckGroupMemberPermission(c fiber.Ctx, groupID int64) bool {
+	if middleware.IsCurrentUserAdmin(c) {
+		return true
+	}
+	userID := middleware.GetCurrentUserID(c)
+	if userID == 0 {
+		return false
+	}
+	db := models.GetDB()
+	member, err := db.GroupMember.Select().Where("group_id = ? AND user_id = ?", groupID, userID).One()
+	return err == nil && member != nil
+}
+
+// RequireGroupMember 要求当前用户为团队成员，否则返回 403
+func RequireGroupMember(c fiber.Ctx, groupID int64) error {
+	if !CheckGroupMemberPermission(c, groupID) {
+		return JSONError(c, HTTPStatusForbidden, "Access denied")
 	}
 	return nil
 }

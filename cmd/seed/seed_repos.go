@@ -60,7 +60,7 @@ go install github.com/ryan/gx@latest
 ## 许可证
 
 MIT 许可证`,
-			ProjectType: "public",
+			ProjectType: "mirror",
 			StarsCount:  42,
 			ForksCount:  8,
 			WatchCount:  12,
@@ -189,7 +189,7 @@ builder.NotNull{"a"}.ToSQL()
 ## License
 
 MIT License`,
-			ProjectType: "public",
+			ProjectType: "mirror",
 			StarsCount:  89,
 			ForksCount:  45,
 			WatchCount:  12,
@@ -210,6 +210,7 @@ MIT License`,
 			Homepage:      repoData.Homepage,
 			Readme:        repoData.Readme,
 			OwnerID:       owner.ID,
+			OwnerType:     "user",
 			ProjectType:   repoData.ProjectType,
 			DefaultBranch: "main",
 		}

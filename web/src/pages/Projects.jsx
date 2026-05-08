@@ -103,16 +103,11 @@ const Projects = () => {
                     </Text>
                     <HStack gap="6px" flexWrap="wrap">
                       <Badge fontSize="11px" px="8px" py="1px" rounded="4px"
-                        bg={p.project_type === 'private' ? '#fef2f2' : p.project_type === 'public' ? '#dcfce7' : '#f3f4f6'}
-                        color={p.project_type === 'private' ? '#dc2626' : p.project_type === 'public' ? '#16a34a' : '#6b7280'}
+                        bg={p.project_type === 'mirror' ? '#eff6ff' : '#f3f4f6'}
+                        color={p.project_type === 'mirror' ? '#2563eb' : '#6b7280'}
                         fontWeight="500">
-                        {p.project_type === 'private' ? t('common.private') : p.project_type === 'public' ? t('common.public') : t('common.local')}
+                        {p.project_type === 'mirror' ? t('project.mirror') : t('common.local')}
                       </Badge>
-                      {p.is_mirror && (
-                        <Badge fontSize="11px" px="8px" py="1px" rounded="4px" bg="#eff6ff" color="#2563eb" fontWeight="500">
-                          {t('project.mirror')}
-                        </Badge>
-                      )}
                     </HStack>
                   </HStack>
                   <Text fontSize="13.5px" color="#666" mb="12px" noOfLines={2}>{p.description || t('dashboard.noDescription')}</Text>

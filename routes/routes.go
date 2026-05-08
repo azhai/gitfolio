@@ -1,52 +1,15 @@
 package routes
 
 import (
-	"strings"
-
 	"github.com/azhai/gitfolio/config"
 	"github.com/azhai/gitfolio/handlers"
 	"github.com/azhai/gitfolio/middleware"
 	"github.com/gofiber/fiber/v3"
-	"github.com/gofiber/fiber/v3/middleware/cors"
 	"github.com/gofiber/fiber/v3/middleware/static"
 )
 
-// SetupRouter 创建并配置 Fiber 应用，注册所有路由
-func SetupRouter() *fiber.App {
-	app := fiber.New(fiber.Config{
-		ErrorHandler: func(c fiber.Ctx, err error) error {
-			code := fiber.StatusInternalServerError
-			msg := "Internal Server Error"
-			if e, ok := err.(*fiber.Error); ok {
-				code = e.Code
-				msg = e.Message
-			}
-			return c.Status(code).JSON(fiber.Map{"error": msg})
-		},
-	})
-
-	app.Use(cors.New(cors.Config{
-		AllowOrigins: []string{"*"},
-		AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"},
-		AllowHeaders: []string{"Origin", "Content-Type", "Content-Length", "Accept-Encoding", "X-CSRF-Token", "Authorization", "accept", "origin", "Cache-Control", "X-Requested-With"},
-	}))
-
-	setupStaticFiles(app)
-	setupAPIRoutes(app)
-
-	app.Get("/*", func(c fiber.Ctx) error {
-		path := c.Path()
-		if strings.HasPrefix(path, "/api/") {
-			return c.Status(404).JSON(fiber.Map{"error": "API endpoint not found"})
-		}
-		return c.SendFile("./web/dist/index.html")
-	})
-
-	return app
-}
-
-// setupStaticFiles 注册静态文件和 SPA 入口路由
-func setupStaticFiles(app *fiber.App) {
+// SetupStaticFiles 注册静态文件和 SPA 入口路由
+func SetupStaticFiles(app *fiber.App) {
 	app.Get("/", func(c fiber.Ctx) error {
 		return c.SendFile("./web/dist/index.html")
 	})
@@ -58,8 +21,8 @@ func setupStaticFiles(app *fiber.App) {
 	})
 }
 
-// setupAPIRoutes 注册 API 路由组
-func setupAPIRoutes(app *fiber.App) {
+// SetupAPIRoutes 注册 API 路由组
+func SetupAPIRoutes(app *fiber.App) {
 	api := app.Group(config.APIBaseURL)
 
 	api.Get("/health", func(c fiber.Ctx) error {
@@ -67,6 +30,8 @@ func setupAPIRoutes(app *fiber.App) {
 	})
 
 	api.Get("/stats", handlers.GetStats)
+	api.Get("/recent-issues", handlers.GetRecentIssues)
+	api.Get("/recent-tasks", handlers.GetRecentTasks)
 
 	setupAuthRoutes(api)
 	setupUserRoutes(api)
@@ -166,6 +131,7 @@ func setupRepoCRUDRoutes(repo fiber.Router) {
 	repo.Get("", middleware.OptionalAuth(), handlers.GetRepository)
 	repo.Put("", middleware.AuthMiddleware(), handlers.UpdateRepository)
 	repo.Delete("", middleware.AuthMiddleware(), handlers.DeleteRepository)
+	repo.Post("/transfer", middleware.AuthMiddleware(), handlers.TransferRepository)
 }
 
 // setupRepoGitRoutes 注册仓库 Git 操作路由（目录树、提交、分支等）
@@ -194,6 +160,7 @@ func setupRepoGitRoutes(repo fiber.Router) {
 // setupRepoSyncRoutes 注册仓库同步路由
 func setupRepoSyncRoutes(repo fiber.Router) {
 	repo.Post("/sync/pull", middleware.AuthMiddleware(), handlers.SyncPullRepository)
+	repo.Post("/sync/issues", middleware.AuthMiddleware(), handlers.SyncIssuesData)
 	repo.Post("/sync/push", middleware.AuthMiddleware(), handlers.SyncPushRepository)
 	repo.Get("/sync/config", middleware.AuthMiddleware(), handlers.GetSyncConfig)
 	repo.Put("/sync/config", middleware.AuthMiddleware(), handlers.UpdateSyncConfig)

@@ -24,7 +24,7 @@ func TestCreateIssue(t *testing.T) {
 	repo := models.Repository{
 		Name:      "issue-repo",
 		OwnerID:   user.ID,
-		ProjectType: "public",
+		ProjectType: "mirror",
 	}
 	db.Repository.Insert().One(&repo)
 
@@ -92,7 +92,7 @@ func TestListIssues(t *testing.T) {
 	repo := models.Repository{
 		Name:      "list-issue-repo",
 		OwnerID:   user.ID,
-		ProjectType: "public",
+		ProjectType: "mirror",
 	}
 	db.Repository.Insert().One(&repo)
 
@@ -139,7 +139,7 @@ func TestGetIssue(t *testing.T) {
 	repo := models.Repository{
 		Name:      "get-issue-repo",
 		OwnerID:   user.ID,
-		ProjectType: "public",
+		ProjectType: "mirror",
 	}
 	db.Repository.Insert().One(&repo)
 
@@ -172,7 +172,7 @@ func TestUpdateIssue(t *testing.T) {
 	repo := models.Repository{
 		Name:      "update-issue-repo",
 		OwnerID:   user.ID,
-		ProjectType: "public",
+		ProjectType: "mirror",
 	}
 	db.Repository.Insert().One(&repo)
 
@@ -213,7 +213,7 @@ func TestCloseIssue(t *testing.T) {
 	repo := models.Repository{
 		Name:      "close-issue-repo",
 		OwnerID:   user.ID,
-		ProjectType: "public",
+		ProjectType: "mirror",
 	}
 	db.Repository.Insert().One(&repo)
 
@@ -254,7 +254,7 @@ func TestCreateComment(t *testing.T) {
 	repo := models.Repository{
 		Name:      "comment-repo",
 		OwnerID:   user.ID,
-		ProjectType: "public",
+		ProjectType: "mirror",
 	}
 	db.Repository.Insert().One(&repo)
 

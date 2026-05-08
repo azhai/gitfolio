@@ -202,21 +202,22 @@ func CreateMirror(c fiber.Ctx) error {
 		}
 	}
 
-	repos, _ := db.Repository.Select().Where("name = ? AND owner_id = ?", req.Repo, owner.ID).All()
+	repos, _ := db.Repository.Select().Where("name = ? AND owner_id = ? AND owner_type = 'user'", req.Repo, owner.ID).All()
 	var repo models.Repository
 	now := time.Now()
 
 	if len(repos) > 0 {
 		repo = *repos[0]
 		repo.MirrorURL = req.CloneURL
-		repo.ProjectType = "public"
+		repo.ProjectType = "mirror"
 		repo.LastSyncAt = &now
 		db.Repository.Save().One(&repo)
 	} else {
 		repo = models.Repository{
 			Name:          req.Repo,
 			OwnerID:       owner.ID,
-			ProjectType:   "public",
+			OwnerType:     "user",
+			ProjectType:   "mirror",
 			MirrorURL:     req.CloneURL,
 			LastSyncAt:    &now,
 			DefaultBranch: "main",

@@ -3,7 +3,7 @@ import { Box, Text, Input, Textarea, Button, Flex, useToast, HStack } from '@cha
 import { useNavigate } from 'react-router-dom'
 import { reposAPI } from '../api/index'
 import { t } from '../i18n/index'
-import { LuGlobe as Globe, LuLock as Lock, LuSparkles as Sparkles } from 'react-icons/lu'
+import { LuGlobe as Globe, LuSparkles as Sparkles } from 'react-icons/lu'
 
 const MigrateProject = () => {
   const navigate = useNavigate()
@@ -15,7 +15,7 @@ const MigrateProject = () => {
     description: '',
     clone_url: '',
     homepage: '',
-    project_type: 'public',
+    project_type: 'mirror',
   })
 
   function updateField(key) {
@@ -35,7 +35,7 @@ const MigrateProject = () => {
       return
     }
     setSubmitting(true)
-    reposAPI.create(form).then(function(data) {
+    reposAPI.create(Object.assign({}, form, { project_type: 'mirror' })).then(function(data) {
       navigate('/' + (data.owner || 'ryan') + '/' + data.name)
     }).catch(function(err) {
       toast({ title: err.message || t('migrateProject.migrateFailed'), status: 'error', duration: 3000 })
@@ -67,11 +67,6 @@ const MigrateProject = () => {
       toast({ title: err.message || t('migrateProject.detectFailed'), status: 'error', duration: 3000 })
     }).finally(function() { setDetecting(false) })
   }
-
-  var types = [
-    { key: 'public', icon: Globe, labelKey: 'common.public', descKey: 'migrateProject.publicDesc' },
-    { key: 'private', icon: Lock, labelKey: 'common.private', descKey: 'migrateProject.privateDesc' },
-  ]
 
   return (
     <Box maxW="720px" mx="auto">
@@ -125,24 +120,14 @@ const MigrateProject = () => {
 
         <Box mb="24px">
           <Text fontSize="13.5px" fontWeight="600" color="#555" mb="12px">{t('migrateProject.projectType')}</Text>
-          <Flex gap="12px">
-            {types.map(function(tp) {
-              var Icon = tp.icon
-              var selected = form.project_type === tp.key
-              return (
-                <Flex
-                  key={tp.key} flex={1} direction="column" align="center" p="14px"
-                  border="2px solid" borderColor={selected ? '#22c55e' : '#d1d5db'}
-                  rounded="10px" cursor="pointer" bg={selected ? '#f0fdf4' : 'white'}
-                  onClick={function() { setForm(function(p) { return Object.assign({}, p, { project_type: tp.key }) }) }}
-                  transition="all 0.15s"
-                >
-                  <Icon size={22} color={selected ? '#16a34a' : '#666'} mb="6px" />
-                  <Text fontSize="13px" fontWeight="600" color={selected ? '#16a34a' : '#666'}>{t(tp.labelKey)}</Text>
-                  <Text fontSize="11px" color="#888" mt="4px" textAlign="center">{t(tp.descKey)}</Text>
-                </Flex>
-              )
-            })}
+          <Flex
+            flex={1} direction="column" align="center" p="14px"
+            border="2px solid" borderColor="#22c55e"
+            rounded="10px" bg="#f0fdf4"
+          >
+            <Globe size={22} color="#16a34a" mb="6px" />
+            <Text fontSize="13px" fontWeight="600" color="#16a34a">{t('project.mirror')}</Text>
+            <Text fontSize="11px" color="#888" mt="4px" textAlign="center">{t('migrateProject.mirrorDesc')}</Text>
           </Flex>
         </Box>
 

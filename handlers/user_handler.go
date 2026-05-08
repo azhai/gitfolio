@@ -296,10 +296,10 @@ func GetUserRepositories(c fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "User not found"})
 	}
 
-	query := db.Repository.Select().Where("owner_id = ?", userModel.ID)
+	query := db.Repository.Select().Where("owner_id = ? AND owner_type = 'user'", userModel.ID)
 	currentUserID := middleware.GetCurrentUserID(c)
-	if currentUserID != userModel.ID {
-		query = query.Where("project_type != ?", "private")
+	if currentUserID != userModel.ID && !middleware.IsCurrentUserAdmin(c) {
+		query = query.Where("project_type = ?", "local")
 	}
 
 	repos, err := query.Skip((page - 1) * perPage).Take(perPage).All()
@@ -309,7 +309,7 @@ func GetUserRepositories(c fiber.Ctx) error {
 
 	response := make([]*RepositoryResponse, 0)
 	for _, repo := range repos {
-		response = append(response, ToRepositoryResponse(repo, userModel))
+		response = append(response, ToRepositoryResponse(repo, userModel, nil))
 	}
 
 	return c.Status(fiber.StatusOK).JSON(response)

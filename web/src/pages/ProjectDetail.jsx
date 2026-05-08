@@ -121,8 +121,8 @@ const ProjectDetail = () => {
     <Box>
       <HStack gap="10px" mb="16px" align="center" flexWrap="wrap">
         <Text fontSize="20px" fontWeight="700" color="#333">{info.name || repo}</Text>
-        {info.is_mirror && (
-            <Box as="a" href={info.mirror_url || '#'} target="_blank" rel="noopener noreferrer"
+        {info.project_type === 'mirror' && info.mirror_url && (
+            <Box as="a" href={info.mirror_url} target="_blank" rel="noopener noreferrer"
               fontSize="11px" px="8px" py="2px" bg="#eff6ff" color="#2563eb" fontWeight="600"
               border="1px solid #bfdbfe" rounded="4px" cursor="pointer"
               _hover={{ bg: '#dbeafe', borderColor: '#93c5fd', textDecoration: 'none' }}
@@ -130,19 +130,15 @@ const ProjectDetail = () => {
               {t('project.mirror')}
             </Box>
         )}
-        <Text fontSize="13px" color="#666">{info.description || ''}</Text>
-        {info.project_type === 'private' && (
+        {info.project_type === 'mirror' && !info.mirror_url && (
           <Badge fontSize="11px" px="8px" py="1px" rounded="4px"
-            bg="#fef2f2" color="#dc2626" fontWeight="500">{t('common.private')}</Badge>
-        )}
-        {info.project_type === 'public' && (
-          <Badge fontSize="11px" px="8px" py="1px" rounded="4px"
-            bg="#dcfce7" color="#16a34a" fontWeight="500">{t('common.public')}</Badge>
+            bg="#eff6ff" color="#2563eb" fontWeight="500">{t('project.mirror')}</Badge>
         )}
         {info.project_type === 'local' && (
           <Badge fontSize="11px" px="8px" py="1px" rounded="4px"
             bg="#f3f4f6" color="#6b7280" fontWeight="500">{t('common.local')}</Badge>
         )}
+        <Text fontSize="13px" color="#666">{info.description || ''}</Text>
       </HStack>
 
       <HStack gap="8px" mb="16px" fontSize="12.5px" flexWrap="wrap">

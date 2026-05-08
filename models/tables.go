@@ -86,7 +86,8 @@ type Repository struct {
 	Description string
 	Homepage    string
 	Readme      string
-	OwnerID     int64 `goe:"index"`
+	OwnerID     int64  `goe:"index"`
+	OwnerType   string `goe:"default:'user';index"`
 
 	ProjectType string `goe:"default:'local';index"`
 	IsFork      bool   `goe:"default:false"`
@@ -100,15 +101,19 @@ type Repository struct {
 }
 
 func (r *Repository) IsMirror() bool {
-	return r.ProjectType == "public" || r.ProjectType == "private" || r.ProjectType == "mirror"
+	return r.ProjectType == "mirror"
 }
 
 func (r *Repository) IsPrivate() bool {
-	return r.ProjectType == "private"
+	return r.ProjectType == "mirror"
 }
 
 func (r *Repository) IsLocal() bool {
-	return r.ProjectType == "local" || r.ProjectType == "owned"
+	return r.ProjectType == "local"
+}
+
+func (r *Repository) IsGroupOwned() bool {
+	return r.OwnerType == "group"
 }
 
 type RepositoryStats struct {
@@ -287,9 +292,8 @@ type Webhook struct {
 type ProjectType string
 
 const (
+	ProjectTypeLocal  ProjectType = "local"
 	ProjectTypeMirror ProjectType = "mirror"
-	ProjectTypeOwned  ProjectType = "owned"
-	ProjectTypeFork   ProjectType = "fork"
 )
 
 type PlatformType string

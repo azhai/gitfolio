@@ -32,7 +32,7 @@ func CreateRepository(c fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "User not found"})
 	}
 
-	existingRepo, _ := db.Repository.Select().Where("owner_id = ? AND name = ?", userID, req.Name).One()
+	existingRepo, _ := db.Repository.Select().Where("owner_id = ? AND owner_type = 'user' AND name = ?", userID, req.Name).One()
 	if existingRepo != nil {
 		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "Repository with this name already exists"})
 	}
@@ -42,6 +42,7 @@ func CreateRepository(c fiber.Ctx) error {
 		Description:   req.Description,
 		Homepage:      req.Homepage,
 		OwnerID:       userID,
+		OwnerType:     "user",
 		ProjectType:   req.ProjectType,
 		DefaultBranch: "main",
 	}
@@ -52,9 +53,7 @@ func CreateRepository(c fiber.Ctx) error {
 
 	if req.CloneURL != "" {
 		repo.MirrorURL = req.CloneURL
-		if repo.ProjectType != "private" {
-			repo.ProjectType = "public"
-		}
+		repo.ProjectType = "mirror"
 
 		if strings.Contains(req.CloneURL, "github.com") {
 			syncSvc := services.NewSyncService(db)
@@ -102,7 +101,7 @@ func CreateRepository(c fiber.Ctx) error {
 	}
 	schedulerSvc.GetOrCreateSyncPoint(repo.ID, syncType)
 
-	return c.Status(fiber.StatusCreated).JSON(ToRepositoryResponse(repo, ownerUser))
+	return c.Status(fiber.StatusCreated).JSON(ToRepositoryResponse(repo, ownerUser, nil))
 }
 
 // GetGitHubRepoInfo 获取 GitHub 仓库信息（名称、描述、主页）
@@ -136,7 +135,7 @@ func GetRepository(c fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	response := ToRepositoryResponse(result.Repo, result.Owner)
+	response := ToRepositoryResponse(result.Repo, result.Owner, result.Group)
 
 	userID := middleware.GetCurrentUserID(c)
 	if userID > 0 {
@@ -163,7 +162,40 @@ func ListRepositories(c fiber.Ctx) error {
 
 	userID := middleware.GetCurrentUserID(c)
 	if userID == 0 {
-		query = query.Where("project_type != ?", "private")
+		query = query.Where("project_type = ?", "local")
+	} else {
+		groupIDs := getUserGroupIDs(db, userID)
+		if len(groupIDs) > 0 {
+			query = query.Filter(
+				goent.Or(
+					goent.Equals(db.Repository.Field("project_type"), "local"),
+					goent.And(
+						goent.Equals(db.Repository.Field("project_type"), "mirror"),
+						goent.Or(
+							goent.And(
+								goent.Equals(db.Repository.Field("owner_type"), "user"),
+								goent.Equals(db.Repository.Field("owner_id"), userID),
+							),
+							goent.And(
+								goent.Equals(db.Repository.Field("owner_type"), "group"),
+								goent.In(db.Repository.Field("owner_id"), groupIDs),
+							),
+						),
+					),
+				),
+			)
+		} else {
+			query = query.Filter(
+				goent.Or(
+					goent.Equals(db.Repository.Field("project_type"), "local"),
+					goent.And(
+						goent.Equals(db.Repository.Field("project_type"), "mirror"),
+						goent.Equals(db.Repository.Field("owner_type"), "user"),
+						goent.Equals(db.Repository.Field("owner_id"), userID),
+					),
+				),
+			)
+		}
 	}
 
 	repos, err := query.All()
@@ -199,27 +231,55 @@ func ListRepositories(c fiber.Ctx) error {
 
 	response := make([]*RepositoryResponse, 0, len(repos))
 	if len(repos) > 0 {
-		ownerIDs := make([]int64, 0, len(repos))
+		userOwnerIDs := make([]int64, 0)
+		groupOwnerIDs := make([]int64, 0)
 		for _, repo := range repos {
-			ownerIDs = append(ownerIDs, repo.OwnerID)
+			if repo.OwnerType == "group" {
+				groupOwnerIDs = append(groupOwnerIDs, repo.OwnerID)
+			} else {
+				userOwnerIDs = append(userOwnerIDs, repo.OwnerID)
+			}
 		}
 
 		ownersMap := make(map[int64]*models.User)
-		users, err := db.User.Select().Filter(
-			goent.In(db.User.Field("id"), ownerIDs),
-		).All()
-		if err == nil {
-			for _, u := range users {
-				ownersMap[u.ID] = u
+		if len(userOwnerIDs) > 0 {
+			users, err := db.User.Select().Filter(
+				goent.In(db.User.Field("id"), userOwnerIDs),
+			).All()
+			if err == nil {
+				for _, u := range users {
+					ownersMap[u.ID] = u
+				}
+			}
+		}
+
+		groupsMap := make(map[int64]*models.Group)
+		if len(groupOwnerIDs) > 0 {
+			groups, err := db.Group.Select().Filter(
+				goent.In(db.Group.Field("id"), groupOwnerIDs),
+			).All()
+			if err == nil {
+				for _, g := range groups {
+					groupsMap[g.ID] = g
+				}
 			}
 		}
 
 		for _, repo := range repos {
-			ownerUser, ok := ownersMap[repo.OwnerID]
-			if !ok {
-				continue
+			var ownerUser *models.User
+			var ownerGroup *models.Group
+			if repo.OwnerType == "group" {
+				ownerGroup = groupsMap[repo.OwnerID]
+				if ownerGroup == nil {
+					continue
+				}
+			} else {
+				ownerUser = ownersMap[repo.OwnerID]
+				if ownerUser == nil {
+					continue
+				}
 			}
-			response = append(response, ToRepositoryResponse(repo, ownerUser))
+			response = append(response, ToRepositoryResponse(repo, ownerUser, ownerGroup))
 		}
 	}
 
@@ -284,4 +344,57 @@ func DeleteRepository(c fiber.Ctx) error {
 	}
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Repository deleted successfully"})
+}
+
+type TransferRepositoryRequest struct {
+	NewOwner string `json:"new_owner"`
+}
+
+func getUserGroupIDs(db *models.Database, userID int64) []int64 {
+	members, err := db.GroupMember.Select("group_id").Where("user_id = ?", userID).All()
+	if err != nil {
+		return nil
+	}
+	ids := make([]int64, 0, len(members))
+	for _, m := range members {
+		ids = append(ids, m.GroupID)
+	}
+	return ids
+}
+
+// TransferRepository 转移仓库所有权
+func TransferRepository(c fiber.Ctx) error {
+	var req TransferRepositoryRequest
+	if err := c.Bind().JSON(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+	if req.NewOwner == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "new_owner is required"})
+	}
+
+	result, err := helpers.RequireOwnerAndRepoFromParams(c)
+	if err != nil {
+		return err
+	}
+
+	db := models.GetDB()
+
+	user, err := db.User.Select().Where("username = ?", req.NewOwner).One()
+	if err == nil && user != nil {
+		result.Repo.OwnerID = user.ID
+		result.Repo.OwnerType = "user"
+	} else {
+		group, err := db.Group.Select().Where("name = ?", req.NewOwner).One()
+		if err != nil || group == nil {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Target user or group not found"})
+		}
+		result.Repo.OwnerID = group.ID
+		result.Repo.OwnerType = "group"
+	}
+
+	if err := db.Repository.Save().One(result.Repo); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to transfer repository"})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Repository transferred successfully"})
 }

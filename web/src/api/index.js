@@ -84,6 +84,12 @@ export const statsAPI = {
   get() {
     return api.get('/stats')
   },
+  recentIssues(limit) {
+    return api.get('/recent-issues', { limit: limit || 5 })
+  },
+  recentTasks(limit) {
+    return api.get('/recent-tasks', { limit: limit || 5 })
+  },
 }
 
 export const reposAPI = {
@@ -104,6 +110,9 @@ export const reposAPI = {
   },
   del(owner, repo) {
     return api.del('/' + owner + '/' + repo)
+  },
+  transfer(owner, repo, newOwner) {
+    return api.post('/' + owner + '/' + repo + '/transfer', { new_owner: newOwner })
   },
   tree(owner, repo, path, ref) {
     path = path || ''
@@ -163,8 +172,11 @@ export const reposAPI = {
   syncPull(owner, repo) {
     return api.post('/' + owner + '/' + repo + '/sync/pull')
   },
-  syncPush(owner, repo) {
-    return api.post('/' + owner + '/' + repo + '/sync/push')
+  syncIssues(owner, repo) {
+    return api.post('/' + owner + '/' + repo + '/sync/issues')
+  },
+  syncPush(owner, repo, remoteUrl) {
+    return api.post('/' + owner + '/' + repo + '/sync/push', { remote_url: remoteUrl || '' })
   },
   refreshStats(owner, repo) {
     return api.post('/' + owner + '/' + repo + '/refresh-stats')

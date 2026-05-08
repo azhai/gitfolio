@@ -44,7 +44,7 @@ func TestCompleteUserFlow(t *testing.T) {
 		payload := map[string]any{
 			"name":        "flow-repo",
 			"description": "Test repository for flow",
-			"project_type":  "public",
+			"project_type":  "mirror",
 		}
 
 		w, _ := MakeRequest(router, "POST", "/api/v1/repos", payload, headers)
@@ -126,7 +126,7 @@ func TestCollaborationFlow(t *testing.T) {
 	repoPayload := map[string]any{
 		"name":        "collab-repo",
 		"description": "Collaboration test repository",
-		"project_type":  "public",
+		"project_type":  "mirror",
 	}
 	w, _ = MakeRequest(router, "POST", "/api/v1/repos", repoPayload, ownerHeaders)
 	AssertStatus(t, http.StatusCreated, w.StatusCode)
@@ -183,9 +183,9 @@ func TestPrivateRepositoryFlow(t *testing.T) {
 	}
 
 	repoPayload := map[string]any{
-		"name":        "private-repo",
-		"description": "Private repository",
-		"project_type":  "private",
+		"name":        "local-repo",
+		"description": "Local repository",
+		"project_type":  "local",
 	}
 	w, _ = MakeRequest(router, "POST", "/api/v1/repos", repoPayload, ownerHeaders)
 	AssertStatus(t, http.StatusCreated, w.StatusCode)
@@ -206,18 +206,18 @@ func TestPrivateRepositoryFlow(t *testing.T) {
 		"Authorization": "Bearer " + otherToken,
 	}
 
-	t.Run("Cannot access private repo without auth", func(t *testing.T) {
-		w, _ := MakeRequest(router, "GET", "/api/v1/privateowner/private-repo", nil, nil)
-		AssertStatus(t, http.StatusForbidden, w.StatusCode)
+	t.Run("Can access local repo without auth", func(t *testing.T) {
+		w, _ := MakeRequest(router, "GET", "/api/v1/privateowner/local-repo", nil, nil)
+		AssertStatus(t, http.StatusOK, w.StatusCode)
 	})
 
-	t.Run("Cannot access private repo as other user", func(t *testing.T) {
-		w, _ := MakeRequest(router, "GET", "/api/v1/privateowner/private-repo", nil, otherHeaders)
-		AssertStatus(t, http.StatusForbidden, w.StatusCode)
+	t.Run("Can access local repo as other user", func(t *testing.T) {
+		w, _ := MakeRequest(router, "GET", "/api/v1/privateowner/local-repo", nil, otherHeaders)
+		AssertStatus(t, http.StatusOK, w.StatusCode)
 	})
 
-	t.Run("Owner can access private repo", func(t *testing.T) {
-		w, _ := MakeRequest(router, "GET", "/api/v1/privateowner/private-repo", nil, ownerHeaders)
+	t.Run("Owner can access local repo", func(t *testing.T) {
+		w, _ := MakeRequest(router, "GET", "/api/v1/privateowner/local-repo", nil, ownerHeaders)
 		AssertStatus(t, http.StatusOK, w.StatusCode)
 	})
 }

@@ -209,9 +209,9 @@ var SyncManagementTab = function() {
                   <td style={{ padding: '10px 14px' }}>
                     <Text fontWeight={500} color="#333">{sp.owner_name}/{sp.repo_name}</Text>
                     {sp.project_type && <Badge ml="6px" fontSize="9px" px="4px" rounded="3px"
-                      bg={sp.project_type === 'private' ? '#fef2f2' : sp.project_type === 'public' ? '#dcfce7' : '#f3f4f6'}
-                      color={sp.project_type === 'private' ? '#dc2626' : sp.project_type === 'public' ? '#16a34a' : '#6b7280'}>
-                      {sp.project_type === 'private' ? t('common.private') : sp.project_type === 'public' ? t('common.public') : t('common.local')}
+                      bg={sp.project_type === 'mirror' ? '#eff6ff' : '#f3f4f6'}
+                      color={sp.project_type === 'mirror' ? '#2563eb' : '#6b7280'}>
+                      {sp.project_type === 'mirror' ? t('project.mirror') : t('common.local')}
                     </Badge>}
                   </td>
                   <td style={{ padding: '10px 14px' }}>

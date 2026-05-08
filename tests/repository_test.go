@@ -38,11 +38,11 @@ func TestCreateRepository(t *testing.T) {
 			wantStatus: http.StatusCreated,
 		},
 		{
-			name: "Valid private repository",
+			name: "Valid local repository",
 			payload: map[string]any{
 				"name":         "private-repo",
 				"description":  "Private repository",
-				"project_type": "private",
+				"project_type": "local",
 			},
 			wantStatus: http.StatusCreated,
 		},
@@ -123,9 +123,9 @@ func TestListRepositories(t *testing.T) {
 	db.User.Insert().One(&user)
 
 	repos := []models.Repository{
-		{Name: "repo1", OwnerID: user.ID, ProjectType: "public"},
-		{Name: "repo2", OwnerID: user.ID, ProjectType: "public"},
-		{Name: "repo3", OwnerID: user.ID, ProjectType: "private"},
+		{Name: "repo1", OwnerID: user.ID, ProjectType: "mirror"},
+		{Name: "repo2", OwnerID: user.ID, ProjectType: "mirror"},
+		{Name: "repo3", OwnerID: user.ID, ProjectType: "local"},
 	}
 	for _, repo := range repos {
 		db.Repository.Insert().One(&repo)
@@ -156,9 +156,9 @@ func TestGetRepository(t *testing.T) {
 	db.User.Insert().One(&user)
 
 	repo := models.Repository{
-		Name:      "get-repo",
-		OwnerID:   user.ID,
-		ProjectType: "public",
+		Name:        "get-repo",
+		OwnerID:     user.ID,
+		ProjectType: "mirror",
 	}
 	db.Repository.Insert().One(&repo)
 
@@ -189,21 +189,22 @@ func TestGetPrivateRepository(t *testing.T) {
 	db.User.Insert().One(&otherUser)
 
 	repo := models.Repository{
-		Name:      "private-repo",
-		OwnerID:   owner.ID,
-		ProjectType: "private",
+		Name:        "local-repo",
+		OwnerID:     owner.ID,
+		OwnerType:   "user",
+		ProjectType: "local",
 	}
 	db.Repository.Insert().One(&repo)
 
-	w, _ := MakeRequest(router, "GET", "/api/v1/privateowner/private-repo", nil, nil)
-	AssertStatus(t, http.StatusForbidden, w.StatusCode)
+	w, _ := MakeRequest(router, "GET", "/api/v1/privateowner/local-repo", nil, nil)
+	AssertStatus(t, http.StatusOK, w.StatusCode)
 
 	token, _ := middleware.GenerateToken(&owner)
 	headers := map[string]string{
 		"Authorization": "Bearer " + token,
 	}
 
-	w, _ = MakeRequest(router, "GET", "/api/v1/privateowner/private-repo", nil, headers)
+	w, _ = MakeRequest(router, "GET", "/api/v1/privateowner/local-repo", nil, headers)
 	AssertStatus(t, http.StatusOK, w.StatusCode)
 }
 
@@ -220,9 +221,9 @@ func TestUpdateRepository(t *testing.T) {
 	db.User.Insert().One(&user)
 
 	repo := models.Repository{
-		Name:      "update-repo",
-		OwnerID:   user.ID,
-		ProjectType: "public",
+		Name:        "update-repo",
+		OwnerID:     user.ID,
+		ProjectType: "mirror",
 	}
 	db.Repository.Insert().One(&repo)
 
@@ -252,9 +253,9 @@ func TestDeleteRepository(t *testing.T) {
 	db.User.Insert().One(&user)
 
 	repo := models.Repository{
-		Name:      "delete-repo",
-		OwnerID:   user.ID,
-		ProjectType: "public",
+		Name:        "delete-repo",
+		OwnerID:     user.ID,
+		ProjectType: "mirror",
 	}
 	db.Repository.Insert().One(&repo)
 
@@ -280,9 +281,9 @@ func TestStarRepository(t *testing.T) {
 	db.User.Insert().One(&owner)
 
 	repo := models.Repository{
-		Name:      "star-repo",
-		OwnerID:   owner.ID,
-		ProjectType: "public",
+		Name:        "star-repo",
+		OwnerID:     owner.ID,
+		ProjectType: "mirror",
 	}
 	db.Repository.Insert().One(&repo)
 

@@ -11,13 +11,7 @@ import (
 	"github.com/gofiber/fiber/v3"
 )
 
-// SyncPullRepository 推送本地仓库所有分支和标签到远程，并同步 Issues 和 PR 数据
 func SyncPullRepository(c fiber.Ctx) error {
-	var req struct {
-		RemoteURL string `json:"remote_url"`
-	}
-	c.Bind().JSON(&req)
-
 	result, err := helpers.RequireOwnerAndRepoFromParams(c)
 	if err != nil {
 		return err
@@ -31,18 +25,10 @@ func SyncPullRepository(c fiber.Ctx) error {
 
 	syncSvc := services.NewSyncService(db)
 
-	if req.RemoteURL != "" && req.RemoteURL != result.Repo.MirrorURL {
-		result.Repo.MirrorURL = req.RemoteURL
-		if err = db.Repository.Save().One(result.Repo); err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update remote URL"})
-		}
-		syncSvc.SetRemoteURL(result.Repo.LocalPath, req.RemoteURL)
-	}
-
-	gitResult, err := syncSvc.SyncPushAll(result.Repo.LocalPath)
+	gitResult, err := syncSvc.SyncPullRepository(result.Repo.LocalPath)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error":   fmt.Sprintf("Git push failed: %v", err),
+			"error":   fmt.Sprintf("Git pull failed: %v", err),
 			"details": err.Error(),
 			"git": fiber.Map{
 				"command":     gitResult.Command,
@@ -57,46 +43,13 @@ func SyncPullRepository(c fiber.Ctx) error {
 
 	now := time.Now()
 	result.Repo.LastSyncAt = &now
-	err = db.Repository.Save().One(result.Repo)
-	if err != nil {
+	if err = db.Repository.Save().One(result.Repo); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update sync time"})
 	}
 
-	remoteRepo, err := syncSvc.GetRemoteRepoInfo(result.Repo.ID)
-	if err != nil || remoteRepo == nil {
-		if result.Repo.MirrorURL != "" {
-			remoteRepo = syncSvc.CreateRemoteRepoFromMirrorURL(result.Repo.ID, result.Repo.MirrorURL)
-		}
-	}
-
-	var syncError string
-	var syncResult services.SyncResult
-	if remoteRepo != nil {
-		token := ""
-		if remoteRepo.AccountID != nil {
-			t, err := syncSvc.GetSyncToken(*remoteRepo.AccountID)
-			if err == nil && t != nil {
-				token = t.AccessToken
-			}
-		}
-
-		ctx := context.Background()
-		syncResult, err = syncSvc.SyncRepositoryData(ctx, result.Repo.ID, remoteRepo.Platform, remoteRepo.Owner, remoteRepo.RepoName, token)
-		if err != nil {
-			syncError = err.Error()
-		}
-	} else {
-		syncError = fmt.Sprintf("No remote repo found for repository ID %d", result.Repo.ID)
-	}
-
-	resp := fiber.Map{
-		"message":         "Repository pushed successfully",
-		"last_sync":       now.Format("2006-01-02T15:04:05Z07:00"),
-		"issues_inserted": syncResult.IssuesInserted,
-		"issues_updated":  syncResult.IssuesUpdated,
-		"prs_inserted":    syncResult.PRsInserted,
-		"prs_updated":     syncResult.PRsUpdated,
-		"total_synced":    syncResult.IssuesInserted + syncResult.IssuesUpdated + syncResult.PRsInserted + syncResult.PRsUpdated,
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"message":   "Code pulled successfully",
+		"last_sync": now.Format("2006-01-02T15:04:05Z07:00"),
 		"git": fiber.Map{
 			"command":     gitResult.Command,
 			"output":      gitResult.Output,
@@ -106,16 +59,68 @@ func SyncPullRepository(c fiber.Ctx) error {
 			"duration_ms": gitResult.DurationMs,
 			"log_id":      gitResult.LogID,
 		},
-	}
-
-	if syncError != "" {
-		resp["warning"] = syncError
-	}
-
-	return c.Status(fiber.StatusOK).JSON(resp)
+	})
 }
 
-// SyncPushRepository 推送本地仓库到远程地址
+func SyncIssuesData(c fiber.Ctx) error {
+	result, err := helpers.RequireOwnerAndRepoFromParams(c)
+	if err != nil {
+		return err
+	}
+
+	db := models.GetDB()
+
+	if !result.Repo.IsMirror() {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Not a mirror repository"})
+	}
+
+	syncSvc := services.NewSyncService(db)
+
+	remoteRepo, err := syncSvc.GetRemoteRepoInfo(result.Repo.ID)
+	if err != nil || remoteRepo == nil {
+		if result.Repo.MirrorURL != "" {
+			remoteRepo = syncSvc.CreateRemoteRepoFromMirrorURL(result.Repo.ID, result.Repo.MirrorURL)
+		}
+	}
+
+	if remoteRepo == nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": fmt.Sprintf("No remote repo found for repository ID %d", result.Repo.ID),
+		})
+	}
+
+	token := ""
+	if remoteRepo.AccountID != nil {
+		t, err := syncSvc.GetSyncToken(*remoteRepo.AccountID)
+		if err == nil && t != nil {
+			token = t.AccessToken
+		}
+	}
+
+	ctx := context.Background()
+	syncResult, err := syncSvc.SyncRepositoryData(ctx, result.Repo.ID, remoteRepo.Platform, remoteRepo.Owner, remoteRepo.RepoName, token)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error":   fmt.Sprintf("Failed to sync issues: %v", err),
+			"details": err.Error(),
+		})
+	}
+
+	now := time.Now()
+	result.Repo.LastSyncAt = &now
+	db.Repository.Save().One(result.Repo)
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"message":         "Issues synced successfully",
+		"last_sync":       now.Format("2006-01-02T15:04:05Z07:00"),
+		"issues_inserted": syncResult.IssuesInserted,
+		"issues_updated":  syncResult.IssuesUpdated,
+		"prs_inserted":    syncResult.PRsInserted,
+		"prs_updated":     syncResult.PRsUpdated,
+		"total_synced":    syncResult.IssuesInserted + syncResult.IssuesUpdated + syncResult.PRsInserted + syncResult.PRsUpdated,
+	})
+}
+
 func SyncPushRepository(c fiber.Ctx) error {
 	var req struct {
 		RemoteURL string `json:"remote_url"`

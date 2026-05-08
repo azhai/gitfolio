@@ -91,7 +91,7 @@ func BenchmarkCreateIssue(b *testing.B) {
 	repo := models.Repository{
 		Name:      "bench-issue-repo",
 		OwnerID:   user.ID,
-		ProjectType: "public",
+		ProjectType: "mirror",
 	}
 	db.Repository.Insert().One(&repo)
 
@@ -127,7 +127,7 @@ func BenchmarkListRepositories(b *testing.B) {
 		repo := models.Repository{
 			Name:      "repo" + string(rune(i)),
 			OwnerID:   user.ID,
-			ProjectType: "public",
+			ProjectType: "mirror",
 		}
 		db.Repository.Insert().One(&repo)
 	}

@@ -6,12 +6,10 @@
     </linearGradient>
   </defs>
   <rect width="32" height="32" rx="8" fill="url(#grad)"/>
-  <g transform="translate(16, 16)" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M4.5 -10 C4.5 -10 9 -5 9.5 0 L5 2 L4 -2 Z" fill="white" opacity="0.95"/>
-    <path d="M-4.5 -10 C-4.5 -10 -9 -5 -9.5 0 L-5 2 L-4 -2 Z" fill="white" opacity="0.95"/>
-    <path d="M0 -12 L0 8" stroke-width="2.5"/>
-    <ellipse cx="0" cy="9" rx="3" ry="2" fill="white" opacity="0.9"/>
-    <path d="M-7 3 Q-9 8 -7 11" opacity="0.6"/>
-    <path d="M7 3 Q9 8 7 11" opacity="0.6"/>
+  <g transform="translate(4, 4)" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/>
+    <path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/>
+    <path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/>
+    <path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/>
   </g>
 </svg>
