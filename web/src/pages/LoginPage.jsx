@@ -68,6 +68,7 @@ const LoginPage = () => {
     <Box
       minH="100vh"
       display="flex"
+      flexDirection="column"
       alignItems="center"
       justifyContent="center"
       bg="#f5f5f5"
@@ -214,6 +215,13 @@ const LoginPage = () => {
             </Link>
           </Text>
         </Box>
+      </Box>
+      <Box as="footer" py="16px">
+        <Text fontSize="12px" color="gray.400">
+          <Link href="https://beian.miit.gov.cn/" target="_blank" rel="noopener" _hover={{ color: 'gray.600' }}>
+            粤ICP备2026052659号-1
+          </Link>
+        </Text>
       </Box>
     </Box>
   )

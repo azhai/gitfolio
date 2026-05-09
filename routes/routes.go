@@ -5,21 +5,7 @@ import (
 	"github.com/azhai/gitfolio/handlers"
 	"github.com/azhai/gitfolio/middleware"
 	"github.com/gofiber/fiber/v3"
-	"github.com/gofiber/fiber/v3/middleware/static"
 )
-
-// SetupStaticFiles 注册静态文件和 SPA 入口路由
-func SetupStaticFiles(app *fiber.App) {
-	app.Get("/", func(c fiber.Ctx) error {
-		return c.SendFile("./web/dist/index.html")
-	})
-	app.Get("/assets/*", static.New("./web/dist/assets"))
-	app.Get("/uploads/*", static.New("./uploads"))
-	app.Get("/images/*", func(c fiber.Ctx) error {
-		path := c.Params("*")
-		return c.SendFile("./web/images/" + path)
-	})
-}
 
 // SetupAPIRoutes 注册 API 路由组
 func SetupAPIRoutes(app *fiber.App) {

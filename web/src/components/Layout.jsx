@@ -1,5 +1,5 @@
 import React from 'react'
-import { Box } from '@chakra-ui/react'
+import { Box, Text, Link } from '@chakra-ui/react'
 import { Outlet, useParams, useLocation } from 'react-router-dom'
 import TopNavbar from './TopNavbar'
 import ProjectSidebar from './ProjectSidebar'
@@ -39,6 +39,19 @@ const Layout = () => {
         minH="calc(100vh - 52px)"
       >
         <Outlet />
+      </Box>
+      <Box
+        as="footer"
+        ml={isProjectPage && !hideSidebar ? '248px' : '0'}
+        py="16px"
+        textAlign="center"
+        bg="#f5f5f5"
+      >
+        <Text fontSize="12px" color="gray.400">
+          <Link href="https://beian.miit.gov.cn/" target="_blank" rel="noopener" _hover={{ color: 'gray.600' }}>
+            粤ICP备2026052659号-1
+          </Link>
+        </Text>
       </Box>
     </Box>
   )

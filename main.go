@@ -10,30 +10,35 @@ import (
 	"time"
 
 	"github.com/azhai/gitfolio/config"
+	"github.com/azhai/gitfolio/middleware"
 	"github.com/azhai/gitfolio/models"
 	"github.com/azhai/gitfolio/routes"
 	"github.com/azhai/gitfolio/services"
 	"github.com/azhai/goent/utils"
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/compress"
-	"github.com/gofiber/fiber/v3/middleware/cors"
+	cors "github.com/gofiber/fiber/v3/middleware/cors"
 	"github.com/gofiber/fiber/v3/middleware/logger"
 	"github.com/gofiber/fiber/v3/middleware/static"
 )
 
-//go:embed web/dist
+//go:embed web/dist web/landing.html web/images
 var efs embed.FS
 
-func getEmbedFS(prefix string) fs.FS {
-	if prefix == "" {
-		return efs
-	}
+func subFS(prefix string) fs.FS {
 	fsys, err := fs.Sub(efs, prefix)
 	if err != nil {
 		panic(err)
 	}
 	return fsys
 }
+
+var (
+	distFS    = subFS("web/dist")
+	assetsFS  = subFS("web/dist/assets")
+	imagesFS  = subFS("web/images")
+	landingFS = subFS("web")
+)
 
 func main() {
 	cfg := config.Load(utils.NewEnv())
@@ -71,19 +76,31 @@ func CreateApp() *fiber.App {
 	})
 	app.Use(compress.New(), cors.New(), logger.New())
 
-	routes.SetupStaticFiles(app)
+	landingHTML, _ := fs.ReadFile(landingFS, "landing.html")
+	spaIndex, _ := fs.ReadFile(distFS, "index.html")
+
+	assetsHandler := static.New("", static.Config{FS: assetsFS})
+	imagesHandler := static.New("", static.Config{FS: imagesFS})
+	uploadsHandler := static.New("./uploads")
+
+	app.Get("/", func(c fiber.Ctx) error {
+		c.Set("Content-Type", "text/html; charset=utf-8")
+		return c.Send(landingHTML)
+	})
+	app.Get("/assets/*", assetsHandler)
+	app.Get("/images/*", imagesHandler)
+	app.Get("/uploads/*", uploadsHandler)
+
 	routes.SetupAPIRoutes(app)
 
-	staticHandler := static.New("./web/public")
+	app.Use(middleware.OptionalAuth())
 	app.Get("/*", func(c fiber.Ctx) error {
 		path := c.Path()
 		if strings.HasPrefix(path, "/api/") {
 			return c.Status(404).JSON(fiber.Map{"error": "API endpoint not found"})
 		}
-		if strings.HasSuffix(path, ".svg") || strings.HasSuffix(path, ".png") {
-			return staticHandler(c)
-		}
-		return c.SendFile("./web/dist/index.html")
+		c.Set("Content-Type", "text/html; charset=utf-8")
+		return c.Send(spaIndex)
 	})
 
 	return app
