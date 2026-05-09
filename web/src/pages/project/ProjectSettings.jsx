@@ -27,7 +27,9 @@ function hmToSeconds(hours, minutes) {
 function formatDateTime(dateStr) {
   if (!dateStr) return '-'
   try {
-    return new Date(dateStr).toLocaleString(getLanguage() === 'zh' ? 'zh-CN' : 'en-US', {
+    var d = new Date(dateStr)
+    if (d.getFullYear() < 2) return '-'
+    return d.toLocaleString(getLanguage() === 'zh' ? 'zh-CN' : 'en-US', {
       year: 'numeric', month: '2-digit', day: '2-digit',
       hour: '2-digit', minute: '2-digit', second: '2-digit'
     })

@@ -421,6 +421,9 @@ export const adminAPI = {
   updateSyncPoint(id, data) {
     return api.put('/admin/sync-points/' + id, data)
   },
+  listSyncLogs(limit) {
+    return api.get('/admin/sync-logs', { limit: limit || 50 })
+  },
 }
 
 export default { getToken, setToken, authAPI, statsAPI, reposAPI, groupsAPI, activitiesAPI, snippetsAPI, issuesAPI, labelsAPI, prsAPI, tasksAPI, releasesAPI, usersAPI, adminAPI }

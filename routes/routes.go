@@ -110,6 +110,7 @@ func setupAdminRoutes(api fiber.Router) {
 
 	admin.Get("/sync-points", handlers.ListAllSyncPoints)
 	admin.Put("/sync-points/:id", handlers.AdminUpdateSyncPoint)
+	admin.Get("/sync-logs", handlers.ListAllSyncLogs)
 }
 
 // setupRepositoryRoutes 注册仓库资源路由（含子模块）
@@ -177,22 +178,22 @@ func setupRepoStarRoutes(repo fiber.Router) {
 
 // setupIssueRoutes 注册 Issue 相关路由
 func setupIssueRoutes(repo fiber.Router) {
-	repo.Get("/issues", handlers.ListIssues)
+	repo.Get("/issues", middleware.OptionalAuth(), handlers.ListIssues)
 	repo.Post("/issues", middleware.AuthMiddleware(), handlers.CreateIssue)
-	repo.Get("/issues/:number", handlers.GetIssue)
+	repo.Get("/issues/:number", middleware.OptionalAuth(), handlers.GetIssue)
 	repo.Put("/issues/:number", middleware.AuthMiddleware(), handlers.UpdateIssue)
-	repo.Get("/issues/:number/comments", handlers.GetComments)
+	repo.Get("/issues/:number/comments", middleware.OptionalAuth(), handlers.GetComments)
 	repo.Post("/issues/:number/comments", middleware.AuthMiddleware(), handlers.CreateComment)
-	repo.Get("/labels", handlers.ListLabels)
+	repo.Get("/labels", middleware.OptionalAuth(), handlers.ListLabels)
 }
 
 // setupPullRequestRoutes 注册 PR 相关路由
 func setupPullRequestRoutes(repo fiber.Router) {
-	repo.Get("/pull_requests", handlers.ListPullRequests)
+	repo.Get("/pull_requests", middleware.OptionalAuth(), handlers.ListPullRequests)
 	repo.Post("/pull_requests", middleware.AuthMiddleware(), handlers.CreatePullRequest)
-	repo.Get("/pull_requests/:number", handlers.GetPullRequest)
-	repo.Get("/pull_requests/:number/commits", handlers.GetPRCommits)
-	repo.Get("/pull_requests/:number/files", handlers.GetPRFiles)
+	repo.Get("/pull_requests/:number", middleware.OptionalAuth(), handlers.GetPullRequest)
+	repo.Get("/pull_requests/:number/commits", middleware.OptionalAuth(), handlers.GetPRCommits)
+	repo.Get("/pull_requests/:number/files", middleware.OptionalAuth(), handlers.GetPRFiles)
 	repo.Put("/pull_requests/:number", middleware.AuthMiddleware(), handlers.UpdatePullRequest)
 	repo.Post("/pull_requests/:number/merge", middleware.AuthMiddleware(), handlers.MergePullRequest)
 	repo.Post("/pull_requests/:number/close", middleware.AuthMiddleware(), handlers.ClosePullRequest)
@@ -201,32 +202,32 @@ func setupPullRequestRoutes(repo fiber.Router) {
 
 // setupTaskRoutes 注册任务管理路由
 func setupTaskRoutes(repo fiber.Router) {
-	repo.Get("/tasks", handlers.ListTasks)
+	repo.Get("/tasks", middleware.OptionalAuth(), handlers.ListTasks)
 	repo.Post("/tasks", middleware.AuthMiddleware(), handlers.CreateTask)
-	repo.Get("/tasks/:id", handlers.GetTask)
+	repo.Get("/tasks/:id", middleware.OptionalAuth(), handlers.GetTask)
 	repo.Put("/tasks/:id", middleware.AuthMiddleware(), handlers.UpdateTask)
 	repo.Delete("/tasks/:id", middleware.AuthMiddleware(), handlers.DeleteTask)
 	repo.Post("/tasks/:id/attachments", middleware.AuthMiddleware(), handlers.UploadTaskAttachment)
 	repo.Delete("/tasks/:id/attachments/:attachment_id", middleware.AuthMiddleware(), handlers.DeleteTaskAttachment)
 	repo.Post("/tasks/:id/issues", middleware.AuthMiddleware(), handlers.AddIssueToTask)
 	repo.Delete("/tasks/:id/issues/:issue_id", middleware.AuthMiddleware(), handlers.RemoveIssueFromTask)
-	repo.Get("/tasks/:id/comments", handlers.GetTaskComments)
+	repo.Get("/tasks/:id/comments", middleware.OptionalAuth(), handlers.GetTaskComments)
 	repo.Post("/tasks/:id/comments", middleware.AuthMiddleware(), handlers.CreateTaskComment)
 	repo.Post("/tasks/:id/transition", middleware.AuthMiddleware(), handlers.TransitionTask)
-	repo.Get("/tasks/:id/transitions", handlers.GetTaskTransitions)
+	repo.Get("/tasks/:id/transitions", middleware.OptionalAuth(), handlers.GetTaskTransitions)
 	repo.Post("/tasks/:id/pull_requests", middleware.AuthMiddleware(), handlers.LinkTaskPullRequest)
 	repo.Delete("/tasks/:id/pull_requests/:pr_id", middleware.AuthMiddleware(), handlers.UnlinkTaskPullRequest)
-	repo.Get("/tasks/:id/pull_requests", handlers.GetTaskPullRequests)
-	repo.Get("/tasks/:id/commits", handlers.GetTaskCommits)
+	repo.Get("/tasks/:id/pull_requests", middleware.OptionalAuth(), handlers.GetTaskPullRequests)
+	repo.Get("/tasks/:id/commits", middleware.OptionalAuth(), handlers.GetTaskCommits)
 	repo.Post("/tasks/:id/timer/start", middleware.AuthMiddleware(), handlers.StartTimer)
 	repo.Post("/tasks/:id/timer/stop", middleware.AuthMiddleware(), handlers.StopTimer)
-	repo.Get("/tasks/:id/time-logs", handlers.GetTaskTimeLogs)
-	repo.Get("/tasks/:id/time-summary", handlers.GetTaskTimeSummary)
+	repo.Get("/tasks/:id/time-logs", middleware.OptionalAuth(), handlers.GetTaskTimeLogs)
+	repo.Get("/tasks/:id/time-summary", middleware.OptionalAuth(), handlers.GetTaskTimeSummary)
 }
 
 // setupReleaseRoutes 注册发布版本路由
 func setupReleaseRoutes(repo fiber.Router) {
-	repo.Get("/releases", handlers.ListReleases)
-	repo.Get("/releases/:tag", handlers.GetRelease)
+	repo.Get("/releases", middleware.OptionalAuth(), handlers.ListReleases)
+	repo.Get("/releases/:tag", middleware.OptionalAuth(), handlers.GetRelease)
 	repo.Post("/releases/sync", middleware.AuthMiddleware(), handlers.SyncReleases)
 }

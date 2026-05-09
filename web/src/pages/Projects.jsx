@@ -25,12 +25,18 @@ const Projects = () => {
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState('all')
+  const [page, setPage] = useState(1)
+  var PAGE_SIZE = 6
 
   useEffect(() => {
     reposAPI.list().then(function(data) {
       setRepos(Array.isArray(data) ? data : [])
     }).catch(function() { setRepos([]) }).finally(function() { setLoading(false) })
   }, [])
+
+  useEffect(function() {
+    setPage(1)
+  }, [search, tab])
 
   var filtered = repos.filter(function(p) {
     var q = search.toLowerCase()
@@ -40,6 +46,9 @@ const Projects = () => {
     if (tab === 'starred') return p.is_starred || p.starred
     return true
   })
+
+  var totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  var paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   if (loading) {
     return (
@@ -90,7 +99,7 @@ const Projects = () => {
       </Box>
 
       <SimpleGrid columns={2} spacing="14px">
-        {filtered.map(function(p) {
+        {paged.map(function(p) {
           return (
             <RouterLink key={p.id || p.name} to={'/' + p.owner + '/' + p.name}>
               <Box bg="white" border="1px solid" borderColor="#e2e2e2"
@@ -135,6 +144,41 @@ const Projects = () => {
           )
         })}
       </SimpleGrid>
+
+      {totalPages > 1 && (
+        <Flex justify="center" align="center" gap="8px" mt="20px">
+          <Button h="32px" px="14px" fontSize="13px" rounded="6px" variant="outline"
+            borderColor="#d1d5db" color="#666"
+            _hover={{ borderColor: '#22c55e', color: '#16a34a' }}
+            _disabled={{ opacity: 0.4, cursor: 'not-allowed' }}
+            isDisabled={page <= 1}
+            onClick={function() { setPage(function(p) { return Math.max(1, p - 1) }) }}>
+            {t('projects.prevPage')}
+          </Button>
+          <HStack gap="4px">
+            {Array.from({ length: totalPages }, function(_, i) {
+              var pageNum = i + 1
+              return (
+                <Button key={pageNum} h="30px" w="34px" minW="34px" px="0" fontSize="13px" rounded="6px"
+                  bg={page === pageNum ? '#22c55e' : 'transparent'} color={page === pageNum ? 'white' : '#666'}
+                  border="1px solid" borderColor={page === pageNum ? '#22c55e' : '#d1d5db'}
+                  _hover={{ bg: page === pageNum ? '#16a34a' : '#f3f4f6', borderColor: page === pageNum ? '#16a34a' : '#c4c4c4' }}
+                  onClick={function() { setPage(pageNum) }}>
+                  {pageNum}
+                </Button>
+              )
+            })}
+          </HStack>
+          <Button h="32px" px="14px" fontSize="13px" rounded="6px" variant="outline"
+            borderColor="#d1d5db" color="#666"
+            _hover={{ borderColor: '#22c55e', color: '#16a34a' }}
+            _disabled={{ opacity: 0.4, cursor: 'not-allowed' }}
+            isDisabled={page >= totalPages}
+            onClick={function() { setPage(function(p) { return Math.min(totalPages, p + 1) }) }}>
+            {t('projects.nextPage')}
+          </Button>
+        </Flex>
+      )}
 
       {!loading && filtered.length === 0 && (
         <Box textAlign="center" py="60px" color="#aaa">

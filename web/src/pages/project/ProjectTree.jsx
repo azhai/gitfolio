@@ -76,7 +76,7 @@ const ProjectTree = () => {
   }, [owner, repo, parsed.filePath, parsed.ref, isFile])
 
   if (isFile) {
-    return <FileViewer />
+    return <FileViewer filePath={parsed.filePath} owner={owner} repo={repo} branchRef={parsed.ref || 'HEAD'} />
   }
 
   return (
@@ -89,7 +89,7 @@ const ProjectTree = () => {
       )}
       {isDir && readmePath && !readmeLoading && (
         <Box mt="20px">
-          <FileViewer filePath={readmePath} owner={owner} repo={repo} />
+          <FileViewer filePath={readmePath} owner={owner} repo={repo} branchRef={parsed.ref || 'HEAD'} />
         </Box>
       )}
     </Box>

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/azhai/gitfolio/config"
 	"github.com/azhai/gitfolio/helpers"
 	"github.com/azhai/gitfolio/models"
 	"github.com/azhai/gitfolio/services"
@@ -49,7 +50,7 @@ func SyncPullRepository(c fiber.Ctx) error {
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
 		"message":   "Code pulled successfully",
-		"last_sync": now.Format("2006-01-02T15:04:05Z07:00"),
+		"last_sync": helpers.FormatTime(now),
 		"git": fiber.Map{
 			"command":     gitResult.Command,
 			"output":      gitResult.Output,
@@ -96,14 +97,33 @@ func SyncIssuesData(c fiber.Ctx) error {
 			token = t.AccessToken
 		}
 	}
+	if token == "" {
+		_, token = config.GetUserToken()
+	}
 
 	ctx := context.Background()
+	startTime := time.Now()
 	syncResult, err := syncSvc.SyncRepositoryData(ctx, result.Repo.ID, remoteRepo.Platform, remoteRepo.Owner, remoteRepo.RepoName, token)
+	duration := time.Since(startTime).Milliseconds()
+
+	syncPoints, _ := db.SyncPoint.Select().Where("repository_id = ? AND sync_type = ?", result.Repo.ID, "mirror").All()
+	var syncPointID int64
+	if len(syncPoints) > 0 {
+		syncPointID = syncPoints[0].ID
+	}
+
 	if err != nil {
+		if syncPointID > 0 {
+			syncSvc.LogSync(syncPointID, "mirror", "failure", err.Error(), duration, 0, 0, "")
+		}
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error":   fmt.Sprintf("Failed to sync issues: %v", err),
 			"details": err.Error(),
 		})
+	}
+
+	if syncPointID > 0 {
+		syncSvc.LogSync(syncPointID, "mirror", "success", "", duration, syncResult.IssuesInserted+syncResult.IssuesUpdated+syncResult.PRsInserted+syncResult.PRsUpdated, 0, "")
 	}
 
 	now := time.Now()
@@ -112,7 +132,7 @@ func SyncIssuesData(c fiber.Ctx) error {
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
 		"message":         "Issues synced successfully",
-		"last_sync":       now.Format("2006-01-02T15:04:05Z07:00"),
+		"last_sync":       helpers.FormatTime(now),
 		"issues_inserted": syncResult.IssuesInserted,
 		"issues_updated":  syncResult.IssuesUpdated,
 		"prs_inserted":    syncResult.PRsInserted,

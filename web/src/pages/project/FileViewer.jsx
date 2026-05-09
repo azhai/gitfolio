@@ -344,7 +344,7 @@ function getRawUrl(owner, repo, filePath, ref) {
   return '/api/v1/' + owner + '/' + repo + '/raw/' + encodedPath + '?ref=' + (ref || 'HEAD')
 }
 
-const FileViewer = ({ filePath: propFilePath, owner: propOwner, repo: propRepo, ref: propRef }) => {
+const FileViewer = ({ filePath: propFilePath, owner: propOwner, repo: propRepo, branchRef: propRef }) => {
   const params = useParams()
   const location = useLocation()
   const owner = propOwner || params.owner

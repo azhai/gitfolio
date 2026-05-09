@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/azhai/gitfolio/cmd/seed"
 	"github.com/azhai/gitfolio/config"
 	"github.com/azhai/gitfolio/models"
 	"github.com/azhai/gitfolio/routes"
@@ -42,9 +41,6 @@ func main() {
 		log.Fatalf("Failed to open database: %v", err)
 	}
 	defer models.CloseDB()
-	seed.SeedUsers()
-	user, token := config.GetUserToken()
-	seed.AddGithubToken(user, token)
 
 	if err := os.MkdirAll(cfg.Repository.Root, 0755); err != nil {
 		log.Fatalf("Failed to create repository root: %v", err)
@@ -65,10 +61,9 @@ func main() {
 	}
 }
 
-// CreateApp 创建并配置 Fiber 应用，注册所有路由
 func CreateApp() *fiber.App {
 	app := fiber.New(fiber.Config{
-		AppName:       "Weekly Admin API",
+		AppName:       "GitFolio",
 		ReadTimeout:   30 * time.Second,
 		WriteTimeout:  30 * time.Second,
 		StrictRouting: true,
@@ -78,12 +73,6 @@ func CreateApp() *fiber.App {
 
 	routes.SetupStaticFiles(app)
 	routes.SetupAPIRoutes(app)
-
-	// app.Use("/images", static.New("./images"))
-	// embedCfg := static.Config{FS: getEmbedFS("public")}
-	// app.Get("/*", static.New("./public", embedCfg))
-
-	// app.Get("/*", static.New("./web/public"))
 
 	staticHandler := static.New("./web/public")
 	app.Get("/*", func(c fiber.Ctx) error {

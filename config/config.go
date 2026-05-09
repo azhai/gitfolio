@@ -8,8 +8,8 @@ type Config struct {
 	Server     ServerConfig
 	Database   DatabaseConfig
 	Auth       AuthConfig
-	Github     GithubConfig
 	Repository RepositoryConfig
+	Github     GithubConfig
 	Proxy      ProxyConfig
 }
 
@@ -36,17 +36,17 @@ type AuthConfig struct {
 	TokenExpiry   int
 }
 
-type GithubConfig struct {
-	Username string
-	Token    string
-}
-
 type RepositoryConfig struct {
 	Root string
 }
 
 type ProxyConfig struct {
 	URL string
+}
+
+type GithubConfig struct {
+	Username string
+	Token    string
 }
 
 var cfg *Config
@@ -69,15 +69,15 @@ func Load(env *utils.Environ) *Config {
 			SessionSecret: env.GetStr("SESSION_SECRET", "session-secret-key"),
 			TokenExpiry:   env.GetInt("TOKEN_EXPIRY", 24),
 		},
-		Github: GithubConfig{
-			Username: env.GetStr("GITHUB_USERNAME", ""),
-			Token:    env.GetStr("GITHUB_TOKEN", ""),
-		},
 		Repository: RepositoryConfig{
 			Root: env.GetStr("REPO_ROOT", "./repos"),
 		},
 		Proxy: ProxyConfig{
 			URL: env.GetStr("PROXY_URL", ""),
+		},
+		Github: GithubConfig{
+			Username: env.GetStr("GHITHUB_USERNAME", ""),
+			Token:    env.GetStr("GHITHUB_TOKEN", ""),
 		},
 	}
 	return cfg
@@ -91,10 +91,6 @@ func GetServerInfo() (int, string) {
 	return cfg.Server.Port, cfg.Server.BaseURL
 }
 
-func GetUserToken() (string, string) {
-	return cfg.Github.Username, cfg.Github.Token
-}
-
 func GetServerMode() string { return cfg.Server.Mode }
 func GetTheme() string      { return cfg.Server.Theme }
 func GetRepoRoot() string   { return cfg.Repository.Root }
@@ -104,3 +100,6 @@ func GetJWTSecret() string {
 func GetSessionSecret() string { return cfg.Auth.SessionSecret }
 func GetTokenExpiry() int      { return cfg.Auth.TokenExpiry }
 func GetProxyURL() string      { return cfg.Proxy.URL }
+func GetUserToken() (string, string) {
+	return cfg.Github.Username, cfg.Github.Token
+}

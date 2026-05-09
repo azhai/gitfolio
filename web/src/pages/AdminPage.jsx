@@ -2,12 +2,14 @@ import React, { useState, useEffect } from 'react'
 import { Box, Text, Flex, HStack, Badge, Button, Spinner, Input, Switch, useToast, Tabs, TabList, Tab, TabPanels, TabPanel } from '@chakra-ui/react'
 import { usersAPI, adminAPI } from '../api/index'
 import { t, timeAgo, getLanguage } from '../i18n/index'
-import { LuUsers as Users, LuClock as Clock, LuShield as Shield, LuMail as Mail, LuCalendar as Calendar, LuRefreshCw as RefreshCw, LuPause as Pause, LuPlay as Play } from 'react-icons/lu'
+import { LuUsers as Users, LuClock as Clock, LuShield as Shield, LuMail as Mail, LuCalendar as Calendar, LuRefreshCw as RefreshCw, LuPause as Pause, LuPlay as Play, LuFileText as FileText, LuCircleCheck as CheckCircle, LuCircleX as XCircle, LuTimer as Timer } from 'react-icons/lu'
 
 function formatDateTime(dateStr) {
   if (!dateStr) return '-'
   try {
-    return new Date(dateStr).toLocaleString(getLanguage() === 'zh' ? 'zh-CN' : 'en-US', {
+    var d = new Date(dateStr)
+    if (d.getFullYear() < 2) return '-'
+    return d.toLocaleString(getLanguage() === 'zh' ? 'zh-CN' : 'en-US', {
       month: '2-digit', day: '2-digit',
       hour: '2-digit', minute: '2-digit'
     })
@@ -133,9 +135,12 @@ var UserManagementTab = function() {
 var SyncManagementTab = function() {
   const toast = useToast()
   const [syncPoints, setSyncPoints] = useState([])
+  const [syncLogs, setSyncLogs] = useState([])
   const [loading, setLoading] = useState(true)
+  const [logsLoading, setLogsLoading] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [editValues, setEditValues] = useState({})
+  const [showLogs, setShowLogs] = useState(false)
 
   function fetchSyncPoints() {
     setLoading(true)
@@ -144,7 +149,18 @@ var SyncManagementTab = function() {
     }).catch(function() { setSyncPoints([]) }).finally(function() { setLoading(false) })
   }
 
+  function fetchSyncLogs() {
+    setLogsLoading(true)
+    adminAPI.listSyncLogs(50).then(function(data) {
+      setSyncLogs(data.logs || [])
+    }).catch(function() { setSyncLogs([]) }).finally(function() { setLogsLoading(false) })
+  }
+
   useEffect(fetchSyncPoints, [])
+
+  useEffect(function() {
+    if (showLogs) fetchSyncLogs()
+  }, [showLogs])
 
   function startEdit(sp) {
     setEditingId(sp.id)
@@ -182,11 +198,100 @@ var SyncManagementTab = function() {
     <Box>
       <Flex justify="space-between" align="center" mb="16px">
         <Text fontSize="14px" color="#888">{t('admin.totalScheduledTasks', { count: syncPoints.length })}</Text>
-        <Button h="28px" px="12px" fontSize="12px" rounded="6px" variant="outline"
-          borderColor="#d1d5db" color="#666" _hover={{ borderColor: '#22c55e', color: '#16a34a' }}
-          leftIcon={<RefreshCw size={13} />}
-          onClick={fetchSyncPoints}>{t('common.refresh')}</Button>
+        <HStack gap="8px">
+          <Button h="28px" px="12px" fontSize="12px" rounded="6px"
+            bg={showLogs ? '#22c55e' : 'transparent'} color={showLogs ? 'white' : '#666'}
+            border="1px solid" borderColor={showLogs ? '#22c55e' : '#d1d5db'}
+            _hover={{ borderColor: '#22c55e', color: showLogs ? 'white' : '#16a34a' }}
+            leftIcon={<FileText size={13} />}
+            onClick={function() { setShowLogs(!showLogs) }}>
+            {t('admin.executionLogs')}
+          </Button>
+          <Button h="28px" px="12px" fontSize="12px" rounded="6px" variant="outline"
+            borderColor="#d1d5db" color="#666" _hover={{ borderColor: '#22c55e', color: '#16a34a' }}
+            leftIcon={<RefreshCw size={13} />}
+            onClick={function() { fetchSyncPoints(); if (showLogs) fetchSyncLogs() }}>
+            {t('common.refresh')}
+          </Button>
+        </HStack>
       </Flex>
+
+      {showLogs && (
+        <Box mb="20px">
+          <HStack gap="6px" mb="12px">
+            <FileText size={15} color="#555" />
+            <Text fontSize="14px" fontWeight={600} color="#333">{t('admin.executionLogs')}</Text>
+            <Text fontSize="12px" color="#aaa">({syncLogs.length})</Text>
+          </HStack>
+          {logsLoading ? (
+            <Box display="flex" justifyContent="center" py="30px">
+              <Spinner size="md" color="#22c55e" />
+            </Box>
+          ) : syncLogs.length === 0 ? (
+            <Box bg="white" border="1px solid" borderColor="#e2e2e2" rounded="10px" p="30px" textAlign="center">
+              <Text fontSize="14px" color="#aaa">{t('admin.noLogs')}</Text>
+            </Box>
+          ) : (
+            <Box overflowX="auto">
+              <table style={{ width: '100%', borderCollapse: 'collapse', background: 'white', borderRadius: '10px', border: '1px solid #e2e2e2' }}>
+                <thead>
+                  <tr style={{ borderBottom: '2px solid #f0f0f0', fontSize: '12px', color: '#888', textAlign: 'left' }}>
+                    <th style={{ padding: '10px 14px', fontWeight: 500 }}>{t('admin.projectCol')}</th>
+                    <th style={{ padding: '10px 14px', fontWeight: 500 }}>{t('admin.typeCol')}</th>
+                    <th style={{ padding: '10px 14px', fontWeight: 500 }}>{t('admin.statusCol')}</th>
+                    <th style={{ padding: '10px 14px', fontWeight: 500 }}>{t('admin.durationCol')}</th>
+                    <th style={{ padding: '10px 14px', fontWeight: 500 }}>{t('admin.messageCol')}</th>
+                    <th style={{ padding: '10px 14px', fontWeight: 500 }}>{t('admin.timeCol')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {syncLogs.map(function(log) {
+                    return (
+                      <tr key={log.id} style={{ borderBottom: '1px solid #f0f0f0', fontSize: '13px' }}>
+                        <td style={{ padding: '10px 14px' }}>
+                          <Text fontWeight={500} color="#333" fontSize="13px">{log.owner_name}/{log.repo_name}</Text>
+                        </td>
+                        <td style={{ padding: '10px 14px' }}>
+                          <Badge fontSize="10px" px="6px" py="1px" rounded="4px"
+                            bg={log.sync_type === 'mirror' ? '#dbeafe' : '#fef3c7'}
+                            color={log.sync_type === 'mirror' ? '#2563eb' : '#d97706'}>
+                            {log.sync_type === 'mirror' ? t('admin.mirrorSync') : t('admin.statsRefresh')}
+                          </Badge>
+                        </td>
+                        <td style={{ padding: '10px 14px' }}>
+                          {log.status === 'success' ? (
+                            <HStack gap="4px" color="#16a34a">
+                              <CheckCircle size={14} />
+                              <Text fontSize="12px" fontWeight={500}>{t('admin.success')}</Text>
+                            </HStack>
+                          ) : (
+                            <HStack gap="4px" color="#dc2626">
+                              <XCircle size={14} />
+                              <Text fontSize="12px" fontWeight={500}>{t('admin.failure')}</Text>
+                            </HStack>
+                          )}
+                        </td>
+                        <td style={{ padding: '10px 14px' }}>
+                          <HStack gap="4px" color="#888">
+                            <Timer size={12} />
+                            <Text fontSize="12px">{log.duration > 0 ? (log.duration < 1000 ? log.duration + 'ms' : (log.duration / 1000).toFixed(1) + 's') : '-'}</Text>
+                          </HStack>
+                        </td>
+                        <td style={{ padding: '10px 14px', maxWidth: '260px' }}>
+                          <Text fontSize="12px" color={log.status === 'failure' ? '#dc2626' : '#888'} noOfLines={1}>{log.message || '-'}</Text>
+                        </td>
+                        <td style={{ padding: '10px 14px', color: '#888', fontSize: '12px', whiteSpace: 'nowrap' }}>
+                          {formatDateTime(log.created_at)}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </Box>
+          )}
+        </Box>
+      )}
 
       <Box overflowX="auto">
         <table style={{ width: '100%', borderCollapse: 'collapse', background: 'white', borderRadius: '10px', border: '1px solid #e2e2e2' }}>

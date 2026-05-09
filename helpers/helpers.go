@@ -2,10 +2,20 @@ package helpers
 
 import (
 	"strconv"
+	"time"
 
 	"github.com/azhai/gitfolio/config"
 	"github.com/gofiber/fiber/v3"
 )
+
+var cstZone = time.FixedZone("CST", 8*3600)
+
+func FormatTime(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return t.In(cstZone).Format("2006-01-02T15:04:05+08:00")
+}
 
 const (
 	HTTPStatusOK                  = 200

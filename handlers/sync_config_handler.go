@@ -41,13 +41,13 @@ func GetSyncConfig(c fiber.Ctx) error {
 		"project_type":  result.Repo.ProjectType,
 	}
 	if sp.LastSyncAt != nil {
-		resp["last_sync_at"] = sp.LastSyncAt.Format("2006-01-02T15:04:05Z07:00")
+		resp["last_sync_at"] = helpers.FormatTime(*sp.LastSyncAt)
 	}
 	if sp.LastSuccessAt != nil {
-		resp["last_success_at"] = sp.LastSuccessAt.Format("2006-01-02T15:04:05Z07:00")
+		resp["last_success_at"] = helpers.FormatTime(*sp.LastSuccessAt)
 	}
 	if sp.NextSyncAt != nil {
-		resp["next_sync_at"] = sp.NextSyncAt.Format("2006-01-02T15:04:05Z07:00")
+		resp["next_sync_at"] = helpers.FormatTime(*sp.NextSyncAt)
 	}
 
 	return c.Status(fiber.StatusOK).JSON(resp)
@@ -100,13 +100,13 @@ func UpdateSyncConfig(c fiber.Ctx) error {
 		"next_sync_at":  nil,
 	}
 	if sp.LastSyncAt != nil {
-		resp["last_sync_at"] = sp.LastSyncAt.Format("2006-01-02T15:04:05Z07:00")
+		resp["last_sync_at"] = helpers.FormatTime(*sp.LastSyncAt)
 	}
 	if sp.LastSuccessAt != nil {
-		resp["last_success_at"] = sp.LastSuccessAt.Format("2006-01-02T15:04:05Z07:00")
+		resp["last_success_at"] = helpers.FormatTime(*sp.LastSuccessAt)
 	}
 	if sp.NextSyncAt != nil {
-		resp["next_sync_at"] = sp.NextSyncAt.Format("2006-01-02T15:04:05Z07:00")
+		resp["next_sync_at"] = helpers.FormatTime(*sp.NextSyncAt)
 	}
 
 	return c.Status(fiber.StatusOK).JSON(resp)
@@ -136,7 +136,7 @@ func GetSyncLogs(c fiber.Ctx) error {
 			"duration":     l.Duration,
 			"items_synced": l.ItemsSynced,
 			"items_failed": l.ItemsFailed,
-			"created_at":   l.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+			"created_at":   helpers.FormatTime(l.CreatedAt),
 		}
 		items[i] = item
 	}
@@ -150,7 +150,7 @@ func ListAllSyncPoints(c fiber.Ctx) error {
 
 	syncPoints, err := schedulerSvc.ListAllSyncPoints()
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to list sync points"})
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": fmt.Sprintf("Failed to list sync points: %v", err)})
 	}
 
 	items := make([]fiber.Map, len(syncPoints))
@@ -171,13 +171,13 @@ func ListAllSyncPoints(c fiber.Ctx) error {
 			"next_sync_at":    nil,
 		}
 		if sp.LastSyncAt != nil {
-			item["last_sync_at"] = sp.LastSyncAt.Format("2006-01-02T15:04:05Z07:00")
+			item["last_sync_at"] = helpers.FormatTime(*sp.LastSyncAt)
 		}
 		if sp.LastSuccessAt != nil {
-			item["last_success_at"] = sp.LastSuccessAt.Format("2006-01-02T15:04:05Z07:00")
+			item["last_success_at"] = helpers.FormatTime(*sp.LastSuccessAt)
 		}
 		if sp.NextSyncAt != nil {
-			item["next_sync_at"] = sp.NextSyncAt.Format("2006-01-02T15:04:05Z07:00")
+			item["next_sync_at"] = helpers.FormatTime(*sp.NextSyncAt)
 		}
 		items[i] = item
 	}
@@ -232,4 +232,42 @@ func AdminUpdateSyncPoint(c fiber.Ctx) error {
 	}
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Sync point updated"})
+}
+
+func ListAllSyncLogs(c fiber.Ctx) error {
+	limitStr := c.Query("limit", "50")
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil || limit <= 0 {
+		limit = 50
+	}
+	if limit > 200 {
+		limit = 200
+	}
+
+	db := models.GetDB()
+	schedulerSvc := services.NewSchedulerService(db)
+
+	logs, err := schedulerSvc.ListAllSyncLogs(limit)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to list sync logs"})
+	}
+
+	items := make([]fiber.Map, len(logs))
+	for i, l := range logs {
+		items[i] = fiber.Map{
+			"id":            l.ID,
+			"sync_point_id": l.SyncPointID,
+			"owner_name":    l.OwnerName,
+			"repo_name":     l.RepoName,
+			"sync_type":     l.SyncType,
+			"status":        l.Status,
+			"message":       l.Message,
+			"duration":      l.Duration,
+			"items_synced":  l.ItemsSynced,
+			"items_failed":  l.ItemsFailed,
+			"created_at":    helpers.FormatTime(l.CreatedAt),
+		}
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{"logs": items})
 }

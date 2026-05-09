@@ -129,32 +129,41 @@ type GitHubPR struct {
 }
 
 func (s *SyncService) makeGitHubRequest(url string, token string) ([]byte, error) {
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Set("Accept", "application/vnd.github.v3+json")
-	if token != "" {
-		req.Header.Set("Authorization", fmt.Sprintf("token %s", token))
-	}
-
-	client := NewHTTPClient(30 * time.Second)
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		if resp.StatusCode == 403 && strings.Contains(string(body), "rate limit") {
-			return nil, fmt.Errorf("GitHub API rate limit exceeded. Please add a GitHub token for higher limits. URL: %s", url)
+	var lastErr error
+	for attempt := 0; attempt < 3; attempt++ {
+		if attempt > 0 {
+			time.Sleep(time.Duration(attempt) * 2 * time.Second)
 		}
-		return nil, fmt.Errorf("GitHub API returned status %d for URL %s: %s", resp.StatusCode, url, string(body))
-	}
 
-	return io.ReadAll(resp.Body)
+		req, err := http.NewRequest("GET", url, nil)
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("Accept", "application/vnd.github.v3+json")
+		if token != "" {
+			req.Header.Set("Authorization", fmt.Sprintf("token %s", token))
+		}
+
+		client := NewHTTPClient(30 * time.Second)
+		resp, err := client.Do(req)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(resp.Body)
+			if resp.StatusCode == 403 && strings.Contains(string(body), "rate limit") {
+				return nil, fmt.Errorf("GitHub API rate limit exceeded. Please add a GitHub token for higher limits. URL: %s", url)
+			}
+			return nil, fmt.Errorf("GitHub API returned status %d for URL %s: %s", resp.StatusCode, url, string(body))
+		}
+
+		return io.ReadAll(resp.Body)
+	}
+	return nil, fmt.Errorf("failed after 3 retries: %w", lastErr)
 }
 
 func (s *SyncService) FetchGitHubRepoInfo(cloneURL string) (*GitHubRepo, error) {
@@ -166,11 +175,12 @@ func (s *SyncService) FetchGitHubRepoInfo(cloneURL string) (*GitHubRepo, error) 
 	repo := parts[len(parts)-1]
 
 	var client *github.Client
+	httpClient := NewHTTPClient(30 * time.Second)
 	token := s.getGitHubToken()
 	if token != "" {
-		client = github.NewClient(nil).WithAuthToken(token)
+		client = github.NewClient(httpClient).WithAuthToken(token)
 	} else {
-		client = github.NewClient(nil)
+		client = github.NewClient(httpClient)
 	}
 
 	ctx := context.Background()
@@ -216,27 +226,36 @@ func (s *SyncService) FetchGitHubRepoInfo(cloneURL string) (*GitHubRepo, error) 
 
 func (s *SyncService) makeGiteaRequest(baseURL, path, token string) ([]byte, error) {
 	url := fmt.Sprintf("%s/api/v1/%s", baseURL, path)
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return nil, err
-	}
+	var lastErr error
+	for attempt := 0; attempt < 3; attempt++ {
+		if attempt > 0 {
+			time.Sleep(time.Duration(attempt) * 2 * time.Second)
+		}
 
-	if token != "" {
-		req.Header.Set("Authorization", "token "+token)
-	}
+		req, err := http.NewRequest("GET", url, nil)
+		if err != nil {
+			return nil, err
+		}
 
-	client := NewHTTPClient(30 * time.Second)
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
+		if token != "" {
+			req.Header.Set("Authorization", "token "+token)
+		}
 
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("Gitea API returned status %d", resp.StatusCode)
-	}
+		client := NewHTTPClient(30 * time.Second)
+		resp, err := client.Do(req)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		defer resp.Body.Close()
 
-	return io.ReadAll(resp.Body)
+		if resp.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("Gitea API returned status %d", resp.StatusCode)
+		}
+
+		return io.ReadAll(resp.Body)
+	}
+	return nil, fmt.Errorf("failed after 3 retries: %w", lastErr)
 }
 
 func (s *SyncService) SyncGiteaIssues(ctx context.Context, repoID int64, owner, repo, token string) (SyncResult, error) {
@@ -1236,6 +1255,7 @@ func (s *SyncService) LogSync(syncPointID int64, syncType, status, message strin
 		ItemsSynced: itemsSynced,
 		ItemsFailed: itemsFailed,
 		Details:     details,
+		CreatedAt:   time.Now(),
 	}
 
 	return s.db.SyncLog.Insert().One(&log)

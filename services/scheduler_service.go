@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/azhai/gitfolio/config"
 	"github.com/azhai/gitfolio/models"
 )
 
@@ -142,6 +143,9 @@ func (s *SchedulerService) checkMirrorSync(repo *models.Repository, now time.Tim
 			token = t.AccessToken
 		}
 	}
+	if token == "" {
+		_, token = config.GetUserToken()
+	}
 
 	startTime := time.Now()
 	ctx := context.Background()
@@ -261,7 +265,7 @@ func (s *SchedulerService) UpdateSyncConfig(repoID int64, syncType string, inter
 }
 
 func (s *SchedulerService) ListAllSyncPoints() ([]SyncPointInfo, error) {
-	syncPoints, err := s.db.SyncPoint.Select().OrderBy("sync_interval DESC, next_sync_at ASC").All()
+	syncPoints, err := s.db.SyncPoint.Select().OrderBy("sync_interval DESC").All()
 	if err != nil {
 		return nil, err
 	}
@@ -350,6 +354,70 @@ func (s *SchedulerService) GetSyncLogs(repoID int64, limit int) ([]models.SyncLo
 	result := make([]models.SyncLog, len(allLogs))
 	for i, l := range allLogs {
 		result[i] = *l
+	}
+	return result, nil
+}
+
+type SyncLogInfo struct {
+	ID          int64     `json:"id"`
+	SyncPointID int64     `json:"sync_point_id"`
+	OwnerName   string    `json:"owner_name"`
+	RepoName    string    `json:"repo_name"`
+	SyncType    string    `json:"sync_type"`
+	Status      string    `json:"status"`
+	Message     string    `json:"message"`
+	Duration    int64     `json:"duration"`
+	ItemsSynced int       `json:"items_synced"`
+	ItemsFailed int       `json:"items_failed"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+func (s *SchedulerService) ListAllSyncLogs(limit int) ([]SyncLogInfo, error) {
+	logs, err := s.db.SyncLog.Select().OrderBy("created_at DESC").Skip(0).Take(limit).All()
+	if err != nil {
+		return nil, err
+	}
+
+	pointCache := make(map[int64]*models.SyncPoint)
+	repoCache := make(map[int64]*models.Repository)
+
+	var result []SyncLogInfo
+	for _, l := range logs {
+		var sp *models.SyncPoint
+		var ok bool
+		if sp, ok = pointCache[l.SyncPointID]; !ok {
+			points, err := s.db.SyncPoint.Select().Where("id = ?", l.SyncPointID).All()
+			if err != nil || len(points) == 0 {
+				continue
+			}
+			sp = points[0]
+			pointCache[l.SyncPointID] = sp
+		}
+
+		var repo *models.Repository
+		if repo, ok = repoCache[sp.RepositoryID]; !ok {
+			r, err := s.db.Repository.Select().Where("id = ?", sp.RepositoryID).One()
+			if err != nil || r == nil {
+				continue
+			}
+			repo = r
+			repoCache[sp.RepositoryID] = repo
+		}
+
+		ownerName := s.getOwnerName(repo.OwnerID)
+		result = append(result, SyncLogInfo{
+			ID:          l.ID,
+			SyncPointID: l.SyncPointID,
+			OwnerName:   ownerName,
+			RepoName:    repo.Name,
+			SyncType:    l.SyncType,
+			Status:      l.Status,
+			Message:     l.Message,
+			Duration:    l.Duration,
+			ItemsSynced: l.ItemsSynced,
+			ItemsFailed: l.ItemsFailed,
+			CreatedAt:   l.CreatedAt,
+		})
 	}
 	return result, nil
 }
