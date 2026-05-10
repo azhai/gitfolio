@@ -14,10 +14,11 @@ type Config struct {
 }
 
 type ServerConfig struct {
-	Mode    string
-	Theme   string
-	Port    int
-	BaseURL string
+	Mode     string
+	Theme    string
+	Port     int
+	BaseURL  string
+	SiteMark string
 }
 
 type DatabaseConfig struct {
@@ -54,10 +55,11 @@ var cfg *Config
 func Load(env *utils.Environ) *Config {
 	cfg = &Config{
 		Server: ServerConfig{
-			Mode:    env.GetStr("APP_MODE", "debug"),
-			Theme:   env.GetStr("APP_THEME", "orange"),
-			Port:    env.GetInt("SERVER_PORT", 3000),
-			BaseURL: env.GetStr("BASE_URL", "http://localhost:3000"),
+			Mode:     env.GetStr("APP_MODE", "debug"),
+			Theme:    env.GetStr("APP_THEME", "orange"),
+			Port:     env.GetInt("SERVER_PORT", 3000),
+			BaseURL:  env.GetStr("BASE_URL", "http://localhost:3000"),
+			SiteMark: env.GetStr("SITE_MARK", ""),
 		},
 		Database: DatabaseConfig{
 			Type:    env.GetStr("DB_TYPE", "sqlite"),
@@ -93,6 +95,7 @@ func GetServerInfo() (int, string) {
 
 func GetServerMode() string { return cfg.Server.Mode }
 func GetTheme() string      { return cfg.Server.Theme }
+func GetSiteMark() string   { return cfg.Server.SiteMark }
 func GetRepoRoot() string   { return cfg.Repository.Root }
 func GetJWTSecret() string {
 	return cfg.Auth.JWTSecret

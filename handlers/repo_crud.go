@@ -149,7 +149,7 @@ func GetRepository(c fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(response)
 }
 
-// ListRepositories 分页获取仓库列表，未登录用户仅可见公开仓库
+// ListRepositories 分页获取仓库列表
 func ListRepositories(c fiber.Ctx) error {
 	page, _ := strconv.Atoi(c.Query("page", strconv.Itoa(config.DefaultPage)))
 	perPage, _ := strconv.Atoi(c.Query("per_page", strconv.Itoa(config.DefaultPerPage)))
@@ -161,7 +161,10 @@ func ListRepositories(c fiber.Ctx) error {
 	query := db.Repository.Select()
 
 	userID := middleware.GetCurrentUserID(c)
-	if userID == 0 {
+	role := middleware.GetCurrentUserRole(c)
+
+	if role == "admin" || role == "guest" {
+	} else if userID == 0 {
 		query = query.Where("project_type = ?", "local")
 	} else {
 		groupIDs := getUserGroupIDs(db, userID)

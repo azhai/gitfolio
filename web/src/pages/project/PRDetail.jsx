@@ -4,6 +4,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { prsAPI } from '../../api/index'
 import { t, timeAgo } from '../../i18n/index'
 import { LuGitPullRequest as GitPullRequest } from 'react-icons/lu'
+import { useAuth } from '../../contexts/AuthContext'
 
 function shortHash(hash) {
   return hash ? hash.substring(0, 7) : ''
@@ -18,6 +19,7 @@ var STATUS_MAP = {
 const PRDetail = () => {
   const { owner, repo, number } = useParams()
   const navigate = useNavigate()
+  const { isGuest, isAdmin, isLeader } = useAuth()
   const [pr, setPr] = useState(null)
   const [prCommits, setPrCommits] = useState([])
   const [prFiles, setPrFiles] = useState([])
@@ -95,12 +97,14 @@ const PRDetail = () => {
           </HStack>
         </Box>
         <HStack gap="8px">
-          {status === 'open' && (
+          {status === 'open' && !isGuest && (
             <>
-              <Button h="30px" px="14px" fontSize="13px" rounded="6px" bg="#7c3aed" color="white"
-                _hover={{ bg: '#6d28d9' }} onClick={function() { handleAction('merge') }} isLoading={actionLoading}>
-                {t('pr.merge')}
-              </Button>
+              {(isAdmin || isLeader) && (
+                <Button h="30px" px="14px" fontSize="13px" rounded="6px" bg="#7c3aed" color="white"
+                  _hover={{ bg: '#6d28d9' }} onClick={function() { handleAction('merge') }} isLoading={actionLoading}>
+                  {t('pr.merge')}
+                </Button>
+              )}
               <Button h="30px" px="14px" fontSize="13px" rounded="6px" variant="outline"
                 borderColor="#d1d5db" color="#666" _hover={{ borderColor: '#dc2626', color: '#dc2626' }}
                 onClick={function() { handleAction('close') }} isLoading={actionLoading}>
@@ -108,7 +112,7 @@ const PRDetail = () => {
               </Button>
             </>
           )}
-          {status === 'closed' && !pr.is_merged && (
+          {status === 'closed' && !pr.is_merged && !isGuest && (
             <Button h="30px" px="14px" fontSize="13px" rounded="6px" bg="#22c55e" color="white"
               _hover={{ bg: '#16a34a' }} onClick={function() { handleAction('reopen') }} isLoading={actionLoading}>
               {t('pr.reopen')}

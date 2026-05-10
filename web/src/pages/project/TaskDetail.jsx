@@ -6,6 +6,7 @@ import SimpleRenderer from '../../components/SimpleRenderer'
 import SimpleEditor from '../../components/SimpleEditor'
 import { t, timeAgo } from '../../i18n/index'
 import { LuClipboardList as ClipboardList, LuUser as User, LuWrench as Wrench, LuCircleCheckBig as CheckCircle2, LuMessageSquare as MessageSquare, LuPaperclip as Paperclip, LuLink as LinkIcon, LuUpload as Upload, LuX as X, LuTrash2 as Trash2, LuFile as FileIcon, LuImage as ImageIcon, LuFileText as FileText } from 'react-icons/lu'
+import { useAuth } from '../../contexts/AuthContext'
 
 var STATUS_CONFIG = {
   draft: { labelKey: 'task.status.draft', bg: '#f3f4f6', color: '#666' },
@@ -42,6 +43,7 @@ const TaskDetail = () => {
   const { owner, repo, id } = useParams()
   const navigate = useNavigate()
   const toast = useToast()
+  const { isGuest } = useAuth()
   const [task, setTask] = useState(null)
   const [comments, setComments] = useState([])
   const [loading, setLoading] = useState(true)
@@ -192,7 +194,7 @@ const TaskDetail = () => {
         </Box>
         {nextStatus && (
           <Button h="30px" px="14px" fontSize="13px" rounded="6px" bg="#22c55e" color="white"
-            _hover={{ bg: '#16a34a' }} onClick={handleTransition} isLoading={submitting}>
+            _hover={{ bg: '#16a34a' }} onClick={handleTransition} isLoading={submitting} isDisabled={isGuest}>
             {t('task.transitionTo', { status: t(STATUS_CONFIG[nextStatus].labelKey) })}
           </Button>
         )}
@@ -382,7 +384,7 @@ const TaskDetail = () => {
         <Flex justify="flex-end" mt="10px">
           <Button h="30px" px="14px" fontSize="13px" rounded="6px" bg="#22c55e" color="white"
             _hover={{ bg: '#16a34a' }} onClick={handleComment} isLoading={submitting}
-            isDisabled={!commentText.trim()}>
+            isDisabled={!commentText.trim() || isGuest}>
             {t('issue.submitComment')}
           </Button>
         </Flex>

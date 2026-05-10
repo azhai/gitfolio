@@ -4,8 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>GitFolio - 自托管 Git 仓库管理</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+SC:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+SC:wght@300;400;500;700;900&family=Inter:wght@300;400;500;700;900&display=swap" rel="stylesheet">
 <style>
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -22,12 +23,14 @@
   --text-dim: #94a3b8;
   --text-muted: #64748b;
   --mono: 'JetBrains Mono', monospace;
-  --sans: 'Noto Sans SC', system-ui, sans-serif;
+  --sans-zh: 'Noto Sans SC', system-ui, sans-serif;
+  --sans-en: 'Inter', system-ui, sans-serif;
 }
 
 html { scroll-behavior: smooth; }
+html[lang="zh-CN"] body { font-family: var(--sans-zh); }
+html[lang="en"] body { font-family: var(--sans-en); }
 body {
-  font-family: var(--sans);
   background: var(--bg);
   color: var(--text);
   line-height: 1.6;
@@ -95,6 +98,7 @@ nav {
   backdrop-filter: blur(20px);
   border-bottom: 1px solid var(--border);
 }
+.nav-left { display: flex; align-items: center; gap: 32px; }
 .nav-logo {
   display: flex;
   align-items: center;
@@ -105,7 +109,7 @@ nav {
   color: var(--green);
   text-decoration: none;
 }
-.nav-logo svg { width: 28px; height: 28px; }
+.nav-logo svg { width: 32px; height: 32px; }
 .nav-links { display: flex; align-items: center; gap: 32px; }
 .nav-links a {
   color: var(--text-dim);
@@ -115,6 +119,31 @@ nav {
   transition: color 0.2s;
 }
 .nav-links a:hover { color: var(--green); }
+.nav-right { display: flex; align-items: center; gap: 16px; }
+.lang-switch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 13px;
+  font-family: var(--mono);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.lang-switch:hover { border-color: var(--green); color: var(--green); }
+.lang-switch svg { width: 14px; height: 14px; }
+.nav-github {
+  display: flex;
+  align-items: center;
+  color: var(--text-dim);
+  transition: color 0.2s;
+}
+.nav-github:hover { color: var(--text); }
+.nav-github svg { width: 22px; height: 22px; }
 .nav-cta {
   padding: 8px 20px;
   background: var(--green);
@@ -421,7 +450,7 @@ footer a:hover { text-decoration: underline; }
 
 @media (max-width: 768px) {
   nav { padding: 0 20px; }
-  .nav-links a:not(.nav-cta) { display: none; }
+  .nav-links { display: none; }
   .hero { padding: 100px 20px 60px; }
   .section { padding: 60px 20px; }
   .features-grid { grid-template-columns: 1fr; }
@@ -433,181 +462,349 @@ footer a:hover { text-decoration: underline; }
 <body>
 
 <nav>
-  <a href="/" class="nav-logo">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-      <circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/>
-    </svg>
-    GitFolio
-  </a>
-  <div class="nav-links">
-    <a href="#features">功能</a>
-    <a href="#tech">技术栈</a>
-    <a href="/login" class="nav-cta">开始使用</a>
+  <div class="nav-left">
+    <a href="/" class="nav-logo">
+      <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+        <defs><linearGradient id="logoGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" style="stop-color:#22c55e"/><stop offset="100%" style="stop-color:#16a34a"/></linearGradient></defs>
+        <rect width="32" height="32" rx="8" fill="url(#logoGrad)"/>
+        <g transform="translate(4,4)" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/>
+          <path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/>
+          <path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/>
+          <path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/>
+        </g>
+      </svg>
+      GitFolio
+    </a>
+    <div class="nav-links">
+      <a href="#features" data-i18n="nav.features">功能</a>
+      <a href="#tech" data-i18n="nav.techStack">技术栈</a>
+    </div>
+  </div>
+  <div class="nav-right">
+    <a href="https://github.com/azhai/gitfolio" target="_blank" rel="noopener" class="nav-github" aria-label="GitHub">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+    </a>
+    <button class="lang-switch" onclick="toggleLang()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+      <span id="langLabel">EN</span>
+    </button>
+    <a href="/login" class="nav-cta" data-i18n="nav.getStarted">开始使用</a>
   </div>
 </nav>
 
 <section class="hero">
   <div class="hero-grid"></div>
   <div class="hero-glow"></div>
-  <div class="hero-badge"><span class="dot"></span> 开源 · 自托管 · 轻量级</div>
-  <h1>你的代码<br><span class="accent">你做主</span></h1>
-  <p>一个类似 Gitea 的 Git 仓库管理系统，采用 Go 语言开发。<br>轻量、快速、功能完备，部署即用。</p>
+  <div class="hero-badge"><span class="dot"></span> <span data-i18n="hero.badge">开源 · 自托管 · 轻量级</span></div>
+  <h1 data-i18n-html="hero.title">你的代码<br><span class="accent">你做主</span></h1>
+  <p data-i18n-html="hero.desc">一个类似 Gitea 的 Git 仓库管理系统，采用 Go 语言开发。<br>轻量、快速、功能完备，部署即用。</p>
   <div class="hero-actions">
     <a href="/login" class="btn-primary">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-      立即开始
+      <span data-i18n="hero.getStarted">立即开始</span>
     </a>
     <a href="#features" class="btn-secondary">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
-      了解更多
+      <span data-i18n="hero.learnMore">了解更多</span>
     </a>
   </div>
   <div class="hero-screenshot">
-    <img src="/images/screenshot-1.png" alt="GitFolio 截图" onerror="this.style.display='none'">
+    <img src="/images/screenshot-1.png" alt="GitFolio" onerror="this.style.display='none'">
   </div>
 </section>
 
 <section class="section" id="features">
   <div class="section-label">// Features</div>
-  <div class="section-title">功能完备，开箱即用</div>
-  <div class="section-desc">覆盖代码托管全流程，从仓库管理到项目协作，一站式解决。</div>
+  <div class="section-title" data-i18n="features.title">功能完备，开箱即用</div>
+  <div class="section-desc" data-i18n="features.desc">覆盖代码托管全流程，从仓库管理到项目协作，一站式解决。</div>
   <div class="features-grid">
     <div class="feature-card">
       <div class="feature-icon">🔐</div>
-      <h3>用户认证和授权</h3>
-      <p>基于 JWT 的安全认证体系，支持注册、登录、权限分级管理</p>
+      <h3 data-i18n="features.auth.title">用户认证和授权</h3>
+      <p data-i18n="features.auth.desc">基于 JWT 的安全认证体系，支持注册、登录、权限分级管理</p>
     </div>
     <div class="feature-card">
       <div class="feature-icon">📦</div>
-      <h3>Git 仓库管理</h3>
-      <p>完整的仓库 CRUD、分支与标签管理、提交历史浏览、文件查看</p>
+      <h3 data-i18n="features.repo.title">Git 仓库管理</h3>
+      <p data-i18n="features.repo.desc">完整的仓库 CRUD、分支与标签管理、提交历史浏览、文件查看</p>
     </div>
     <div class="feature-card">
       <div class="feature-icon">📝</div>
-      <h3>Issue 跟踪系统</h3>
-      <p>标签分类、人员指派、评论讨论，支持多维度筛选和状态管理</p>
+      <h3 data-i18n="features.issue.title">Issue 跟踪系统</h3>
+      <p data-i18n="features.issue.desc">标签分类、人员指派、评论讨论，支持多维度筛选和状态管理</p>
     </div>
     <div class="feature-card">
       <div class="feature-icon">🔀</div>
-      <h3>Pull Request 管理</h3>
-      <p>代码审查、合并、关闭、重开，完整的 PR 工作流支持</p>
+      <h3 data-i18n="features.pr.title">Pull Request 管理</h3>
+      <p data-i18n="features.pr.desc">代码审查、合并、关闭、重开，完整的 PR 工作流支持</p>
     </div>
     <div class="feature-card">
       <div class="feature-icon">✅</div>
-      <h3>任务管理系统</h3>
-      <p>排期规划、附件管理、关联 Issue、状态流转、时间追踪</p>
+      <h3 data-i18n="features.task.title">任务管理系统</h3>
+      <p data-i18n="features.task.desc">排期规划、附件管理、关联 Issue、状态流转、时间追踪</p>
     </div>
     <div class="feature-card">
       <div class="feature-icon">🔗</div>
-      <h3>提交自动关联</h3>
-      <p>提交消息自动解析关联 Issue/PR/Task，支持 Fixes #123 等语法</p>
+      <h3 data-i18n="features.autolink.title">提交自动关联</h3>
+      <p data-i18n="features.autolink.desc">提交消息自动解析关联 Issue/PR/Task，支持 Fixes #123 等语法</p>
     </div>
     <div class="feature-card">
       <div class="feature-icon">📝</div>
-      <h3>提交详情与比较</h3>
-      <p>签名验证、文件变更查看、差异对比，深入理解每一次提交</p>
+      <h3 data-i18n="features.commit.title">提交详情与比较</h3>
+      <p data-i18n="features.commit.desc">签名验证、文件变更查看、差异对比，深入理解每一次提交</p>
     </div>
     <div class="feature-card">
       <div class="feature-icon">⏱️</div>
-      <h3>任务时间追踪</h3>
-      <p>内置计时器、时间汇总统计，精准把控项目进度</p>
+      <h3 data-i18n="features.timetrack.title">任务时间追踪</h3>
+      <p data-i18n="features.timetrack.desc">内置计时器、时间汇总统计，精准把控项目进度</p>
     </div>
     <div class="feature-card">
       <div class="feature-icon">👥</div>
-      <h3>团队/组织管理</h3>
-      <p>创建团队、管理成员、权限控制，支持多人协作开发</p>
+      <h3 data-i18n="features.team.title">团队/组织管理</h3>
+      <p data-i18n="features.team.desc">创建团队、管理成员、权限控制，支持多人协作开发</p>
     </div>
     <div class="feature-card">
       <div class="feature-icon">🏷️</div>
-      <h3>里程碑管理</h3>
-      <p>项目阶段规划与跟踪，关联 Issue 和 PR，把控版本节奏</p>
+      <h3 data-i18n="features.milestone.title">里程碑管理</h3>
+      <p data-i18n="features.milestone.desc">项目阶段规划与跟踪，关联 Issue 和 PR，把控版本节奏</p>
     </div>
     <div class="feature-card">
       <div class="feature-icon">📊</div>
-      <h3>仓库统计和活动流</h3>
-      <p>代码统计、提交活动、贡献者分析，项目健康一目了然</p>
+      <h3 data-i18n="features.stats.title">仓库统计和活动流</h3>
+      <p data-i18n="features.stats.desc">代码统计、提交活动、贡献者分析，项目健康一目了然</p>
     </div>
     <div class="feature-card">
       <div class="feature-icon">💻</div>
-      <h3>代码片段管理</h3>
-      <p>创建和分享代码片段，支持多语言语法高亮</p>
+      <h3 data-i18n="features.snippet.title">代码片段管理</h3>
+      <p data-i18n="features.snippet.desc">创建和分享代码片段，支持多语言语法高亮</p>
     </div>
     <div class="feature-card">
       <div class="feature-icon">🔄</div>
-      <h3>仓库同步</h3>
-      <p>GitHub 镜像同步，定时拉取代码和 Issue 数据，保持远程同步</p>
+      <h3 data-i18n="features.sync.title">仓库同步</h3>
+      <p data-i18n="features.sync.desc">GitHub 镜像同步，定时拉取代码和 Issue 数据，保持远程同步</p>
     </div>
     <div class="feature-card">
       <div class="feature-icon">⭐</div>
-      <h3>Star 和 Watch</h3>
-      <p>收藏感兴趣的仓库，关注仓库动态，不错过任何更新</p>
+      <h3 data-i18n="features.star.title">Star 和 Watch</h3>
+      <p data-i18n="features.star.desc">收藏感兴趣的仓库，关注仓库动态，不错过任何更新</p>
     </div>
     <div class="feature-card">
       <div class="feature-icon">🚀</div>
-      <h3>Release 版本管理</h3>
-      <p>版本发布与标签管理，从 GitHub 同步 Release 信息</p>
+      <h3 data-i18n="features.release.title">Release 版本管理</h3>
+      <p data-i18n="features.release.desc">版本发布与标签管理，从 GitHub 同步 Release 信息</p>
     </div>
   </div>
 </section>
 
 <section class="section tech-section" id="tech">
   <div class="section-label">// Tech Stack</div>
-  <div class="section-title">现代技术栈，简洁高效</div>
-  <div class="section-desc">Go + React，前后端分离，轻量部署，零依赖烦恼。</div>
+  <div class="section-title" data-i18n="tech.title">现代技术栈，简洁高效</div>
+  <div class="section-desc" data-i18n="tech.desc">Go + React，前后端分离，轻量部署，零依赖烦恼。</div>
   <div class="tech-grid">
     <div class="tech-item">
       <div class="tech-name">Go 1.25+</div>
-      <div class="tech-desc">高性能后端</div>
+      <div class="tech-desc" data-i18n="tech.go">高性能后端</div>
     </div>
     <div class="tech-item">
       <div class="tech-name">Fiber v3</div>
-      <div class="tech-desc">Web 框架</div>
+      <div class="tech-desc" data-i18n="tech.fiber">Web 框架</div>
     </div>
     <div class="tech-item">
       <div class="tech-name">goent</div>
-      <div class="tech-desc">自研轻量 ORM</div>
+      <div class="tech-desc" data-i18n="tech.goent">自研轻量 ORM</div>
     </div>
     <div class="tech-item">
       <div class="tech-name">SQLite</div>
-      <div class="tech-desc">嵌入式数据库</div>
+      <div class="tech-desc" data-i18n="tech.sqlite">嵌入式数据库</div>
     </div>
     <div class="tech-item">
       <div class="tech-name">JWT</div>
-      <div class="tech-desc">安全认证</div>
+      <div class="tech-desc" data-i18n="tech.jwt">安全认证</div>
     </div>
     <div class="tech-item">
       <div class="tech-name">React 18</div>
-      <div class="tech-desc">前端框架</div>
+      <div class="tech-desc" data-i18n="tech.react">前端框架</div>
     </div>
     <div class="tech-item">
       <div class="tech-name">Chakra UI</div>
-      <div class="tech-desc">组件库</div>
+      <div class="tech-desc" data-i18n="tech.chakra">组件库</div>
     </div>
     <div class="tech-item">
       <div class="tech-name">Vite</div>
-      <div class="tech-desc">构建工具</div>
+      <div class="tech-desc" data-i18n="tech.vite">构建工具</div>
     </div>
   </div>
   <div class="terminal">
-    <span class="comment"># 快速启动</span><br>
+    <span class="comment" data-i18n="terminal.comment"># 快速启动</span><br>
     <span class="prompt">$</span> <span class="cmd">go run main.go</span><br>
-    <span class="comment"># 服务器将在 http://localhost:3000 启动</span>
+    <span class="comment" data-i18n="terminal.hint"># 服务器将在 http://localhost:3000 启动</span>
   </div>
 </section>
 
 <section class="cta-section">
   <div class="cta-glow"></div>
-  <h2>准备好开始了吗？</h2>
-  <p>部署你自己的 Git 仓库管理系统，只需一行命令。</p>
+  <h2 data-i18n="cta.title">准备好开始了吗？</h2>
+  <p data-i18n="cta.desc">部署你自己的 Git 仓库管理系统，只需一行命令。</p>
   <a href="/login" class="btn-primary">
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-    进入 GitFolio
+    <span data-i18n="cta.button">进入 GitFolio</span>
   </a>
 </section>
 
 <footer>
-  GitFolio · MIT License · 由 <a href="#">Go</a> 和 <a href="#">React</a> 驱动 · <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener">粤ICP备2026052659号-1</a>
+  GitFolio · MIT License · <span data-i18n="footer.poweredBy">由</span> <a href="#">Go</a> <span data-i18n="footer.and">和</span> <a href="#">React</a> <span data-i18n="footer.driven">驱动</span> · <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener">粤ICP备2026052659号-1</a>
 </footer>
+
+<script>
+var i18n = {
+  'zh-CN': {
+    'nav.features': '功能',
+    'nav.techStack': '技术栈',
+    'nav.getStarted': '开始使用',
+    'hero.badge': '开源 · 自托管 · 轻量级',
+    'hero.title': '你的代码<br><span class="accent">你做主</span>',
+    'hero.desc': '一个类似 Gitea 的 Git 仓库管理系统，采用 Go 语言开发。<br>轻量、快速、功能完备，部署即用。',
+    'hero.getStarted': '立即开始',
+    'hero.learnMore': '了解更多',
+    'features.title': '功能完备，开箱即用',
+    'features.desc': '覆盖代码托管全流程，从仓库管理到项目协作，一站式解决。',
+    'features.auth.title': '用户认证和授权',
+    'features.auth.desc': '基于 JWT 的安全认证体系，支持注册、登录、权限分级管理',
+    'features.repo.title': 'Git 仓库管理',
+    'features.repo.desc': '完整的仓库 CRUD、分支与标签管理、提交历史浏览、文件查看',
+    'features.issue.title': 'Issue 跟踪系统',
+    'features.issue.desc': '标签分类、人员指派、评论讨论，支持多维度筛选和状态管理',
+    'features.pr.title': 'Pull Request 管理',
+    'features.pr.desc': '代码审查、合并、关闭、重开，完整的 PR 工作流支持',
+    'features.task.title': '任务管理系统',
+    'features.task.desc': '排期规划、附件管理、关联 Issue、状态流转、时间追踪',
+    'features.autolink.title': '提交自动关联',
+    'features.autolink.desc': '提交消息自动解析关联 Issue/PR/Task，支持 Fixes #123 等语法',
+    'features.commit.title': '提交详情与比较',
+    'features.commit.desc': '签名验证、文件变更查看、差异对比，深入理解每一次提交',
+    'features.timetrack.title': '任务时间追踪',
+    'features.timetrack.desc': '内置计时器、时间汇总统计，精准把控项目进度',
+    'features.team.title': '团队/组织管理',
+    'features.team.desc': '创建团队、管理成员、权限控制，支持多人协作开发',
+    'features.milestone.title': '里程碑管理',
+    'features.milestone.desc': '项目阶段规划与跟踪，关联 Issue 和 PR，把控版本节奏',
+    'features.stats.title': '仓库统计和活动流',
+    'features.stats.desc': '代码统计、提交活动、贡献者分析，项目健康一目了然',
+    'features.snippet.title': '代码片段管理',
+    'features.snippet.desc': '创建和分享代码片段，支持多语言语法高亮',
+    'features.sync.title': '仓库同步',
+    'features.sync.desc': 'GitHub 镜像同步，定时拉取代码和 Issue 数据，保持远程同步',
+    'features.star.title': 'Star 和 Watch',
+    'features.star.desc': '收藏感兴趣的仓库，关注仓库动态，不错过任何更新',
+    'features.release.title': 'Release 版本管理',
+    'features.release.desc': '版本发布与标签管理，从 GitHub 同步 Release 信息',
+    'tech.title': '现代技术栈，简洁高效',
+    'tech.desc': 'Go + React，前后端分离，轻量部署，零依赖烦恼。',
+    'tech.go': '高性能后端',
+    'tech.fiber': 'Web 框架',
+    'tech.goent': '自研轻量 ORM',
+    'tech.sqlite': '嵌入式数据库',
+    'tech.jwt': '安全认证',
+    'tech.react': '前端框架',
+    'tech.chakra': '组件库',
+    'tech.vite': '构建工具',
+    'terminal.comment': '# 快速启动',
+    'terminal.hint': '# 服务器将在 http://localhost:3000 启动',
+    'cta.title': '准备好开始了吗？',
+    'cta.desc': '部署你自己的 Git 仓库管理系统，只需一行命令。',
+    'cta.button': '进入 GitFolio',
+    'footer.poweredBy': '由',
+    'footer.and': '和',
+    'footer.driven': '驱动'
+  },
+  'en': {
+    'nav.features': 'Features',
+    'nav.techStack': 'Tech Stack',
+    'nav.getStarted': 'Get Started',
+    'hero.badge': 'Open Source · Self-Hosted · Lightweight',
+    'hero.title': 'Your Code,<br><span class="accent">Your Rules</span>',
+    'hero.desc': 'A Gitea-like Git repository management system built with Go.<br>Lightweight, fast, feature-rich, ready to deploy.',
+    'hero.getStarted': 'Get Started',
+    'hero.learnMore': 'Learn More',
+    'features.title': 'Feature-Rich, Ready to Use',
+    'features.desc': 'Covers the entire code hosting workflow — from repo management to project collaboration, all in one place.',
+    'features.auth.title': 'Authentication & Authorization',
+    'features.auth.desc': 'JWT-based secure auth system with registration, login, and role-based access control',
+    'features.repo.title': 'Git Repository Management',
+    'features.repo.desc': 'Full repo CRUD, branch & tag management, commit history browsing, file viewer',
+    'features.issue.title': 'Issue Tracking',
+    'features.issue.desc': 'Labels, assignees, comments, multi-dimensional filtering and status management',
+    'features.pr.title': 'Pull Request Management',
+    'features.pr.desc': 'Code review, merge, close, reopen — complete PR workflow support',
+    'features.task.title': 'Task Management',
+    'features.task.desc': 'Scheduling, attachments, linked issues, status transitions, time tracking',
+    'features.autolink.title': 'Auto-Linked Commits',
+    'features.autolink.desc': 'Auto-parse commit messages to link Issues/PRs/Tasks, supports Fixes #123 syntax',
+    'features.commit.title': 'Commit Details & Diff',
+    'features.commit.desc': 'Signature verification, file changes, diff comparison — understand every commit',
+    'features.timetrack.title': 'Time Tracking',
+    'features.timetrack.desc': 'Built-in timer, time summary stats, precise project progress control',
+    'features.team.title': 'Team & Organization',
+    'features.team.desc': 'Create teams, manage members, permission control for collaborative development',
+    'features.milestone.title': 'Milestone Management',
+    'features.milestone.desc': 'Project phase planning & tracking, linked Issues and PRs, version cadence control',
+    'features.stats.title': 'Stats & Activity Feed',
+    'features.stats.desc': 'Code stats, commit activity, contributor analysis — project health at a glance',
+    'features.snippet.title': 'Code Snippets',
+    'features.snippet.desc': 'Create and share code snippets with multi-language syntax highlighting',
+    'features.sync.title': 'Repo Sync',
+    'features.sync.desc': 'GitHub mirror sync, scheduled code & issue data pull, stay in sync with remote',
+    'features.star.title': 'Star & Watch',
+    'features.star.desc': 'Star repos you like, watch repo activity, never miss an update',
+    'features.release.title': 'Release Management',
+    'features.release.desc': 'Version publishing & tag management, sync Release info from GitHub',
+    'tech.title': 'Modern Stack, Simple & Efficient',
+    'tech.desc': 'Go + React, decoupled frontend & backend, lightweight deployment, zero dependency headaches.',
+    'tech.go': 'High-perf Backend',
+    'tech.fiber': 'Web Framework',
+    'tech.goent': 'Lightweight ORM',
+    'tech.sqlite': 'Embedded Database',
+    'tech.jwt': 'Secure Auth',
+    'tech.react': 'Frontend Framework',
+    'tech.chakra': 'Component Library',
+    'tech.vite': 'Build Tool',
+    'terminal.comment': '# Quick start',
+    'terminal.hint': '# Server will start at http://localhost:3000',
+    'cta.title': 'Ready to Get Started?',
+    'cta.desc': 'Deploy your own Git repository management system with a single command.',
+    'cta.button': 'Enter GitFolio',
+    'footer.poweredBy': 'Powered by',
+    'footer.and': '&',
+    'footer.driven': ''
+  }
+};
+
+var currentLang = localStorage.getItem('landing-lang') || 'zh-CN';
+
+function applyLang(lang) {
+  currentLang = lang;
+  localStorage.setItem('landing-lang', lang);
+  document.documentElement.lang = lang;
+  var dict = i18n[lang];
+  document.querySelectorAll('[data-i18n]').forEach(function(el) {
+    var key = el.getAttribute('data-i18n');
+    if (dict[key] !== undefined) el.textContent = dict[key];
+  });
+  document.querySelectorAll('[data-i18n-html]').forEach(function(el) {
+    var key = el.getAttribute('data-i18n-html');
+    if (dict[key] !== undefined) el.innerHTML = dict[key];
+  });
+  document.getElementById('langLabel').textContent = lang === 'zh-CN' ? 'EN' : '中文';
+  document.title = lang === 'zh-CN' ? 'GitFolio - 自托管 Git 仓库管理' : 'GitFolio - Self-Hosted Git Repository Manager';
+}
+
+function toggleLang() {
+  applyLang(currentLang === 'zh-CN' ? 'en' : 'zh-CN');
+}
+
+applyLang(currentLang);
+</script>
 
 </body>
 </html>

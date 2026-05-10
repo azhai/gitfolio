@@ -69,9 +69,6 @@ export const authAPI = {
     setToken(null)
     return api.post('/auth/logout').catch(() => null)
   },
-  register(data) {
-    return api.post('/auth/register', data)
-  },
   me() {
     return api.get('/user/me')
   },

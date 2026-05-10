@@ -90,7 +90,7 @@ func UploadUserAvatar(c fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Target user not found"})
 	}
 
-	if !currentUser.IsAdmin && currentUser.ID != targetUser.ID {
+	if currentUser.Role != "admin" && currentUser.ID != targetUser.ID {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Only admins can update other users' avatar"})
 	}
 

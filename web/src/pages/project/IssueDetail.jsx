@@ -6,11 +6,13 @@ import SimpleRenderer from '../../components/SimpleRenderer'
 import SimpleEditor from '../../components/SimpleEditor'
 import { t, timeAgo, getLanguage } from '../../i18n/index'
 import { LuTriangleAlert as TriangleAlert, LuMessageSquare as MessageSquare, LuLock as Lock } from 'react-icons/lu'
+import { useAuth } from '../../contexts/AuthContext'
 
 const IssueDetail = () => {
   const { owner, repo, number } = useParams()
   const navigate = useNavigate()
   const toast = useToast()
+  const { isGuest } = useAuth()
   const [issue, setIssue] = useState(null)
   const [comments, setComments] = useState([])
   const [allLabels, setAllLabels] = useState([])
@@ -160,7 +162,7 @@ const IssueDetail = () => {
             <Flex justify="flex-end" mt="10px">
               <Button h="30px" px="14px" fontSize="13px" rounded="6px" bg="#22c55e" color="white"
                 _hover={{ bg: '#16a34a' }} onClick={handleComment} isLoading={submitting}
-                isDisabled={!commentText.trim()}>
+                isDisabled={!commentText.trim() || isGuest}>
                 {t('issue.submitComment')}
               </Button>
             </Flex>

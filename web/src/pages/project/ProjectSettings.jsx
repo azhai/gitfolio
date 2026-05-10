@@ -4,6 +4,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { reposAPI } from '../../api/index'
 import { t, timeAgo, getLanguage } from '../../i18n/index'
 import { LuSettings as Settings, LuTriangleAlert as AlertTriangle, LuClock as Clock, LuCircleCheck as CheckCircle, LuCircleX as XCircle, LuRefreshCw as RefreshCw } from 'react-icons/lu'
+import { useAuth } from '../../contexts/AuthContext'
 
 function formatIntervalLabel(seconds) {
   if (!seconds || seconds === 0) return t('common.manual')
@@ -48,6 +49,7 @@ const ProjectSettings = () => {
   const { owner, repo } = useParams()
   const navigate = useNavigate()
   const toast = useToast()
+  const { isGuest, isAdmin, isLeader } = useAuth()
   const [repoInfo, setRepoInfo] = useState(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -267,7 +269,7 @@ const ProjectSettings = () => {
         </Flex>
 
         <Button h="36px" px="20px" fontSize="14px" rounded="6px" bg="#22c55e" color="white"
-          _hover={{ bg: '#16a34a' }} onClick={handleSave} isLoading={saving}>
+          _hover={{ bg: '#16a34a' }} onClick={handleSave} isLoading={saving} isDisabled={isGuest}>
           {t('projectSettings.saveChanges')}
         </Button>
       </Box>
@@ -345,7 +347,7 @@ const ProjectSettings = () => {
             </Box>
 
             <Button h="36px" px="20px" fontSize="14px" rounded="6px" bg="#22c55e" color="white"
-              _hover={{ bg: '#16a34a' }} onClick={handleSyncConfigSave} isLoading={syncSaving}>
+              _hover={{ bg: '#16a34a' }} onClick={handleSyncConfigSave} isLoading={syncSaving} isDisabled={isGuest}>
               {t('projectSettings.saveSyncConfig')}
             </Button>
           </Box>
@@ -416,20 +418,20 @@ const ProjectSettings = () => {
           {isMirror && (
             <Button h="32px" px="16px" fontSize="13px" rounded="6px" variant="outline"
               borderColor="#22c55e" color="#16a34a" _hover={{ bg: '#f0fdf4' }}
-              onClick={handleSyncPull} isLoading={syncing.pull}>
+              onClick={handleSyncPull} isLoading={syncing.pull} isDisabled={isGuest}>
               {t('projectSettings.pullCode')}
             </Button>
           )}
           {isMirror && (
             <Button h="32px" px="16px" fontSize="13px" rounded="6px" variant="outline"
               borderColor="#3b82f6" color="#2563eb" _hover={{ bg: '#eff6ff' }}
-              onClick={handleSyncIssues} isLoading={syncing.issues}>
+              onClick={handleSyncIssues} isLoading={syncing.issues} isDisabled={isGuest}>
               {t('projectSettings.pullIssues')}
             </Button>
           )}
           <Button h="32px" px="16px" fontSize="13px" rounded="6px" variant="outline"
             borderColor="#d1d5db" color="#666" _hover={{ borderColor: '#22c55e', color: '#16a34a' }}
-            onClick={handleSyncPush} isLoading={syncing.push}>
+            onClick={handleSyncPush} isLoading={syncing.push} isDisabled={isGuest}>
             {t('projectSettings.pushToRemote')}
           </Button>
         </HStack>
@@ -446,7 +448,7 @@ const ProjectSettings = () => {
             }).catch(function(err) {
               toast({ title: err.message || t('projectSettings.refreshFailed'), status: 'error', duration: 3000 })
             })
-          }}>
+          }} isDisabled={isGuest}>
           {t('projectSettings.refreshStats')}
         </Button>
       </Box>
@@ -463,14 +465,14 @@ const ProjectSettings = () => {
             </Box>
             <Button h="30px" px="14px" fontSize="13px" rounded="6px" variant="outline"
               borderColor="#f59e0b" color="#d97706" _hover={{ bg: '#fffbeb' }}
-              onClick={function() { setTransferTarget(''); setTransferOpen(true) }}>
+              onClick={function() { setTransferTarget(''); setTransferOpen(true) }} isDisabled={!(isAdmin || isLeader)}>
               {t('projectSettings.transferProject')}
             </Button>
           </Flex>
         )}
 
         <Button h="30px" px="14px" fontSize="13px" rounded="6px" bg="#dc2626" color="white"
-          _hover={{ bg: '#b91c1c' }} onClick={function() { setDeleteConfirm(''); setDeleteOpen(true) }}>
+          _hover={{ bg: '#b91c1c' }} onClick={function() { setDeleteConfirm(''); setDeleteOpen(true) }} isDisabled={!(isAdmin || isLeader)}>
           {t('projectSettings.deleteProject')}
         </Button>
       </Box>

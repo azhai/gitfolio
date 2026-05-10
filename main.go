@@ -51,6 +51,8 @@ func main() {
 		log.Fatalf("Failed to create repository root: %v", err)
 	}
 
+	seedUsers()
+
 	app := CreateApp()
 	scheduler := services.NewSchedulerService(models.GetDB())
 	scheduler.Start()
@@ -83,6 +85,9 @@ func CreateApp() *fiber.App {
 	imagesHandler := static.New("", static.Config{FS: imagesFS})
 	uploadsHandler := static.New("./uploads")
 
+	faviconSVG, _ := fs.ReadFile(distFS, "favicon.svg")
+	faviconPNG, _ := fs.ReadFile(distFS, "favicon.png")
+
 	app.Get("/", func(c fiber.Ctx) error {
 		c.Set("Content-Type", "text/html; charset=utf-8")
 		return c.Send(landingHTML)
@@ -90,6 +95,14 @@ func CreateApp() *fiber.App {
 	app.Get("/assets/*", assetsHandler)
 	app.Get("/images/*", imagesHandler)
 	app.Get("/uploads/*", uploadsHandler)
+	app.Get("/favicon.svg", func(c fiber.Ctx) error {
+		c.Set("Content-Type", "image/svg+xml")
+		return c.Send(faviconSVG)
+	})
+	app.Get("/favicon.png", func(c fiber.Ctx) error {
+		c.Set("Content-Type", "image/png")
+		return c.Send(faviconPNG)
+	})
 
 	routes.SetupAPIRoutes(app)
 
@@ -114,4 +127,52 @@ func ErrorHandler(c fiber.Ctx, err error) error {
 		msg = e.Message
 	}
 	return c.Status(code).JSON(fiber.Map{"error": msg})
+}
+
+func seedUsers() {
+	db := models.GetDB()
+
+	users := []struct {
+		Username string
+		Email    string
+		Password string
+		FullName string
+		Role     string
+	}{
+		{"admin", "admin@gitfolio.local", "FolioAdmin", "管理员", "admin"},
+		{"demo", "demo@gitfolio.local", "demo123", "游客", "guest"},
+	}
+
+	for _, u := range users {
+		existing, err := db.User.Select().Where("username = ?", u.Username).One()
+		if err == nil && existing != nil {
+			if existing.Role != u.Role {
+				existing.Role = u.Role
+				if saveErr := db.User.Save().One(existing); saveErr != nil {
+					log.Printf("Failed to update role for %s: %v", u.Username, saveErr)
+				} else {
+					log.Printf("Updated role for %s: %s", u.Username, u.Role)
+				}
+			}
+			continue
+		}
+
+		user := &models.User{
+			Username: u.Username,
+			Email:    u.Email,
+			FullName: u.FullName,
+			IsActive: true,
+			Role:     u.Role,
+		}
+		if err := user.SetPassword(u.Password); err != nil {
+			log.Printf("Failed to set password for %s: %v", u.Username, err)
+			continue
+		}
+
+		if err := db.User.Save().One(user); err != nil {
+			log.Printf("Failed to seed user %s: %v", u.Username, err)
+		} else {
+			log.Printf("Seeded user: %s (role: %s)", u.Username, u.Role)
+		}
+	}
 }

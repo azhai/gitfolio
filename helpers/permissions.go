@@ -8,7 +8,8 @@ import (
 
 // CheckOwnerPermission 检查当前用户是否为资源所有者
 func CheckOwnerPermission(c fiber.Ctx, ownerID int64) bool {
-	if middleware.IsCurrentUserAdmin(c) {
+	role := middleware.GetCurrentUserRole(c)
+	if role == "admin" || role == "guest" {
 		return true
 	}
 	userID := middleware.GetCurrentUserID(c)
@@ -25,7 +26,8 @@ func RequireOwner(c fiber.Ctx, ownerID int64) error {
 
 // CheckUserPermission 检查当前用户是否为指定用户
 func CheckUserPermission(c fiber.Ctx, userID *int64) bool {
-	if middleware.IsCurrentUserAdmin(c) {
+	role := middleware.GetCurrentUserRole(c)
+	if role == "admin" || role == "guest" {
 		return true
 	}
 	if userID == nil {
@@ -79,7 +81,8 @@ func RequireAuth(c fiber.Ctx) error {
 
 // CheckGroupAdminPermission 检查当前用户是否为团队管理员或所有者
 func CheckGroupAdminPermission(c fiber.Ctx, groupID int64) bool {
-	if middleware.IsCurrentUserAdmin(c) {
+	role := middleware.GetCurrentUserRole(c)
+	if role == "admin" || role == "guest" {
 		return true
 	}
 	userID := middleware.GetCurrentUserID(c)
@@ -104,7 +107,8 @@ func RequireGroupAdmin(c fiber.Ctx, groupID int64) error {
 
 // CheckGroupMemberPermission 检查当前用户是否为团队成员
 func CheckGroupMemberPermission(c fiber.Ctx, groupID int64) bool {
-	if middleware.IsCurrentUserAdmin(c) {
+	role := middleware.GetCurrentUserRole(c)
+	if role == "admin" || role == "guest" {
 		return true
 	}
 	userID := middleware.GetCurrentUserID(c)

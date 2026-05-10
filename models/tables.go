@@ -59,8 +59,8 @@ type User struct {
 	Website  string
 	Location string
 
-	IsActive bool `goe:"default:true"`
-	IsAdmin  bool `goe:"default:false"`
+	IsActive bool   `goe:"default:true"`
+	Role     string `goe:"default:user"`
 }
 
 func (u *User) SetPassword(password string) error {

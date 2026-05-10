@@ -25,7 +25,7 @@ function NavIcon({ name, size = 15 }) {
 const TopNavbar = () => {
   const location = useLocation()
   const navigate = useNavigate()
-  const { user, isAuthenticated, logout } = useAuth()
+  const { user, isAuthenticated, isAdmin, logout } = useAuth()
   const [menuOpen, setMenuOpen] = useState(false)
 
   async function handleLogout() {
@@ -106,10 +106,12 @@ const TopNavbar = () => {
                   onClick={function() { setMenuOpen(false); navigate('/settings') }}>
                   <HStack gap="8px"><SettingsIcon size={15} /><Text>{t('nav.settings')}</Text></HStack>
                 </MenuItem>
-                <MenuItem fontSize="13.5px" rounded="6px" _hover={{ bg: '#f0fdf4', color: '#16a34a' }}
-                  onClick={function() { setMenuOpen(false); navigate('/admin') }}>
-                  <HStack gap="8px"><UsersIcon size={15} /><Text>{t('nav.admin')}</Text></HStack>
-                </MenuItem>
+                {isAdmin && (
+                  <MenuItem fontSize="13.5px" rounded="6px" _hover={{ bg: '#f0fdf4', color: '#16a34a' }}
+                    onClick={function() { setMenuOpen(false); navigate('/admin') }}>
+                    <HStack gap="8px"><UsersIcon size={15} /><Text>{t('nav.admin')}</Text></HStack>
+                  </MenuItem>
+                )}
                 <Box my="4px" borderTop="1px solid #eee" />
                 <MenuItem fontSize="13.5px" rounded="6px" color="#dc2626" _hover={{ bg: '#fef2f2' }}
                   onClick={handleLogout}>
@@ -119,16 +121,10 @@ const TopNavbar = () => {
             </Menu>
           ) : (
             <HStack gap="12px">
-              <Button h="30px" px="14px" fontSize="13px" rounded="6px" variant="outline"
-                borderColor="#d1d5db" color="#666"
-                _hover={{ borderColor: '#22c55e', color: '#16a34a', bg: '#f0fdf4' }}
-                onClick={function() { navigate('/login') }}>
-                {t('nav.login')}
-              </Button>
               <Button h="30px" px="14px" fontSize="13px" rounded="6px" bg="#22c55e" color="white"
                 _hover={{ bg: '#16a34a' }}
                 onClick={function() { navigate('/login') }}>
-                {t('nav.register')}
+                {t('nav.login')}
               </Button>
             </HStack>
           )}

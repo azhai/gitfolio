@@ -9,13 +9,6 @@ import (
 	"github.com/gofiber/fiber/v3"
 )
 
-// RegisterRequest 注册请求
-type RegisterRequest struct {
-	Username string `json:"username" validate:"required,min=3,max=64"`
-	Email    string `json:"email" validate:"required,email"`
-	Password string `json:"password" validate:"required,min=6"`
-}
-
 // LoginRequest 登录请求
 type LoginRequest struct {
 	Username string `json:"username" validate:"required"`
@@ -42,7 +35,7 @@ type UserResponse struct {
 	Website   string `json:"website"`
 	Location  string `json:"location"`
 	IsActive  bool   `json:"is_active"`
-	IsAdmin   bool   `json:"is_admin"`
+	Role      string `json:"role"`
 	CreatedAt string `json:"created_at"`
 	UpdatedAt string `json:"updated_at"`
 }
@@ -64,54 +57,10 @@ func ToUserResponse(user *models.User) *UserResponse {
 		Website:   user.Website,
 		Location:  user.Location,
 		IsActive:  user.IsActive,
-		IsAdmin:   user.IsAdmin,
+		Role:      user.Role,
 		CreatedAt: user.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		UpdatedAt: user.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 	}
-}
-
-// Register 注册新用户，返回用户信息和 JWT 令牌
-func Register(c fiber.Ctx) error {
-	var req RegisterRequest
-	if err := c.Bind().JSON(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
-	}
-
-	db := models.GetDB()
-
-	existingUser, _ := db.User.Select().Where("username = ?", req.Username).One()
-	if existingUser != nil {
-		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "Username already exists"})
-	}
-
-	existingUser, _ = db.User.Select().Where("email = ?", req.Email).One()
-	if existingUser != nil {
-		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "Email already exists"})
-	}
-
-	userModel := &models.User{
-		Username: req.Username,
-		Email:    req.Email,
-	}
-
-	if err := userModel.SetPassword(req.Password); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to hash password"})
-	}
-
-	err := db.User.Insert().One(userModel)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create user"})
-	}
-
-	token, err := middleware.GenerateToken(userModel)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to generate token"})
-	}
-
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
-		"user":  ToUserResponse(userModel),
-		"token": token,
-	})
 }
 
 // Login 用户登录，验证凭据后返回 JWT 令牌
@@ -227,7 +176,7 @@ func UpdateUserByUsername(c fiber.Ctx) error {
 		Location string `json:"location"`
 		Avatar   string `json:"avatar"`
 		IsActive *bool  `json:"is_active"`
-		IsAdmin  *bool  `json:"is_admin"`
+		Role     string `json:"role"`
 	}
 
 	if err := c.Bind().JSON(&req); err != nil {
@@ -246,7 +195,7 @@ func UpdateUserByUsername(c fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Target user not found"})
 	}
 
-	if !currentUser.IsAdmin {
+	if currentUser.Role != "admin" {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Only admins can update other users"})
 	}
 
@@ -268,8 +217,8 @@ func UpdateUserByUsername(c fiber.Ctx) error {
 	if req.IsActive != nil {
 		targetUser.IsActive = *req.IsActive
 	}
-	if req.IsAdmin != nil {
-		targetUser.IsAdmin = *req.IsAdmin
+	if req.Role != "" {
+		targetUser.Role = req.Role
 	}
 
 	err = db.User.Save().One(targetUser)
@@ -298,7 +247,8 @@ func GetUserRepositories(c fiber.Ctx) error {
 
 	query := db.Repository.Select().Where("owner_id = ? AND owner_type = 'user'", userModel.ID)
 	currentUserID := middleware.GetCurrentUserID(c)
-	if currentUserID != userModel.ID && !middleware.IsCurrentUserAdmin(c) {
+	role := middleware.GetCurrentUserRole(c)
+	if currentUserID != userModel.ID && role != "admin" && role != "guest" {
 		query = query.Where("project_type = ?", "local")
 	}
 

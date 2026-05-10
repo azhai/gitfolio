@@ -11,7 +11,7 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 const UserSettings = () => {
   const navigate = useNavigate()
   const toast = useToast()
-  const { user } = useAuth()
+  const { user, isGuest } = useAuth()
   const fileInputRef = useRef(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -145,10 +145,10 @@ const UserSettings = () => {
                   <Box position="absolute" bottom="0" right="0"
                     w="28px" h="28px" rounded="full" bg="#22c55e"
                     display="flex" alignItems="center" justifyContent="center"
-                    cursor="pointer" fontSize="14px" color="white"
-                    border="2px solid white"
-                    onClick={handleAvatarClick}
-                    _hover={{ bg: '#16a34a' }}>
+                    cursor={isGuest ? "not-allowed" : "pointer"} fontSize="14px" color="white"
+                    border="2px solid white" opacity={isGuest ? 0.5 : 1}
+                    onClick={isGuest ? undefined : handleAvatarClick}
+                    _hover={isGuest ? {} : { bg: '#16a34a' }}>
                     <Camera size={14} />
                   </Box>
                   <input ref={fileInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleAvatarChange} />
@@ -157,7 +157,7 @@ const UserSettings = () => {
                   <Text fontSize="14px" fontWeight="600" color="#333" mb="4px">{user?.full_name || user?.username}</Text>
                   <Text fontSize="13px" color="#888" mb="8px">@{user?.username}</Text>
                   <Button h="26px" px="10px" fontSize="12px" rounded="4px" variant="outline" borderColor="#d1d5db"
-                    onClick={handleAvatarClick} isLoading={avatarUploading}>
+                    onClick={handleAvatarClick} isLoading={avatarUploading} isDisabled={isGuest}>
                     {t('userSettings.changeAvatar')}
                   </Button>
                 </Box>
@@ -177,6 +177,7 @@ const UserSettings = () => {
                 <Text fontSize="13px" fontWeight="600" color="#555" mb="6px">{t('userSettings.name')} *</Text>
                 <Input value={profile.full_name} onChange={function(e) { setProfile(function(p) { return Object.assign({}, p, { full_name: e.target.value }) }) }}
                   placeholder={t('userSettings.namePlaceholder')} h="38px" fontSize="14px" borderRadius="8px" borderColor="#d1d5db"
+                  isReadOnly={isGuest}
                   _focus={{ borderColor: '#22c55e', boxShadow: '0 0 0 3px rgba(34,197,94,0.1)' }} />
               </Box>
 
@@ -184,6 +185,7 @@ const UserSettings = () => {
                 <Text fontSize="13px" fontWeight="600" color="#555" mb="6px">{t('userSettings.bio')}</Text>
                 <Textarea value={profile.bio} onChange={function(e) { setProfile(function(p) { return Object.assign({}, p, { bio: e.target.value }) }) }}
                   placeholder={t('userSettings.bioPlaceholder')} fontSize="14px" borderRadius="8px" borderColor="#d1d5db" rows={4}
+                  isReadOnly={isGuest}
                   _focus={{ borderColor: '#22c55e', boxShadow: '0 0 0 3px rgba(34,197,94,0.1)' }} />
               </Box>
 
@@ -191,6 +193,7 @@ const UserSettings = () => {
                 <Text fontSize="13px" fontWeight="600" color="#555" mb="6px">{t('userSettings.website')}</Text>
                 <Input value={profile.website} onChange={function(e) { setProfile(function(p) { return Object.assign({}, p, { website: e.target.value }) }) }}
                   placeholder="https://example.com" h="38px" fontSize="14px" borderRadius="8px" borderColor="#d1d5db"
+                  isReadOnly={isGuest}
                   _focus={{ borderColor: '#22c55e', boxShadow: '0 0 0 3px rgba(34,197,94,0.1)' }} />
               </Box>
 
@@ -198,6 +201,7 @@ const UserSettings = () => {
                 <Text fontSize="13px" fontWeight="600" color="#555" mb="6px">{t('userSettings.location')}</Text>
                 <Input value={profile.location} onChange={function(e) { setProfile(function(p) { return Object.assign({}, p, { location: e.target.value }) }) }}
                   placeholder={t('userSettings.locationPlaceholder')} h="38px" fontSize="14px" borderRadius="8px" borderColor="#d1d5db"
+                  isReadOnly={isGuest}
                   _focus={{ borderColor: '#22c55e', boxShadow: '0 0 0 3px rgba(34,197,94,0.1)' }} />
               </Box>
 
@@ -207,7 +211,7 @@ const UserSettings = () => {
                   {t('common.cancel')}
                 </Button>
                 <Button h="34px" px="20px" fontSize="13px" rounded="6px" bg="#22c55e" color="white"
-                  _hover={{ bg: '#16a34a' }} onClick={handleSaveProfile} isLoading={saving}>
+                  _hover={{ bg: '#16a34a' }} onClick={handleSaveProfile} isLoading={saving} isDisabled={isGuest}>
                   {t('userSettings.saveChanges')}
                 </Button>
               </Flex>
@@ -239,7 +243,7 @@ const UserSettings = () => {
 
               <Flex justify="flex-end">
                 <Button h="34px" px="20px" fontSize="13px" rounded="6px" bg="#22c55e" color="white"
-                  _hover={{ bg: '#16a34a' }} onClick={handleChangePassword} isLoading={saving}>
+                  _hover={{ bg: '#16a34a' }} onClick={handleChangePassword} isLoading={saving} isDisabled={isGuest}>
                   {t('userSettings.changePassword')}
                 </Button>
               </Flex>

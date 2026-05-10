@@ -36,11 +36,6 @@ export function AuthProvider({ children }) {
     return data
   }
 
-  const register = async function(regData) {
-    var data = await authAPI.register(regData)
-    return data
-  }
-
   const logout = async function() {
     try {
       await authAPI.logout()
@@ -53,8 +48,11 @@ export function AuthProvider({ children }) {
     user,
     loading,
     isAuthenticated: !!user,
+    role: user ? (user.role || 'user') : '',
+    isGuest: !!(user && user.role === 'guest'),
+    isAdmin: !!(user && user.role === 'admin'),
+    isLeader: !!(user && user.role === 'leader'),
     login,
-    register,
     logout,
     refreshUser: fetchMe,
   }

@@ -1,8 +1,9 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import { Box, Text, Link } from '@chakra-ui/react'
 import { Outlet, useParams, useLocation } from 'react-router-dom'
 import TopNavbar from './TopNavbar'
 import ProjectSidebar from './ProjectSidebar'
+import { statsAPI } from '../api/index'
 
 function isFileViewPath(pathname, owner, repo) {
   if (!owner || !repo) return false
@@ -23,6 +24,13 @@ const Layout = () => {
   const location = useLocation()
   const isProjectPage = !!params.owner && !!params.repo
   const hideSidebar = isFileViewPath(location.pathname, params.owner, params.repo)
+  const [siteMark, setSiteMark] = useState('')
+
+  useEffect(function() {
+    statsAPI.get().then(function(data) {
+      if (data && data.site_mark) setSiteMark(data.site_mark)
+    }).catch(function() {})
+  }, [])
 
   return (
     <Box minH="100vh" bg="#f5f5f5">
@@ -47,11 +55,13 @@ const Layout = () => {
         textAlign="center"
         bg="#f5f5f5"
       >
-        <Text fontSize="12px" color="gray.400">
-          <Link href="https://beian.miit.gov.cn/" target="_blank" rel="noopener" _hover={{ color: 'gray.600' }}>
-            粤ICP备2026052659号-1
-          </Link>
-        </Text>
+        {siteMark && (
+          <Text fontSize="12px" color="gray.400">
+            <Link href="https://beian.miit.gov.cn/" target="_blank" rel="noopener" _hover={{ color: 'gray.600' }}>
+              {siteMark}
+            </Link>
+          </Text>
+        )}
       </Box>
     </Box>
   )

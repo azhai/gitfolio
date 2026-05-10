@@ -6,6 +6,7 @@ import { t, timeAgo } from '../i18n/index'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { getThemeStyle } from '../codeThemes'
 import { LuFileCode as FileCode, LuGlobe as Globe, LuLock as Lock } from 'react-icons/lu'
+import { useAuth } from '../contexts/AuthContext'
 
 var LANG_COLORS = {
   Go: '#00ADD8', JavaScript: '#F7DF1E', TypeScript: '#3178C6',
@@ -21,6 +22,7 @@ const LANGUAGES = ['Go', 'JavaScript', 'TypeScript', 'Python', 'Ruby', 'Java', '
 const SnippetDetail = () => {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { isGuest } = useAuth()
   const [snippet, setSnippet] = useState(null)
   const [loading, setLoading] = useState(true)
 
@@ -79,10 +81,13 @@ const SnippetDetail = () => {
           </HStack>
         </Box>
         <HStack gap="8px">
+          {!isGuest && (
           <Button h="30px" px="14px" fontSize="13px" rounded="6px" variant="outline"
             borderColor="#d1d5db" color="#666" onClick={function() { navigate('/snippets/' + id + '/edit') }}>
             {t('snippet.edit')}
           </Button>
+          )}
+          {!isGuest && (
           <Button h="30px" px="14px" fontSize="13px" rounded="6px" variant="outline"
             borderColor="#fecaca" color="#dc2626" _hover={{ bg: '#fef2f2' }}
             onClick={function() {
@@ -91,6 +96,7 @@ const SnippetDetail = () => {
             }}>
             {t('snippet.delete')}
           </Button>
+          )}
         </HStack>
       </Flex>
 

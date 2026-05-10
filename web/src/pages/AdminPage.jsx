@@ -101,7 +101,7 @@ var UserManagementTab = function() {
                     </HStack>
                   </td>
                   <td style={{ padding: '12px 16px' }}>
-                    {user.is_admin ? (
+                    {user.role === 'admin' ? (
                       <Badge fontSize="10px" px="6px" py="1px" rounded="4px" bg="#ede9fe" color="#7c3aed">
                         <HStack gap="4px"><Shield size={10} /><Text>{t('common.administrator')}</Text></HStack>
                       </Badge>

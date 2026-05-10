@@ -10,24 +10,22 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-// Claims JWT 令牌的自定义声明
 type Claims struct {
 	UserID   int64  `json:"user_id"`
 	Username string `json:"username"`
 	Email    string `json:"email"`
-	IsAdmin  bool   `json:"is_admin"`
+	Role     string `json:"role"`
 	jwt.RegisteredClaims
 }
 
-// GenerateToken 为用户生成 JWT 令牌，有效期 24 小时
 func GenerateToken(user *models.User) (string, error) {
 	claims := Claims{
 		UserID:   user.ID,
 		Username: user.Username,
 		Email:    user.Email,
-		IsAdmin:  user.IsAdmin,
+		Role:     user.Role,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Duration(config.GetTokenExpiry()) * time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			NotBefore: jwt.NewNumericDate(time.Now()),
 		},
@@ -37,7 +35,6 @@ func GenerateToken(user *models.User) (string, error) {
 	return token.SignedString([]byte(config.GetJWTSecret()))
 }
 
-// AuthMiddleware 要求请求携带有效 JWT 令牌，否则返回 401
 func AuthMiddleware() fiber.Handler {
 	return func(c fiber.Ctx) error {
 		authHeader := c.Get("Authorization")
@@ -64,13 +61,12 @@ func AuthMiddleware() fiber.Handler {
 		c.Locals("user_id", claims.UserID)
 		c.Locals("username", claims.Username)
 		c.Locals("email", claims.Email)
-		c.Locals("is_admin", claims.IsAdmin)
+		c.Locals("role", claims.Role)
 
 		return c.Next()
 	}
 }
 
-// OptionalAuth 可选认证中间件，令牌有效时注入用户信息，无效时继续放行
 func OptionalAuth() fiber.Handler {
 	return func(c fiber.Ctx) error {
 		authHeader := c.Get("Authorization")
@@ -94,25 +90,43 @@ func OptionalAuth() fiber.Handler {
 			c.Locals("user_id", claims.UserID)
 			c.Locals("username", claims.Username)
 			c.Locals("email", claims.Email)
-			c.Locals("is_admin", claims.IsAdmin)
+			c.Locals("role", claims.Role)
 		}
 
 		return c.Next()
 	}
 }
 
-// AdminOnly 要求当前用户为管理员，否则返回 403
+func GuestReadOnly() fiber.Handler {
+	return func(c fiber.Ctx) error {
+		role := GetCurrentUserRole(c)
+		if role == "guest" {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Guest users cannot perform this action"})
+		}
+		return c.Next()
+	}
+}
+
 func AdminOnly() fiber.Handler {
 	return func(c fiber.Ctx) error {
-		isAdmin := c.Locals("is_admin")
-		if isAdmin == nil || !isAdmin.(bool) {
+		role := GetCurrentUserRole(c)
+		if role != "admin" {
 			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Admin access required"})
 		}
 		return c.Next()
 	}
 }
 
-// GetCurrentUser 从上下文中获取当前登录用户
+func LeaderOrAdmin() fiber.Handler {
+	return func(c fiber.Ctx) error {
+		role := GetCurrentUserRole(c)
+		if role != "admin" && role != "leader" {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Leader or admin access required"})
+		}
+		return c.Next()
+	}
+}
+
 func GetCurrentUser(c fiber.Ctx) (*models.User, error) {
 	userID := c.Locals("user_id")
 	if userID == nil {
@@ -120,7 +134,6 @@ func GetCurrentUser(c fiber.Ctx) (*models.User, error) {
 	}
 
 	db := models.GetDB()
-
 	user, err := db.User.Select().Where("id = ?", userID.(int64)).One()
 	if err != nil {
 		return nil, err
@@ -129,7 +142,6 @@ func GetCurrentUser(c fiber.Ctx) (*models.User, error) {
 	return user, nil
 }
 
-// GetCurrentUserID 从上下文中获取当前登录用户 ID，未登录返回 0
 func GetCurrentUserID(c fiber.Ctx) int64 {
 	userID := c.Locals("user_id")
 	if userID == nil {
@@ -138,8 +150,14 @@ func GetCurrentUserID(c fiber.Ctx) int64 {
 	return userID.(int64)
 }
 
-// IsCurrentUserAdmin 检查当前用户是否为超级管理员
+func GetCurrentUserRole(c fiber.Ctx) string {
+	role := c.Locals("role")
+	if role == nil {
+		return ""
+	}
+	return role.(string)
+}
+
 func IsCurrentUserAdmin(c fiber.Ctx) bool {
-	isAdmin := c.Locals("is_admin")
-	return isAdmin != nil && isAdmin.(bool)
+	return GetCurrentUserRole(c) == "admin"
 }

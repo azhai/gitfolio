@@ -50,7 +50,7 @@ const UserProfile = () => {
             <HStack gap="10px" mb="4px">
               <Text fontSize="22px" fontWeight="700" color="#333">{user.full_name || user.username}</Text>
               <Text fontSize="15px" color="#888">@{user.username}</Text>
-              {user.is_admin && (
+              {user.role === 'admin' && (
                 <Badge fontSize="11px" px="6px" py="1px" rounded="4px" bg="#ede9fe" color="#7c3aed">{t('common.administrator')}</Badge>
               )}
             </HStack>

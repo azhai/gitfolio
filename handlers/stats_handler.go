@@ -21,6 +21,7 @@ type StatsResponse struct {
 	TotalStars   int    `json:"total_stars"`
 	TotalForks   int    `json:"total_forks"`
 	Theme        string `json:"theme"`
+	SiteMark     string `json:"site_mark"`
 }
 
 func GetStats(c fiber.Ctx) error {
@@ -59,6 +60,7 @@ func GetStats(c fiber.Ctx) error {
 		TotalStars:   int(totalStars),
 		TotalForks:   int(totalForks),
 		Theme:        config.GetTheme(),
+		SiteMark:     config.GetSiteMark(),
 	}
 
 	return c.Status(fiber.StatusOK).JSON(stats)

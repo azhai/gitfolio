@@ -4,11 +4,13 @@ import { useParams, useNavigate, Link as RouterLink } from 'react-router-dom'
 import { groupsAPI } from '../api/index'
 import { t, timeAgo } from '../i18n/index'
 import { LuUsers as Users, LuUser as User, LuLink2 as Link2, LuMapPin as MapPin } from 'react-icons/lu'
+import { useAuth } from '../contexts/AuthContext'
 
 const GroupDetail = () => {
   const { name } = useParams()
   const navigate = useNavigate()
   const toast = useToast()
+  const { isGuest } = useAuth()
   const [group, setGroup] = useState(null)
   const [members, setMembers] = useState([])
   const [loading, setLoading] = useState(true)
@@ -108,7 +110,7 @@ const GroupDetail = () => {
                 placeholder="member" h="36px" fontSize="14px" borderRadius="8px" borderColor="#d1d5db" />
             </Box>
             <Button h="36px" px="16px" fontSize="13px" rounded="6px" bg="#22c55e" color="white"
-              _hover={{ bg: '#16a34a' }} onClick={handleAddMember} isLoading={addingMember}>
+              _hover={{ bg: '#16a34a' }} onClick={handleAddMember} isLoading={addingMember} isDisabled={isGuest}>
               {t('group.add')}
             </Button>
           </Flex>
@@ -138,7 +140,7 @@ const GroupDetail = () => {
                   </HStack>
                   {email && <Text fontSize="12px" color="#888">{email}</Text>}
                 </Box>
-                {role !== 'owner' && (
+                {role !== 'owner' && !isGuest && (
                   <Button h="26px" px="10px" fontSize="12px" rounded="4px" variant="outline"
                     borderColor="#fecaca" color="#dc2626" _hover={{ bg: '#fef2f2' }}
                     onClick={function() { handleRemoveMember(username) }}>
