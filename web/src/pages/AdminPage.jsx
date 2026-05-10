@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react'
-import { Box, Text, Flex, HStack, Badge, Button, Spinner, Input, Switch, useToast, Tabs, TabList, Tab, TabPanels, TabPanel } from '@chakra-ui/react'
+import { Box, Text, Flex, HStack, VStack, Badge, Button, Spinner, Input, Switch, useToast, Tabs, TabList, Tab, TabPanels, TabPanel, Modal, ModalOverlay, ModalContent, ModalHeader, ModalBody, ModalFooter, ModalCloseButton, Select, useDisclosure } from '@chakra-ui/react'
 import { usersAPI, adminAPI } from '../api/index'
 import { t, timeAgo, getLanguage } from '../i18n/index'
-import { LuUsers as Users, LuClock as Clock, LuShield as Shield, LuMail as Mail, LuCalendar as Calendar, LuRefreshCw as RefreshCw, LuPause as Pause, LuPlay as Play, LuFileText as FileText, LuCircleCheck as CheckCircle, LuCircleX as XCircle, LuTimer as Timer } from 'react-icons/lu'
+import { LuUsers as Users, LuClock as Clock, LuShield as Shield, LuMail as Mail, LuCalendar as Calendar, LuRefreshCw as RefreshCw, LuPause as Pause, LuPlay as Play, LuFileText as FileText, LuCircleCheck as CheckCircle, LuCircleX as XCircle, LuTimer as Timer, LuPlus as Plus } from 'react-icons/lu'
 
 function formatDateTime(dateStr) {
   if (!dateStr) return '-'
@@ -41,17 +41,44 @@ var UserManagementTab = function() {
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const toast = useToast()
+  const { isOpen, onOpen, onClose } = useDisclosure()
+  const [form, setForm] = useState({ username: '', email: '', password: '', full_name: '', role: 'user' })
+  const [creating, setCreating] = useState(false)
 
-  useEffect(function() {
+  function fetchUsers() {
+    setLoading(true)
     usersAPI.list().then(function(data) {
       setUsers(Array.isArray(data) ? data : [])
     }).catch(function() { setUsers([]) }).finally(function() { setLoading(false) })
-  }, [])
+  }
+
+  useEffect(fetchUsers, [])
 
   var filtered = users.filter(function(u) {
     var q = search.toLowerCase()
     return ((u.username || '') + ' ' + (u.full_name || '') + ' ' + (u.email || '')).toLowerCase().indexOf(q) >= 0
   })
+
+  function handleCreate() {
+    if (!form.username) { toast({ title: t('userMgmt.usernameRequired'), status: 'warning', duration: 2000 }); return }
+    if (!form.email) { toast({ title: t('userMgmt.emailRequired'), status: 'warning', duration: 2000 }); return }
+    if (!form.password) { toast({ title: t('userMgmt.passwordRequired'), status: 'warning', duration: 2000 }); return }
+    if (form.password.length < 6) { toast({ title: t('userMgmt.passwordMinLength'), status: 'warning', duration: 2000 }); return }
+
+    setCreating(true)
+    usersAPI.create(form).then(function() {
+      toast({ title: t('common.success'), status: 'success', duration: 2000 })
+      setForm({ username: '', email: '', password: '', full_name: '', role: 'user' })
+      onClose()
+      fetchUsers()
+    }).catch(function(err) {
+      var msg = err.message || t('userMgmt.createFailed')
+      if (msg.indexOf('username already exists') >= 0) msg = t('userMgmt.usernameExists')
+      if (msg.indexOf('email already exists') >= 0) msg = t('userMgmt.emailExists')
+      toast({ title: msg, status: 'error', duration: 3000 })
+    }).finally(function() { setCreating(false) })
+  }
 
   if (loading) {
     return (
@@ -63,11 +90,17 @@ var UserManagementTab = function() {
 
   return (
     <Box>
-      <Box bg="white" border="1px solid" borderColor="#e2e2e2" rounded="10px" p="16px" mb="20px">
-        <Input placeholder={t('admin.searchUser')} value={search} onChange={function(e) { setSearch(e.target.value) }}
-          h="36px" fontSize="14px" borderRadius="8px" borderColor="#d1d5db"
-          _focus={{ borderColor: '#22c55e', boxShadow: '0 0 0 3px rgba(34,197,94,0.1)' }} />
-      </Box>
+      <Flex justify="space-between" align="center" mb="16px">
+        <Box bg="white" border="1px solid" borderColor="#e2e2e2" rounded="10px" p="12px 16px" flex={1} mr="12px">
+          <Input placeholder={t('admin.searchUser')} value={search} onChange={function(e) { setSearch(e.target.value) }}
+            h="32px" fontSize="13px" borderRadius="6px" borderColor="#d1d5db"
+            _focus={{ borderColor: '#22c55e', boxShadow: '0 0 0 3px rgba(34,197,94,0.1)' }} />
+        </Box>
+        <Button h="32px" px="14px" fontSize="13px" rounded="6px" bg="#22c55e" color="white"
+          _hover={{ bg: '#16a34a' }} leftIcon={<Plus size={14} />} onClick={onOpen}>
+          {t('userMgmt.newUser')}
+        </Button>
+      </Flex>
 
       <Box overflowX="auto">
         <table style={{ width: '100%', borderCollapse: 'collapse', background: 'white', borderRadius: '10px', border: '1px solid #e2e2e2' }}>
@@ -105,6 +138,10 @@ var UserManagementTab = function() {
                       <Badge fontSize="10px" px="6px" py="1px" rounded="4px" bg="#ede9fe" color="#7c3aed">
                         <HStack gap="4px"><Shield size={10} /><Text>{t('common.administrator')}</Text></HStack>
                       </Badge>
+                    ) : user.role === 'leader' ? (
+                      <Badge fontSize="10px" px="6px" py="1px" rounded="4px" bg="#dbeafe" color="#2563eb">{t('common.administrator')}</Badge>
+                    ) : user.role === 'guest' ? (
+                      <Badge fontSize="10px" px="6px" py="1px" rounded="4px" bg="#fef3c7" color="#d97706">{t('nav.login')}</Badge>
                     ) : (
                       <Badge fontSize="10px" px="6px" py="1px" rounded="4px" bg="#f3f4f6" color="#666">{t('common.user')}</Badge>
                     )}
@@ -128,6 +165,59 @@ var UserManagementTab = function() {
           <Text fontSize="15px" mt="8px">{t('admin.noUsers')}</Text>
         </Box>
       )}
+
+      <Modal isOpen={isOpen} onClose={onClose} isCentered>
+        <ModalOverlay />
+        <ModalContent mx="16px">
+          <ModalHeader fontSize="16px" fontWeight={600}>{t('userMgmt.newUser')}</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody pb="6px">
+            <VStack spacing="12px">
+              <Box w="100%">
+                <Text fontSize="12px" color="#888" mb="4px">{t('userMgmt.username')}</Text>
+                <Input h="36px" fontSize="13px" value={form.username} placeholder={t('userMgmt.username')}
+                  onChange={function(e) { setForm(Object.assign({}, form, { username: e.target.value })) }}
+                  borderColor="#d1d5db" _focus={{ borderColor: '#22c55e' }} />
+              </Box>
+              <Box w="100%">
+                <Text fontSize="12px" color="#888" mb="4px">{t('userMgmt.email')}</Text>
+                <Input h="36px" fontSize="13px" type="email" value={form.email} placeholder={t('userMgmt.email')}
+                  onChange={function(e) { setForm(Object.assign({}, form, { email: e.target.value })) }}
+                  borderColor="#d1d5db" _focus={{ borderColor: '#22c55e' }} />
+              </Box>
+              <Box w="100%">
+                <Text fontSize="12px" color="#888" mb="4px">{t('userMgmt.password')}</Text>
+                <Input h="36px" fontSize="13px" type="password" value={form.password} placeholder={t('userMgmt.passwordMinLength')}
+                  onChange={function(e) { setForm(Object.assign({}, form, { password: e.target.value })) }}
+                  borderColor="#d1d5db" _focus={{ borderColor: '#22c55e' }} />
+              </Box>
+              <Box w="100%">
+                <Text fontSize="12px" color="#888" mb="4px">{t('userMgmt.fullName')}</Text>
+                <Input h="36px" fontSize="13px" value={form.full_name} placeholder={t('userMgmt.fullName')}
+                  onChange={function(e) { setForm(Object.assign({}, form, { full_name: e.target.value })) }}
+                  borderColor="#d1d5db" _focus={{ borderColor: '#22c55e' }} />
+              </Box>
+              <Box w="100%">
+                <Text fontSize="12px" color="#888" mb="4px">{t('userMgmt.role')}</Text>
+                <Select h="36px" fontSize="13px" value={form.role}
+                  onChange={function(e) { setForm(Object.assign({}, form, { role: e.target.value })) }}
+                  borderColor="#d1d5db" _focus={{ borderColor: '#22c55e' }}>
+                  <option value="user">{t('common.user')}</option>
+                  <option value="leader">Leader</option>
+                  <option value="admin">{t('common.administrator')}</option>
+                  <option value="guest">Guest</option>
+                </Select>
+              </Box>
+            </VStack>
+          </ModalBody>
+          <ModalFooter pt="8px">
+            <Button h="32px" px="14px" fontSize="13px" rounded="6px" variant="outline" borderColor="#d1d5db" color="#666"
+              mr="8px" onClick={onClose}>{t('common.cancel')}</Button>
+            <Button h="32px" px="14px" fontSize="13px" rounded="6px" bg="#22c55e" color="white"
+              _hover={{ bg: '#16a34a' }} isLoading={creating} onClick={handleCreate}>{t('userMgmt.createUser')}</Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </Box>
   )
 }

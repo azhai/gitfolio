@@ -2,7 +2,7 @@
 
 一个类似 Gitea 的 Git 仓库管理系统，采用 Go 语言开发。
 
-![GitFolio](./docs/screenshot-1.png)
+![GitFolio](./web/screenshot-1.png)
 
 ## 功能特性
 

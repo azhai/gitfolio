@@ -21,7 +21,7 @@ import (
 	"github.com/gofiber/fiber/v3/middleware/static"
 )
 
-//go:embed web/dist web/landing.html web/images
+//go:embed web/dist web/landing.html web/screenshot-1.png
 var efs embed.FS
 
 func subFS(prefix string) fs.FS {
@@ -35,7 +35,6 @@ func subFS(prefix string) fs.FS {
 var (
 	distFS    = subFS("web/dist")
 	assetsFS  = subFS("web/dist/assets")
-	imagesFS  = subFS("web/images")
 	landingFS = subFS("web")
 )
 
@@ -77,22 +76,21 @@ func CreateApp() *fiber.App {
 	})
 	app.Use(compress.New(), cors.New(), logger.New())
 
-	landingHTML, _ := fs.ReadFile(landingFS, "landing.html")
 	spaIndex, _ := fs.ReadFile(distFS, "index.html")
-
-	assetsHandler := static.New("", static.Config{FS: assetsFS})
-	imagesHandler := static.New("", static.Config{FS: imagesFS})
-	uploadsHandler := static.New("./uploads")
-
 	faviconSVG, _ := fs.ReadFile(distFS, "favicon.svg")
 	faviconPNG, _ := fs.ReadFile(distFS, "favicon.png")
+
+	landingHTML, _ := fs.ReadFile(landingFS, "landing.html")
+	screenshotPNG, _ := fs.ReadFile(landingFS, "screenshot-1.png")
+
+	assetsHandler := static.New("", static.Config{FS: assetsFS})
+	uploadsHandler := static.New("./uploads")
 
 	app.Get("/", func(c fiber.Ctx) error {
 		c.Set("Content-Type", "text/html; charset=utf-8")
 		return c.Send(landingHTML)
 	})
 	app.Get("/assets/*", assetsHandler)
-	app.Get("/images/*", imagesHandler)
 	app.Get("/uploads/*", uploadsHandler)
 	app.Get("/favicon.svg", func(c fiber.Ctx) error {
 		c.Set("Content-Type", "image/svg+xml")
@@ -101,6 +99,10 @@ func CreateApp() *fiber.App {
 	app.Get("/favicon.png", func(c fiber.Ctx) error {
 		c.Set("Content-Type", "image/png")
 		return c.Send(faviconPNG)
+	})
+	app.Get("/screenshot-1.png", func(c fiber.Ctx) error {
+		c.Set("Content-Type", "image/png")
+		return c.Send(screenshotPNG)
 	})
 
 	routes.SetupAPIRoutes(app)

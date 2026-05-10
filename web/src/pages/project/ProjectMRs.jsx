@@ -3,6 +3,7 @@ import { Box, Text, Flex, VStack, HStack, Badge, Button, Spinner, Input } from '
 import { useParams, useNavigate } from 'react-router-dom'
 import { prsAPI } from '../../api/index'
 import { t, timeAgo } from '../../i18n/index'
+import { useAuth } from '../../contexts/AuthContext'
 
 var STATUS_MAP = {
   open: { bg: '#dcfce7', color: '#16a34a' },
@@ -20,6 +21,7 @@ var STATUS_TABS = [
 const ProjectMRs = () => {
   const { owner, repo } = useParams()
   const navigate = useNavigate()
+  const { isGuest } = useAuth()
   const [prs, setPrs] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -71,7 +73,7 @@ const ProjectMRs = () => {
           })}
         </HStack>
         <Button h="30px" px="14px" fontSize="13px" rounded="6px" bg="#22c55e" color="white" _hover={{ bg: '#16a34a' }}
-          onClick={function() { navigate('/' + owner + '/' + repo + '/pull_requests/new') }}>
+          onClick={function() { navigate('/' + owner + '/' + repo + '/pull_requests/new') }} isDisabled={isGuest}>
           {t('pr.newPR')}
         </Button>
       </Flex>

@@ -3,6 +3,7 @@ import { Box, Text, Flex, VStack, HStack, Badge, Button, Spinner, Input } from '
 import { useParams, useNavigate } from 'react-router-dom'
 import { issuesAPI } from '../../api/index'
 import { t, timeAgo } from '../../i18n/index'
+import { useAuth } from '../../contexts/AuthContext'
 
 var STATUS_TABS = [
   { key: 'open', label: '🟢 ' + t('issue.open') },
@@ -13,6 +14,7 @@ var STATUS_TABS = [
 const ProjectIssues = () => {
   const { owner, repo } = useParams()
   const navigate = useNavigate()
+  const { isGuest } = useAuth()
   const [issues, setIssues] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -62,7 +64,7 @@ const ProjectIssues = () => {
           })}
         </HStack>
         <Button h="30px" px="14px" fontSize="13px" rounded="6px" bg="#22c55e" color="white" _hover={{ bg: '#16a34a' }}
-          onClick={function() { navigate('/' + owner + '/' + repo + '/issues/new') }}>
+          onClick={function() { navigate('/' + owner + '/' + repo + '/issues/new') }} isDisabled={isGuest}>
           {t('issue.newIssue')}
         </Button>
       </Flex>

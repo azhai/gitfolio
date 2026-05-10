@@ -1,6 +1,7 @@
 package helpers
 
 import (
+	"github.com/azhai/gitfolio/middleware"
 	"github.com/azhai/gitfolio/models"
 	"github.com/gofiber/fiber/v3"
 )
@@ -103,6 +104,10 @@ func GetOwnerAndRepoWithPrivateAccess(c fiber.Ctx, ownerName, repoName string) (
 	}
 
 	if result.Repo.IsMirror() {
+		role := middleware.GetCurrentUserRole(c)
+		if role == "admin" || role == "guest" {
+			return result, nil
+		}
 		if result.Repo.IsGroupOwned() {
 			if err := RequireGroupMember(c, result.Group.ID); err != nil {
 				return nil, err

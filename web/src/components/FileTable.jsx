@@ -4,6 +4,7 @@ import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import { reposAPI } from '../api/index'
 import { t, timeAgo } from '../i18n/index'
 import { FileIcons, IconMap } from '../components/Icons'
+import { useAuth } from '../contexts/AuthContext'
 
 function getFileIcon(name, isDir) {
   if (isDir) {
@@ -69,6 +70,7 @@ const FileTable = ({ owner: propOwner, repo: propRepo }) => {
   const [commitExpanded, setCommitExpanded] = useState(false)
   const [commitOverflow, setCommitOverflow] = useState(false)
   const commitTextRef = useRef(null)
+  const { isGuest } = useAuth()
 
   var basePath = '/' + owner + '/' + repo
   var urlPath = location.pathname.replace(basePath + '/tree/', '').replace(basePath + '/tree', '').replace(basePath, '')
@@ -300,7 +302,8 @@ const FileTable = ({ owner: propOwner, repo: propRepo }) => {
               bg="#f6f8fa" border="1px solid" borderColor="#d1d5db" color="#555"
               _hover={{ bg: '#eff2f5' }} _active={{ bg: '#eff2f5' }}
               rightIcon={<Text fontSize="10px" ml="2px">▾</Text>}
-              leftIcon={<PlusIcon size={12} />}>
+              leftIcon={<PlusIcon size={12} />}
+              isDisabled={isGuest}>
               {t('fileTable.addFile')}
             </MenuButton>
             <MenuList minW="160px" borderColor="#d1d5db">
@@ -322,7 +325,8 @@ const FileTable = ({ owner: propOwner, repo: propRepo }) => {
               bg="#16a34a" color="white"
               _hover={{ bg: '#15803d' }} _active={{ bg: '#15803d' }}
               rightIcon={<Text fontSize="10px" ml="2px">▾</Text>}
-              leftIcon={<PlusIcon size={12} />}>
+              leftIcon={<PlusIcon size={12} />}
+              isDisabled={isGuest}>
               {t('fileTable.newBtn')}
             </MenuButton>
             <MenuList minW="160px" borderColor="#d1d5db">

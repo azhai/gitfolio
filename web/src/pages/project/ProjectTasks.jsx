@@ -3,6 +3,7 @@ import { Box, Text, Flex, VStack, HStack, Badge, Button, Spinner, Select } from 
 import { useParams, useNavigate } from 'react-router-dom'
 import { tasksAPI } from '../../api/index'
 import { t, timeAgo } from '../../i18n/index'
+import { useAuth } from '../../contexts/AuthContext'
 
 var STATUS_CONFIG = {
   draft: { label: t('task.draft'), bg: '#f3f4f6', color: '#666', icon: '📝' },
@@ -22,6 +23,7 @@ var PRIORITY_COLORS = {
 const ProjectTasks = () => {
   const { owner, repo } = useParams()
   const navigate = useNavigate()
+  const { isGuest } = useAuth()
   const [tasks, setTasks] = useState([])
   const [loading, setLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState('')
@@ -61,7 +63,7 @@ const ProjectTasks = () => {
           </Select>
           <Button h="30px" px="14px" fontSize="13px" rounded="6px" bg="#22c55e" color="white"
             _hover={{ bg: '#16a34a' }}
-            onClick={function() { navigate('/' + owner + '/' + repo + '/tasks/new') }}>
+            onClick={function() { navigate('/' + owner + '/' + repo + '/tasks/new') }} isDisabled={isGuest}>
             + {t('task.newTask')}
           </Button>
         </HStack>

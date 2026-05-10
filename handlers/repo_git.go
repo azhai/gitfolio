@@ -31,7 +31,7 @@ func GetRepositoryTree(c fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Repository not initialized"})
 	}
 
-	gitSvc := services.NewGitService()
+	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
 	entries, err := gitSvc.GetTreeWithSize(result.Owner.Username, result.Repo.Name, ref, path)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
@@ -64,7 +64,7 @@ func GetRepositoryFile(c fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Repository not initialized"})
 	}
 
-	gitSvc := services.NewGitService()
+	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
 	content, err := gitSvc.GetFileContentByRef(result.Owner.Username, result.Repo.Name, ref, path)
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "File not found"})
@@ -86,7 +86,7 @@ func GetRepositoryRawFile(c fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).SendString("Repository not initialized")
 	}
 
-	gitSvc := services.NewGitService()
+	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
 	content, err := gitSvc.GetFileContentByRef(result.Owner.Username, result.Repo.Name, ref, path)
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).SendString("File not found")
@@ -107,7 +107,7 @@ func GetRepositoryBranches(c fiber.Ctx) error {
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{"branches": []string{}})
 	}
 
-	gitSvc := services.NewGitService()
+	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
 	branches, err := gitSvc.GetAllBranches(result.Owner.Username, result.Repo.Name)
 	if err != nil {
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{"branches": []string{}})
@@ -141,7 +141,7 @@ func GetRepositoryTags(c fiber.Ctx) error {
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{"tags": []string{}})
 	}
 
-	gitSvc := services.NewGitService()
+	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
 	tags, err := gitSvc.GetAllTags(result.Owner.Username, result.Repo.Name)
 	if err != nil {
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{"tags": []string{}})
@@ -163,7 +163,7 @@ func GetRepositoryLastCommit(c fiber.Ctx) error {
 	}
 
 	ref := c.Query("ref", "HEAD")
-	gitSvc := services.NewGitService()
+	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
 	message, time, author, hash, err := gitSvc.GetLastCommitInfo(result.Owner.Username, result.Repo.Name, ref)
 	if err != nil {
 		return c.Status(fiber.StatusOK).JSON(empty)
@@ -196,7 +196,7 @@ func GetRepositoryCommits(c fiber.Ctx) error {
 		perPage = 30
 	}
 
-	gitSvc := services.NewGitService()
+	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
 
 	var commits interface{}
 	var total int
@@ -252,12 +252,12 @@ func GetRepositoryContributors(c fiber.Ctx) error {
 
 // GetCodeStats 获取仓库代码统计（行数、语言分布）
 func GetCodeStats(c fiber.Ctx) error {
-	result, err := helpers.RequireOwnerAndRepoFromParams(c)
+	result, err := helpers.GetOwnerAndRepoWithPrivateAccessFromParams(c)
 	if err != nil {
 		return err
 	}
 
-	gitSvc := services.NewGitService()
+	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
 	stats, err := gitSvc.GetCodeStats(result.Owner.Username, result.Repo.Name)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to get code stats: " + err.Error()})
@@ -268,7 +268,7 @@ func GetCodeStats(c fiber.Ctx) error {
 
 // GetCommitActivity 获取提交活动统计，默认最近30天
 func GetCommitActivity(c fiber.Ctx) error {
-	result, err := helpers.RequireOwnerAndRepoFromParams(c)
+	result, err := helpers.GetOwnerAndRepoWithPrivateAccessFromParams(c)
 	if err != nil {
 		return err
 	}
@@ -280,7 +280,7 @@ func GetCommitActivity(c fiber.Ctx) error {
 		}
 	}
 
-	gitSvc := services.NewGitService()
+	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
 	activity, err := gitSvc.GetCommitActivity(result.Owner.Username, result.Repo.Name, days)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to get commit activity: " + err.Error()})
@@ -465,7 +465,7 @@ func GetCommitDetail(c fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Repository not initialized"})
 	}
 
-	gitSvc := services.NewGitService()
+	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
 	detail, err := gitSvc.GetCommitDetail(result.Owner.Username, result.Repo.Name, sha)
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Commit not found"})
@@ -507,7 +507,7 @@ func CompareCommits(c fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Repository not initialized"})
 	}
 
-	gitSvc := services.NewGitService()
+	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
 	compareResult, err := gitSvc.CompareCommits(result.Owner.Username, result.Repo.Name, base, head)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})

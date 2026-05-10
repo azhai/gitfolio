@@ -49,7 +49,7 @@ const ProjectDetail = () => {
         setRepoInfo(info)
         setStarCount(info.stars_count || 0)
         setWatchCount(info.watch_count || 0)
-      })
+      }).catch(function() {})
     }).catch(function() {})
   }, [owner, repo])
 

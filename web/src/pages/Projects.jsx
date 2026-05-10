@@ -4,6 +4,7 @@ import { Link as RouterLink } from 'react-router-dom'
 import { reposAPI } from '../api/index'
 import { IconMap, NavIcons } from '../components/Icons'
 import { timeAgo, t } from '../i18n'
+import { useAuth } from '../contexts/AuthContext'
 
 var LANG_COLORS = {
   Go: '#00ADD8', JavaScript: '#F7DF1E', TypeScript: '#3178C6',
@@ -27,6 +28,7 @@ const Projects = () => {
   const [tab, setTab] = useState('all')
   const [page, setPage] = useState(1)
   var PAGE_SIZE = 6
+  const { isGuest } = useAuth()
 
   useEffect(() => {
     reposAPI.list().then(function(data) {
@@ -68,11 +70,11 @@ const Projects = () => {
         <HStack gap="8px">
           <Button h="32px" px="16px" fontSize="13px" rounded="6px" variant="outline"
             borderColor="#d1d5db" color="#666" _hover={{ borderColor: '#22c55e', color: '#16a34a' }}
-            as={RouterLink} to="/projects/migrate">
+            as={RouterLink} to="/projects/migrate" isDisabled={isGuest}>
             {t('projects.migrateProject')}
           </Button>
           <Button h="32px" px="16px" fontSize="13px" rounded="6px" bg="#22c55e" color="white"
-            _hover={{ bg: '#16a34a' }} as={RouterLink} to="/projects/new">
+            _hover={{ bg: '#16a34a' }} as={RouterLink} to="/projects/new" isDisabled={isGuest}>
             {t('projects.newProject')}
           </Button>
         </HStack>

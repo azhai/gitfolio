@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { snippetsAPI } from '../api/index'
 import { timeAgo, t } from '../i18n'
 import { LuFileCode as FileCode } from 'react-icons/lu'
+import { useAuth } from '../contexts/AuthContext'
 
 var LANG_COLORS = {
   Go: '#00ADD8', JavaScript: '#F7DF1E', TypeScript: '#3178C6',
@@ -19,6 +20,7 @@ const Snippets = () => {
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const navigate = useNavigate()
+  const { isGuest } = useAuth()
 
   useEffect(() => {
     snippetsAPI.list().then(function(data) {
@@ -47,7 +49,7 @@ const Snippets = () => {
           <Text fontSize="22px" fontWeight="700" color="#333">{t('snippets.title')}</Text>
         </HStack>
         <Button h="32px" px="16px" fontSize="13px" rounded="6px" bg="#22c55e" color="white"
-          _hover={{ bg: '#16a34a' }} onClick={function() { navigate('/snippets/new') }}>
+          _hover={{ bg: '#16a34a' }} onClick={function() { navigate('/snippets/new') }} isDisabled={isGuest}>
           {t('snippets.newSnippet')}
         </Button>
       </Flex>

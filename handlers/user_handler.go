@@ -282,6 +282,70 @@ func ListUsers(c fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(response)
 }
 
+// CreateUserRequest 管理员创建用户请求
+type CreateUserRequest struct {
+	Username string `json:"username" validate:"required"`
+	Email    string `json:"email" validate:"required"`
+	Password string `json:"password" validate:"required,min=6"`
+	FullName string `json:"full_name"`
+	Role     string `json:"role"`
+}
+
+// CreateUser 管理员创建新用户
+func CreateUser(c fiber.Ctx) error {
+	var req CreateUserRequest
+	if err := c.Bind().JSON(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	if req.Username == "" || req.Email == "" || req.Password == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "username, email and password are required"})
+	}
+
+	if len(req.Password) < 6 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "password must be at least 6 characters"})
+	}
+
+	db := models.GetDB()
+
+	existing, _ := db.User.Select().Where("username = ?", req.Username).One()
+	if existing != nil {
+		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "username already exists"})
+	}
+
+	existingEmail, _ := db.User.Select().Where("email = ?", req.Email).One()
+	if existingEmail != nil {
+		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "email already exists"})
+	}
+
+	role := req.Role
+	if role == "" {
+		role = "user"
+	}
+	validRoles := map[string]bool{"admin": true, "leader": true, "user": true, "guest": true}
+	if !validRoles[role] {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid role"})
+	}
+
+	userModel := &models.User{
+		Username: req.Username,
+		Email:    req.Email,
+		FullName: req.FullName,
+		Role:     role,
+		IsActive: true,
+	}
+
+	if err := userModel.SetPassword(req.Password); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to hash password"})
+	}
+
+	if err := db.User.Insert().One(userModel); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create user"})
+	}
+
+	return c.Status(fiber.StatusCreated).JSON(ToUserResponse(userModel))
+}
+
 // ChangePasswordRequest 修改密码请求
 type ChangePasswordRequest struct {
 	OldPassword string `json:"old_password" validate:"required"`

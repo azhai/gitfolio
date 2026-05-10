@@ -38,6 +38,7 @@ func setupUserRoutes(api fiber.Router) {
 	api.Put("/user/me", middleware.AuthMiddleware(), middleware.GuestReadOnly(), handlers.UpdateUser)
 	api.Post("/user/me/password", middleware.AuthMiddleware(), middleware.GuestReadOnly(), handlers.ChangePassword)
 	api.Get("/users", middleware.OptionalAuth(), handlers.ListUsers)
+	api.Post("/users", middleware.AuthMiddleware(), middleware.AdminOnly(), handlers.CreateUser)
 	api.Get("/users/:username", middleware.OptionalAuth(), handlers.GetUser)
 	api.Get("/users/:username/repos", middleware.OptionalAuth(), handlers.GetUserRepositories)
 	api.Put("/users/:username", middleware.AuthMiddleware(), middleware.GuestReadOnly(), handlers.UpdateUserByUsername)

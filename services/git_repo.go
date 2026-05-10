@@ -14,8 +14,9 @@ import (
 
 // GitService 提供 Git 仓库操作服务
 type GitService struct {
-	repoRoot string
-	db       *models.Database
+	repoRoot          string
+	db                *models.Database
+	localPathOverride string
 }
 
 // NewGitService 创建 GitService 实例，使用配置中的仓库根目录
@@ -33,9 +34,20 @@ func NewGitServiceWithDB(db *models.Database) *GitService {
 	}
 }
 
+// WithLocalPath 设置本地路径覆盖，优先使用此路径
+func (s *GitService) WithLocalPath(localPath string) *GitService {
+	s.localPathOverride = localPath
+	return s
+}
+
 // getRepoPath 返回仓库的本地磁盘路径
 // 优先查找裸仓库（.git 后缀），不存在则查找非裸仓库（无后缀）
 func (s *GitService) getRepoPath(owner, name string) string {
+	if s.localPathOverride != "" {
+		if _, err := os.Stat(s.localPathOverride); err == nil {
+			return s.localPathOverride
+		}
+	}
 	barePath := filepath.Join(s.repoRoot, owner, name+".git")
 	if _, err := os.Stat(barePath); err == nil {
 		return barePath

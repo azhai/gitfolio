@@ -385,6 +385,9 @@ export const usersAPI = {
   list(params) {
     return api.get('/users', params)
   },
+  create(data) {
+    return api.post('/users', data)
+  },
   get(username) {
     return api.get('/users/' + username)
   },

@@ -48,7 +48,7 @@ dev:
 	@echo "   - Backend:  http://localhost:$(SERVER_PORT)"
 	@echo "   - HMR:      Enabled"
 	cd web && npx vite &
-	go run main.go
+	go run *.go
 
 clean:
 	rm -rf web/dist $(BINFILES:%=./bin/%)

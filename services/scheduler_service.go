@@ -233,9 +233,12 @@ func (s *SchedulerService) GetOrCreateSyncPoint(repoID int64, syncType string) (
 	sp := models.SyncPoint{
 		RepositoryID: repoID,
 		SyncType:     syncType,
-		SyncInterval: 0,
-		NextSyncAt:   nil,
+		SyncInterval: 43200,
+		IsPaused:     false,
 	}
+	now := time.Now()
+	nextSync := now.Add(43200 * time.Second)
+	sp.NextSyncAt = &nextSync
 	if err := s.db.SyncPoint.Insert().One(&sp); err != nil {
 		return nil, err
 	}
