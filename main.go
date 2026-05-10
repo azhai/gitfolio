@@ -7,7 +7,6 @@ import (
 	"log"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/azhai/gitfolio/config"
 	"github.com/azhai/gitfolio/middleware"
@@ -70,11 +69,11 @@ func main() {
 
 func CreateApp() *fiber.App {
 	app := fiber.New(fiber.Config{
-		AppName:       "GitFolio",
-		ReadTimeout:   30 * time.Second,
-		WriteTimeout:  30 * time.Second,
-		StrictRouting: true,
-		ErrorHandler:  ErrorHandler,
+		AppName:      "GitFolio",
+		ErrorHandler: ErrorHandler,
+		// ReadTimeout:   300 * time.Second,
+		// WriteTimeout:  300 * time.Second,
+		// StrictRouting: false,
 	})
 	app.Use(compress.New(), cors.New(), logger.New())
 
