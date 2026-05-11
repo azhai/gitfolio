@@ -105,11 +105,19 @@ func (r *Repository) IsMirror() bool {
 }
 
 func (r *Repository) IsPrivate() bool {
-	return r.ProjectType == "mirror"
+	return r.ProjectType == "private"
 }
 
 func (r *Repository) IsLocal() bool {
 	return r.ProjectType == "local"
+}
+
+func (r *Repository) IsRemote() bool {
+	return r.ProjectType == "mirror" || r.ProjectType == "public" || r.ProjectType == "private"
+}
+
+func (r *Repository) CanPushRemote() bool {
+	return r.ProjectType == "public" || r.ProjectType == "private"
 }
 
 func (r *Repository) IsGroupOwned() bool {
@@ -292,8 +300,10 @@ type Webhook struct {
 type ProjectType string
 
 const (
-	ProjectTypeLocal  ProjectType = "local"
-	ProjectTypeMirror ProjectType = "mirror"
+	ProjectTypeLocal   ProjectType = "local"
+	ProjectTypeMirror  ProjectType = "mirror"
+	ProjectTypePublic  ProjectType = "public"
+	ProjectTypePrivate ProjectType = "private"
 )
 
 type PlatformType string

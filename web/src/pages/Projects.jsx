@@ -114,10 +114,10 @@ const Projects = () => {
                     </Text>
                     <HStack gap="6px" flexWrap="wrap">
                       <Badge fontSize="11px" px="8px" py="1px" rounded="4px"
-                        bg={p.project_type === 'mirror' ? '#eff6ff' : '#f3f4f6'}
-                        color={p.project_type === 'mirror' ? '#2563eb' : '#6b7280'}
+                        bg={p.project_type === 'mirror' ? '#eff6ff' : p.project_type === 'public' ? '#f0fdf4' : p.project_type === 'private' ? '#fff7ed' : '#f3f4f6'}
+                        color={p.project_type === 'mirror' ? '#2563eb' : p.project_type === 'public' ? '#16a34a' : p.project_type === 'private' ? '#ea580c' : '#6b7280'}
                         fontWeight="500">
-                        {p.project_type === 'mirror' ? t('project.mirror') : t('common.local')}
+                        {p.project_type === 'mirror' ? t('project.mirror') : p.project_type === 'public' ? t('project.public') : p.project_type === 'private' ? t('project.private') : t('common.local')}
                       </Badge>
                     </HStack>
                   </HStack>

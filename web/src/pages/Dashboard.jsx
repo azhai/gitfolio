@@ -90,10 +90,10 @@ const Dashboard = () => {
                   <Flex align="center" gap="8px" mb="4px">
                     <Text fontSize="14px" fontWeight="600" color="#16a34a">{repo.name}</Text>
                     <Badge fontSize="10px" px="5px" py="1px" rounded="3px"
-                      bg={repo.project_type === 'mirror' ? '#eff6ff' : '#f3f4f6'}
-                      color={repo.project_type === 'mirror' ? '#2563eb' : '#6b7280'}
+                      bg={repo.project_type === 'mirror' ? '#eff6ff' : repo.project_type === 'public' ? '#f0fdf4' : repo.project_type === 'private' ? '#fff7ed' : '#f3f4f6'}
+                      color={repo.project_type === 'mirror' ? '#2563eb' : repo.project_type === 'public' ? '#16a34a' : repo.project_type === 'private' ? '#ea580c' : '#6b7280'}
                       fontWeight="500">
-                      {repo.project_type === 'mirror' ? t('project.mirror') : t('common.local')}
+                      {repo.project_type === 'mirror' ? t('project.mirror') : repo.project_type === 'public' ? t('project.public') : repo.project_type === 'private' ? t('project.private') : t('common.local')}
                     </Badge>
                   </Flex>
                   <Text fontSize="12px" color="#888" noOfLines={1}>{repo.description || t('dashboard.noDescription')}</Text>

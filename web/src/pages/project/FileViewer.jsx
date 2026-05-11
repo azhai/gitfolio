@@ -3,6 +3,7 @@ import { Box, Text, Flex, Spinner, Button } from '@chakra-ui/react'
 import { useParams, useLocation } from 'react-router-dom'
 import { reposAPI } from '../../api/index'
 import { t } from '../../i18n/index'
+import { LuFileCode as CodeIcon } from 'react-icons/lu'
 
 var BINARY_EXTS = ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'ico', 'webp', 'mp4', 'mp3', 'wav', 'avi', 'mov', 'zip', 'tar', 'gz', 'rar', '7z', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'exe', 'dll', 'so', 'dylib', 'woff', 'woff2', 'ttf', 'eot', 'o', 'obj', 'pyc', 'class', 'jar', 'wasm']
 
@@ -365,6 +366,7 @@ const FileViewer = ({ filePath: propFilePath, owner: propOwner, repo: propRepo, 
   var binary = isBinary(fileName)
   var image = isImage(fileName)
   var markdown = isMarkdown(fileName)
+  var [showSource, setShowSource] = useState(false)
 
   useEffect(() => {
     if (binary) {
@@ -433,10 +435,48 @@ const FileViewer = ({ filePath: propFilePath, owner: propOwner, repo: propRepo, 
   }
 
   if (markdown && content) {
+    if (showSource) {
+      return (
+        <Box bg="white" border="1px solid" borderColor="#e2e2e2" rounded="10px" overflow="hidden" pos="relative">
+          <Flex pos="absolute" top="10px" right="12px" zIndex={2}>
+            <Button h="26px" px="10px" fontSize="12px" rounded="4px" variant="outline"
+              borderColor="#d1d5db" color="#666" _hover={{ borderColor: '#22c55e', color: '#22c55e' }}
+              onClick={function() { setShowSource(false) }}
+              leftIcon={<CodeIcon size={12} />}>
+              {t('fileViewer.rendered')}
+            </Button>
+          </Flex>
+          <Box overflow="auto" maxH="70vh">
+            <Box as="pre" fontSize="13px" fontFamily="'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace" lineHeight="1.6" m={0} p={0}>
+              {lines.map(function(line, idx) {
+                return (
+                  <Flex key={idx} _hover={{ bg: '#f0fdf4' }} transition="background-color 0.1s" align="flex-start">
+                    <Box w="52px" textAlign="right" pr="14px" pl="12px" color="#bbb" userSelect="none" flexShrink={0} fontSize="12px" lineHeight="1.6" py="0" pos="sticky" left="0" bg="white" zIndex={1}>
+                      {idx + 1}
+                    </Box>
+                    <Box flex={1} pr="16px" py="0" whiteSpace="pre-wrap" wordBreak="break-all" overflowWrap="break-word">
+                      <span dangerouslySetInnerHTML={{ __html: highlightLine(line, lang) || ' ' }} />
+                    </Box>
+                  </Flex>
+                )
+              })}
+            </Box>
+          </Box>
+        </Box>
+      )
+    }
     return (
-      <Box bg="white" border="1px solid" borderColor="#e2e2e2" rounded="10px" p="24px 28px"
+      <Box bg="white" border="1px solid" borderColor="#e2e2e2" rounded="10px" p="24px 28px" pos="relative"
         fontSize="14px" lineHeight="1.8" color="#333"
         sx={{ '& h1, & h2, & h3, & h4': { color: '#1a1a1a' }, '& a': { color: '#16a34a' }, '& code': { fontFamily: "'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace" } }}>
+        <Flex pos="absolute" top="10px" right="12px" zIndex={2}>
+          <Button h="26px" px="10px" fontSize="12px" rounded="4px" variant="outline"
+            borderColor="#d1d5db" color="#666" _hover={{ borderColor: '#22c55e', color: '#22c55e' }}
+            onClick={function() { setShowSource(true) }}
+            leftIcon={<CodeIcon size={12} />}>
+            {t('fileViewer.viewSource')}
+          </Button>
+        </Flex>
         <Box dangerouslySetInnerHTML={{ __html: renderMarkdown(content) }} />
       </Box>
     )
@@ -444,7 +484,15 @@ const FileViewer = ({ filePath: propFilePath, owner: propOwner, repo: propRepo, 
 
   if (content) {
     return (
-      <Box bg="white" border="1px solid" borderColor="#e2e2e2" rounded="10px" overflow="hidden">
+      <Box bg="white" border="1px solid" borderColor="#e2e2e2" rounded="10px" overflow="hidden" pos="relative">
+        <Flex pos="absolute" top="10px" right="12px" zIndex={2}>
+          <Button h="26px" px="10px" fontSize="12px" rounded="4px" variant="outline"
+            borderColor="#d1d5db" color="#666" _hover={{ borderColor: '#22c55e', color: '#22c55e' }}
+            as="a" href={getRawUrl(owner, repo, filePath, ref)} target="_blank"
+            leftIcon={<CodeIcon size={12} />}>
+            {t('fileViewer.viewSource')}
+          </Button>
+        </Flex>
         <Box overflow="auto" maxH="70vh">
           <Box as="pre" fontSize="13px" fontFamily="'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace" lineHeight="1.6" m={0} p={0}>
             {lines.map(function(line, idx) {

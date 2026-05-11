@@ -106,8 +106,11 @@ const GroupDetail = () => {
             </Box>
             <Box w="140px">
               <Text fontSize="13px" fontWeight="500" color="#555" mb="4px">{t('group.role')}</Text>
-              <Input value={memberForm.role} onChange={function(e) { setMemberForm(function(p) { return Object.assign({}, p, { role: e.target.value }) }) }}
-                placeholder="member" h="36px" fontSize="14px" borderRadius="8px" borderColor="#d1d5db" />
+              <select value={memberForm.role} onChange={function(e) { setMemberForm(function(p) { return Object.assign({}, p, { role: e.target.value }) }) }}
+                style={{ height: '36px', fontSize: '14px', borderRadius: '8px', borderColor: '#d1d5db', width: '100%', paddingLeft: '8px', borderWidth: '1px' }}>
+                <option value="member">{t('group.member')}</option>
+                <option value="leader">{t('group.leader')}</option>
+              </select>
             </Box>
             <Button h="36px" px="16px" fontSize="13px" rounded="6px" bg="#22c55e" color="white"
               _hover={{ bg: '#16a34a' }} onClick={handleAddMember} isLoading={addingMember} isDisabled={isGuest}>
@@ -123,9 +126,9 @@ const GroupDetail = () => {
           var fullName = m.user ? m.user.full_name : ''
           var email = m.user ? m.user.email : ''
           var role = m.role || 'member'
-          var roleLabel = role === 'owner' ? t('group.owner') : (role === 'admin' ? t('group.admin') : t('group.member'))
-          var roleBg = role === 'owner' ? '#fef3c7' : (role === 'admin' ? '#ede9fe' : '#f3f4f6')
-          var roleColor = role === 'owner' ? '#d97706' : (role === 'admin' ? '#7c3aed' : '#666')
+          var roleLabel = role === 'leader' ? t('group.leader') : t('group.member')
+          var roleBg = role === 'leader' ? '#dbeafe' : '#f3f4f6'
+          var roleColor = role === 'leader' ? '#2563eb' : '#666'
           return (
             <Box key={username} bg="white" border="1px solid" borderColor="#e2e2e2" rounded="10px" p="16px 20px">
               <Flex align="center" gap="14px">
@@ -140,7 +143,7 @@ const GroupDetail = () => {
                   </HStack>
                   {email && <Text fontSize="12px" color="#888">{email}</Text>}
                 </Box>
-                {role !== 'owner' && !isGuest && (
+                {role !== 'leader' && !isGuest && (
                   <Button h="26px" px="10px" fontSize="12px" rounded="4px" variant="outline"
                     borderColor="#fecaca" color="#dc2626" _hover={{ bg: '#fef2f2' }}
                     onClick={function() { handleRemoveMember(username) }}>

@@ -103,7 +103,7 @@ func CheckGroupAdminPermission(c fiber.Ctx, groupID int64) bool {
 	if err != nil || member == nil {
 		return false
 	}
-	return member.Role == "owner" || member.Role == "admin"
+	return member.Role == "leader"
 }
 
 // RequireGroupAdmin 要求当前用户为团队管理员或所有者，否则返回 403
@@ -135,6 +135,35 @@ func CheckGroupMemberPermission(c fiber.Ctx, groupID int64) bool {
 // RequireGroupMember 要求当前用户为团队成员，否则返回 403
 func RequireGroupMember(c fiber.Ctx, groupID int64) error {
 	if !CheckGroupMemberPermission(c, groupID) {
+		return JSONError(c, HTTPStatusForbidden, "Access denied")
+	}
+	return nil
+}
+
+// CheckGroupLeaderPermission 检查当前用户是否为团队 Leader 或 Owner
+func CheckGroupLeaderPermission(c fiber.Ctx, groupID int64) bool {
+	role := middleware.GetCurrentUserRole(c)
+	if role == "admin" {
+		return true
+	}
+	if role == "guest" {
+		return false
+	}
+	userID := middleware.GetCurrentUserID(c)
+	if userID == 0 {
+		return false
+	}
+	db := models.GetDB()
+	member, err := db.GroupMember.Select().Where("group_id = ? AND user_id = ?", groupID, userID).One()
+	if err != nil || member == nil {
+		return false
+	}
+	return member.Role == "leader"
+}
+
+// RequireGroupLeader 要求当前用户为团队 Leader，否则返回 403
+func RequireGroupLeader(c fiber.Ctx, groupID int64) error {
+	if !CheckGroupLeaderPermission(c, groupID) {
 		return JSONError(c, HTTPStatusForbidden, "Access denied")
 	}
 	return nil

@@ -126,7 +126,7 @@ func RefreshRepositoryStats(c fiber.Ctx) error {
 	}
 
 	statsSvc := services.NewStatsService(models.GetDB())
-	if err := statsSvc.UpdateRepositoryStats(result.Repo.ID, result.Owner.Username, result.Repo.Name); err != nil {
+	if err := statsSvc.UpdateRepositoryStats(result.Repo.ID, result.OwnerName(), result.Repo.Name); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to refresh stats"})
 	}
 

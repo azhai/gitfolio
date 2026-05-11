@@ -288,6 +288,97 @@ func (s *GitService) CommitChangesWithHash(owner, name, message, authorName, aut
 }
 
 // parseLines 将命令输出按行分割为字符串切片
+type UnpushedCommit struct {
+	Branch    string `json:"branch"`
+	Hash      string `json:"hash"`
+	ShortHash string `json:"short_hash"`
+	Message   string `json:"message"`
+	Author    string `json:"author"`
+	Date      string `json:"date"`
+}
+
+func (s *GitService) GetUnpushedCommits(owner, name string) ([]UnpushedCommit, error) {
+	repoPath := s.getRepoPath(owner, name)
+
+	branches, err := s.GetBranches(owner, name)
+	if err != nil {
+		return nil, err
+	}
+
+	var allCommits []UnpushedCommit
+	for _, branch := range branches {
+		upstream := fmt.Sprintf("@{upstream}")
+		cmd := exec.Command("git", "-C", repoPath, "log", upstream+".."+branch,
+			"--format=%H|%h|%s|%an|%ai")
+		output, err := cmd.Output()
+		if err != nil {
+			cmd2 := exec.Command("git", "-C", repoPath, "log", "--branches", "--not", "--remotes",
+				"--format=%H|%h|%s|%an|%ai")
+			output2, err2 := cmd2.Output()
+			if err2 != nil {
+				continue
+			}
+			lines := parseLines(output2)
+			for _, line := range lines {
+				parts := strings.SplitN(line, "|", 5)
+				if len(parts) < 5 {
+					continue
+				}
+				allCommits = append(allCommits, UnpushedCommit{
+					Branch:    branch,
+					Hash:      parts[0],
+					ShortHash: parts[1],
+					Message:   parts[2],
+					Author:    parts[3],
+					Date:      parts[4],
+				})
+			}
+			break
+		}
+
+		lines := parseLines(output)
+		for _, line := range lines {
+			parts := strings.SplitN(line, "|", 5)
+			if len(parts) < 5 {
+				continue
+			}
+			allCommits = append(allCommits, UnpushedCommit{
+				Branch:    branch,
+				Hash:      parts[0],
+				ShortHash: parts[1],
+				Message:   parts[2],
+				Author:    parts[3],
+				Date:      parts[4],
+			})
+		}
+	}
+
+	if len(allCommits) == 0 {
+		cmd := exec.Command("git", "-C", repoPath, "log", "--branches", "--not", "--remotes",
+			"--format=%H|%h|%s|%an|%ai")
+		output, err := cmd.Output()
+		if err == nil {
+			lines := parseLines(output)
+			for _, line := range lines {
+				parts := strings.SplitN(line, "|", 5)
+				if len(parts) < 5 {
+					continue
+				}
+				allCommits = append(allCommits, UnpushedCommit{
+					Branch:    "HEAD",
+					Hash:      parts[0],
+					ShortHash: parts[1],
+					Message:   parts[2],
+					Author:    parts[3],
+					Date:      parts[4],
+				})
+			}
+		}
+	}
+
+	return allCommits, nil
+}
+
 func parseLines(output []byte) []string {
 	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
 	result := make([]string, 0, len(lines))

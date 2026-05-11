@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
-import { Box, Flex, Text, Input, HStack, Spinner, Menu, MenuButton, MenuList, MenuItem, Tabs, TabList, Tab, Button } from '@chakra-ui/react'
+import { Box, Flex, Text, Input, HStack, Spinner, Menu, MenuButton, MenuList, MenuItem, Tabs, TabList, Tab, Button, Badge } from '@chakra-ui/react'
 import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import { reposAPI } from '../api/index'
 import { t, timeAgo } from '../i18n/index'
@@ -44,6 +44,9 @@ function FileIconComp({ name, size = 15, color: iconColor }) {
   return <Text fontSize={size} color={iconColor || '#888'}>{typeof name === 'string' ? name : '📄'}</Text>
 }
 
+var LOCAL_STAGED = '__staged__'
+var LOCAL_WORKING = '__working__'
+
 const FileTable = ({ owner: propOwner, repo: propRepo }) => {
   var BranchIcon = IconMap.branch
   var TagIcon = IconMap.tag
@@ -52,6 +55,7 @@ const FileTable = ({ owner: propOwner, repo: propRepo }) => {
   var UploadIcon = IconMap.upload
   var IssueIcon = IconMap.issue
   var PRIcon = IconMap.pr
+  var EditIcon = IconMap.edit
   const navigate = useNavigate()
   const params = useParams()
   const location = useLocation()
@@ -63,6 +67,10 @@ const FileTable = ({ owner: propOwner, repo: propRepo }) => {
   const [error, setError] = useState(null)
   const [branches, setBranches] = useState([])
   const [tags, setTags] = useState([])
+  const [stagedFiles, setStagedFiles] = useState([])
+  const [workingFiles, setWorkingFiles] = useState([])
+  const [untrackedFiles, setUntrackedFiles] = useState([])
+  const [isLocalRepo, setIsLocalRepo] = useState(false)
   const [currentRef, setCurrentRef] = useState('')
   const [lastCommit, setLastCommit] = useState(null)
   const [refTab, setRefTab] = useState('branches')
@@ -71,6 +79,8 @@ const FileTable = ({ owner: propOwner, repo: propRepo }) => {
   const [commitOverflow, setCommitOverflow] = useState(false)
   const commitTextRef = useRef(null)
   const { isGuest } = useAuth()
+
+  var isLocalRef = currentRef === LOCAL_STAGED || currentRef === LOCAL_WORKING
 
   var basePath = '/' + owner + '/' + repo
   var urlPath = location.pathname.replace(basePath + '/tree/', '').replace(basePath + '/tree', '').replace(basePath, '')
@@ -99,6 +109,11 @@ const FileTable = ({ owner: propOwner, repo: propRepo }) => {
       setBranches(branchList.map(function(b) { return typeof b === 'string' ? b : (b.name || '') }))
       setTags(tagList.map(function(t) { return typeof t === 'string' ? t : (t.name || '') }))
 
+      if (branchData && branchData.staged_files) setStagedFiles(branchData.staged_files)
+      if (branchData && branchData.working_files) setWorkingFiles(branchData.working_files)
+      if (branchData && branchData.untracked_files) setUntrackedFiles(branchData.untracked_files)
+      if (branchData && branchData.is_local) setIsLocalRepo(branchData.is_local)
+
       var decodedUrl = decodeURIComponent(urlPath || '')
       var firstSeg = decodedUrl ? decodedUrl.split('/')[0] : ''
       var allRefs = []
@@ -125,15 +140,17 @@ const FileTable = ({ owner: propOwner, repo: propRepo }) => {
   }, [parsedUrl.ref])
 
   useEffect(function() {
+    if (isLocalRef) {
+      setLastCommit(null)
+      return
+    }
     if (!currentRef) return
     reposAPI.lastCommit(owner, repo, currentRef).then(function(commitData) {
-      console.log('[FileTable] lastCommit data:', commitData)
       setLastCommit(commitData || null)
     }).catch(function(err) {
-      console.error('[FileTable] lastCommit error:', err)
       setLastCommit(null)
     })
-  }, [owner, repo, currentRef])
+  }, [owner, repo, currentRef, isLocalRef])
 
   useEffect(function() {
     setCommitExpanded(false)
@@ -146,8 +163,42 @@ const FileTable = ({ owner: propOwner, repo: propRepo }) => {
   }, [lastCommit])
 
   const loadTree = useCallback(function(path, ref) {
-    setLoading(true)
     var useRef = ref || currentRef || 'HEAD'
+
+    if (useRef === LOCAL_STAGED) {
+      var entries = stagedFiles.map(function(f) {
+        var name = typeof f === 'string' ? f : (f.path || f.name || '')
+        return {
+          name: name.split('/').pop(),
+          isDir: false,
+          size: '',
+          commitMsg: t('fileTable.staged'),
+          time: '',
+          path: name,
+        }
+      })
+      setFiles(entries)
+      setLoading(false)
+      return
+    }
+
+    if (useRef === LOCAL_WORKING) {
+      var allFiles = [].concat(
+        workingFiles.map(function(f) {
+          var name = typeof f === 'string' ? f : (f.path || f.name || '')
+          return { name: name.split('/').pop(), isDir: false, size: '', commitMsg: t('fileTable.modified'), time: '', path: name }
+        }),
+        untrackedFiles.map(function(f) {
+          var name = typeof f === 'string' ? f : (f.path || f.name || '')
+          return { name: name.split('/').pop(), isDir: false, size: '', commitMsg: t('fileTable.untracked'), time: '', path: name }
+        })
+      )
+      setFiles(allFiles)
+      setLoading(false)
+      return
+    }
+
+    setLoading(true)
     reposAPI.tree(owner, repo, path, useRef).then(function(data) {
       var entries = []
       if (data && Array.isArray(data.entries)) {
@@ -173,7 +224,7 @@ const FileTable = ({ owner: propOwner, repo: propRepo }) => {
       setFiles([])
       setError(err.message || t('fileTable.loadFailed'))
     }).finally(function() { setLoading(false) })
-  }, [owner, repo, currentRef])
+  }, [owner, repo, currentRef, stagedFiles, workingFiles, untrackedFiles])
 
   useEffect(() => {
     if (currentRef) {
@@ -182,6 +233,7 @@ const FileTable = ({ owner: propOwner, repo: propRepo }) => {
   }, [currentRef, currentPath, loadTree])
 
   function handleRowClick(file) {
+    if (isLocalRef) return
     var refPrefix = currentRef ? currentRef + '/' : ''
     if (file.isDir) {
       navigate('/' + owner + '/' + repo + '/tree/' + refPrefix + file.path)
@@ -211,9 +263,9 @@ const FileTable = ({ owner: propOwner, repo: propRepo }) => {
             bg="#f6f8fa" border="1px solid" borderColor="#d1d5db" rounded="6px"
             color="#333" _hover={{ bg: '#eff2f5' }} _active={{ bg: '#eff2f5' }}
             rightIcon={null}
-            leftIcon={(branches.indexOf(currentRef) >= 0 ? <BranchIcon size={14} color="#555" /> : <TagIcon size={14} color="#555" />)}>
+            leftIcon={(isLocalRef ? <EditIcon size={14} color="#555" /> : (branches.indexOf(currentRef) >= 0 ? <BranchIcon size={14} color="#555" /> : <TagIcon size={14} color="#555" />))}>
             <HStack gap="4px" display="inline-flex">
-              <Text>{currentRef || 'HEAD'}</Text>
+              <Text>{currentRef === LOCAL_STAGED ? t('fileTable.staged') : (currentRef === LOCAL_WORKING ? t('fileTable.working') : (currentRef || 'HEAD'))}</Text>
               <Text color="#888" fontSize="11px">▾</Text>
             </HStack>
           </MenuButton>
@@ -223,14 +275,44 @@ const FileTable = ({ owner: propOwner, repo: propRepo }) => {
                 value={refSearch} onChange={function(e) { setRefSearch(e.target.value) }}
                 borderColor="#d1d5db" _focus={{ borderColor: '#16a34a', boxShadow: '0 0 0 1px #16a34a' }} />
             </Box>
-            <Tabs index={refTab === 'branches' ? 0 : 1} onChange={function(i) { setRefTab(i === 0 ? 'branches' : 'tags'); setRefSearch('') }} colorScheme="green" size="sm">
+            <Tabs index={refTab === 'local' && isLocalRepo ? 2 : (refTab === 'tags' ? 1 : 0)} onChange={function(i) { setRefTab(i === 0 ? 'branches' : (i === 1 ? 'tags' : 'local')); setRefSearch('') }} colorScheme="green" size="sm">
               <TabList px="8px" borderBottom="1px solid" borderColor="#e5e7eb">
                 <Tab fontSize="12px" px="10px" py="4px" _selected={{ color: '#16a34a', borderColor: '#16a34a' }}>{t('fileTable.branches')}</Tab>
                 <Tab fontSize="12px" px="10px" py="4px" _selected={{ color: '#16a34a', borderColor: '#16a34a' }}>{t('fileTable.tags')}</Tab>
+                {isLocalRepo && (
+                  <Tab fontSize="12px" px="10px" py="4px" _selected={{ color: '#16a34a', borderColor: '#16a34a' }}>{t('fileTable.local')}</Tab>
+                )}
               </TabList>
             </Tabs>
             <Box maxH="240px" overflowY="auto">
-              {(refTab === 'branches' ? branches : tags)
+              {refTab === 'local' ? (
+                [
+                  { key: LOCAL_STAGED, label: t('fileTable.staged'), icon: <PlusIcon size={14} />, count: stagedFiles.length, color: '#16a34a' },
+                  { key: LOCAL_WORKING, label: t('fileTable.working'), icon: <EditIcon size={14} />, count: workingFiles.length + untrackedFiles.length, color: '#d97706' },
+                ].map(function(item) {
+                  var isActive = currentRef === item.key
+                  return (
+                    <MenuItem key={item.key}
+                      fontSize="13px" py="8px" px="12px"
+                      bg={isActive ? '#f0fdf4' : 'transparent'}
+                      color={isActive ? '#16a34a' : '#333'}
+                      fontWeight={isActive ? '600' : 'normal'}
+                      _hover={{ bg: '#f0fdf4' }}
+                      onClick={function() { setCurrentRef(item.key); setRefTab('local') }}
+                      icon={<Box color={isActive ? '#16a34a' : item.color}>{item.icon}</Box>}>
+                      <HStack gap="8px" flex={1} justify="space-between">
+                        <Text>{item.label}</Text>
+                        {item.count > 0 && (
+                          <Badge fontSize="10px" px="5px" py="0" rounded="8px" bg={isActive ? '#dcfce7' : '#f3f4f6'} color={isActive ? '#16a34a' : '#666'}>
+                            {item.count}
+                          </Badge>
+                        )}
+                      </HStack>
+                    </MenuItem>
+                  )
+                })
+              ) : (
+              (refTab === 'branches' ? branches : tags)
                 .filter(function(item) { return !refSearch || item.toLowerCase().indexOf(refSearch.toLowerCase()) >= 0 })
                 .map(function(item) {
                   var isActive = item === currentRef
@@ -246,8 +328,9 @@ const FileTable = ({ owner: propOwner, repo: propRepo }) => {
                       {item}
                     </MenuItem>
                   )
-                })}
-              {(refTab === 'branches' ? branches : tags)
+                })
+              )}
+              {refTab !== 'local' && (refTab === 'branches' ? branches : tags)
                 .filter(function(item) { return !refSearch || item.toLowerCase().indexOf(refSearch.toLowerCase()) >= 0 }).length === 0 && (
                 <Text fontSize="12px" color="#aaa" py="16px" textAlign="center">
                   {refSearch ? t('fileTable.noMatch') : (refTab === 'branches' ? t('fileTable.noBranches') : t('fileTable.noTags'))}

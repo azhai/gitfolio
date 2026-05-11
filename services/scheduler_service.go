@@ -42,7 +42,7 @@ func (s *SchedulerService) ensureSyncPoints() {
 	}
 	for _, repo := range repos {
 		syncType := "stats"
-		if repo.IsMirror() {
+		if repo.IsRemote() {
 			syncType = "mirror"
 		}
 		s.GetOrCreateSyncPoint(repo.ID, syncType)
@@ -103,7 +103,7 @@ func (s *SchedulerService) tick() {
 	}
 
 	for _, repo := range repos {
-		if repo.IsMirror() {
+		if repo.IsRemote() {
 			s.checkMirrorSync(repo, now)
 		} else {
 			s.checkStatsRefresh(repo, now)

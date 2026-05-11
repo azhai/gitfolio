@@ -8,19 +8,21 @@
 
 - 🔐 用户认证和授权（JWT）
 - 📦 Git 仓库管理（CRUD、分支、标签、提交）
+- 🏗️ 四种项目类型（local、mirror、public、private）
 - 📝 Issue 跟踪系统（标签、指派、评论）
 - 🔀 Pull Request 管理（合并、关闭、重开）
 - ✅ 任务管理系统（排期、附件、关联 Issue、状态流转、时间追踪）
 - 🔗 提交自动关联 Issue/PR/Task（Fixes #123, Closes #123, Task: #5）
 - 📝 提交详情和分支比较（签名验证、文件变更、差异对比）
 - ⏱️ 任务时间追踪（计时器、时间汇总）
-- 👥 团队/组织管理
+- 👥 团队/组织管理（Leader/Member 角色）
 - 🏷️ 里程碑管理
 - 📊 仓库统计和活动流
 - 💻 代码片段管理
 - 🔄 仓库同步（GitHub 镜像）
 - ⭐ Star 和 Watch 功能
 - 🚀 Release 版本管理
+- 📄 文件查看（代码高亮、Markdown 渲染、查看源码）
 
 ## 技术栈
 
@@ -223,6 +225,7 @@ gitfolio/
 | POST | `/:owner/:repo/commit` | 提交更改 | ✓ |
 | GET | `/:owner/:repo/commits/:sha` | 提交详情 | 可选 |
 | GET | `/:owner/:repo/compare/:basehead` | 提交/分支比较 | 可选 |
+| GET | `/:owner/:repo/raw/*` | 原始文件内容 | 可选 |
 
 ### 仓库同步
 
@@ -309,7 +312,8 @@ gitfolio/
 | PUT | `/groups/:name` | 更新团队 | ✓ |
 | POST | `/groups/:name/avatar` | 上传团队头像 | ✓ |
 | GET | `/groups/:name/members` | 成员列表 | - |
-| POST | `/groups/:name/members` | 添加成员 | ✓ |
+| POST | `/groups/:name/members` | 添加成员（role: leader/member） | ✓ |
+| PUT | `/groups/:name/members/:username` | 更新成员角色 | ✓ |
 | DELETE | `/groups/:name/members/:username` | 移除成员 | ✓ |
 
 ### 活动流
@@ -380,6 +384,42 @@ gitfolio/
 | `SyncToken` / `SyncPoint` / `SyncLog` | 同步相关 |
 | `RemoteRepository` | 远程仓库 |
 | `Webhook` | Webhook |
+
+## 项目类型
+
+| 类型 | 可见性 | 远程同步 | 推送远程 | Owner ID | 说明 |
+|------|--------|---------|---------|----------|------|
+| `local` | 除 guest 外可见 | ❌ | ❌ | 0 | 本地项目，无远程关联 |
+| `mirror` | 所有人可见 | ✅ 拉取 | ❌ | 用户/团队 ID | 镜像项目，只读 |
+| `public` | 所有人可见 | ✅ | ✅ | 用户/团队 ID | 公开项目 |
+| `private` | 仅所有者和团队成员可见 | ✅ | ✅ | 用户/团队 ID | 私有项目 |
+
+类型转换规则：mirror ↔ public/private 可互转，public ↔ private 可互转，local 不可转换。
+
+## 角色系统
+
+### 用户角色
+
+| 角色 | 中文名 | 权限 |
+|------|--------|------|
+| `admin` | 管理员 | 全部权限 |
+| `user` | 用户 | 管理自己的项目，参与团队项目 |
+| `guest` | 访客 | 只读访问公开和镜像项目 |
+
+### 团队角色
+
+| 角色 | 中文名 | 权限 |
+|------|--------|------|
+| `leader` | 负责人 | 危险操作（删除、转移所有权）、合并 PR |
+| `member` | 成员 | 管理团队项目（非危险操作） |
+
+### 仓库列表可见性
+
+| 角色 | 可见项目类型 |
+|------|-------------|
+| admin | 所有项目 |
+| user | local + public + mirror + 自己/团队的 private |
+| guest | public + mirror |
 
 ## 开发
 

@@ -32,7 +32,7 @@ func GetRepositoryTree(c fiber.Ctx) error {
 	}
 
 	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
-	entries, err := gitSvc.GetTreeWithSize(result.Owner.Username, result.Repo.Name, ref, path)
+	entries, err := gitSvc.GetTreeWithSize(result.OwnerName(), result.Repo.Name, ref, path)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -65,7 +65,7 @@ func GetRepositoryFile(c fiber.Ctx) error {
 	}
 
 	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
-	content, err := gitSvc.GetFileContentByRef(result.Owner.Username, result.Repo.Name, ref, path)
+	content, err := gitSvc.GetFileContentByRef(result.OwnerName(), result.Repo.Name, ref, path)
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "File not found"})
 	}
@@ -87,7 +87,7 @@ func GetRepositoryRawFile(c fiber.Ctx) error {
 	}
 
 	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
-	content, err := gitSvc.GetFileContentByRef(result.Owner.Username, result.Repo.Name, ref, path)
+	content, err := gitSvc.GetFileContentByRef(result.OwnerName(), result.Repo.Name, ref, path)
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).SendString("File not found")
 	}
@@ -108,22 +108,24 @@ func GetRepositoryBranches(c fiber.Ctx) error {
 	}
 
 	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
-	branches, err := gitSvc.GetAllBranches(result.Owner.Username, result.Repo.Name)
+	branches, err := gitSvc.GetAllBranches(result.OwnerName(), result.Repo.Name)
 	if err != nil {
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{"branches": []string{}})
 	}
 
-	response := fiber.Map{"branches": branches}
+	response := fiber.Map{"branches": branches, "is_local": result.Repo.IsLocal()}
 
-	if !result.Repo.IsMirror() {
-		isBare := gitSvc.IsBareRepository(result.Owner.Username, result.Repo.Name)
+	if result.Repo.IsLocal() {
+		isBare := gitSvc.IsBareRepository(result.OwnerName(), result.Repo.Name)
 		if !isBare {
-			stagedFiles, _ := gitSvc.GetStagedFiles(result.Owner.Username, result.Repo.Name)
-			workingFiles, _ := gitSvc.GetWorkingTreeFiles(result.Owner.Username, result.Repo.Name)
-			untrackedFiles, _ := gitSvc.GetUntrackedFiles(result.Owner.Username, result.Repo.Name)
+			stagedFiles, _ := gitSvc.GetStagedFiles(result.OwnerName(), result.Repo.Name)
+			workingFiles, _ := gitSvc.GetWorkingTreeFiles(result.OwnerName(), result.Repo.Name)
+			untrackedFiles, _ := gitSvc.GetUntrackedFiles(result.OwnerName(), result.Repo.Name)
+			unpushedCommits, _ := gitSvc.GetUnpushedCommits(result.OwnerName(), result.Repo.Name)
 			response["staged_files"] = stagedFiles
 			response["working_files"] = workingFiles
 			response["untracked_files"] = untrackedFiles
+			response["unpushed_commits"] = unpushedCommits
 		}
 	}
 
@@ -142,7 +144,7 @@ func GetRepositoryTags(c fiber.Ctx) error {
 	}
 
 	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
-	tags, err := gitSvc.GetAllTags(result.Owner.Username, result.Repo.Name)
+	tags, err := gitSvc.GetAllTags(result.OwnerName(), result.Repo.Name)
 	if err != nil {
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{"tags": []string{}})
 	}
@@ -164,7 +166,7 @@ func GetRepositoryLastCommit(c fiber.Ctx) error {
 
 	ref := c.Query("ref", "HEAD")
 	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
-	message, time, author, hash, err := gitSvc.GetLastCommitInfo(result.Owner.Username, result.Repo.Name, ref)
+	message, time, author, hash, err := gitSvc.GetLastCommitInfo(result.OwnerName(), result.Repo.Name, ref)
 	if err != nil {
 		return c.Status(fiber.StatusOK).JSON(empty)
 	}
@@ -202,9 +204,9 @@ func GetRepositoryCommits(c fiber.Ctx) error {
 	var total int
 
 	if allBranches {
-		commits, total, err = gitSvc.GetCommitGraph(result.Owner.Username, result.Repo.Name, page, perPage)
+		commits, total, err = gitSvc.GetCommitGraph(result.OwnerName(), result.Repo.Name, page, perPage)
 	} else {
-		commits, total, err = gitSvc.GetCommitList(result.Owner.Username, result.Repo.Name, ref, page, perPage)
+		commits, total, err = gitSvc.GetCommitList(result.OwnerName(), result.Repo.Name, ref, page, perPage)
 	}
 
 	if err != nil {
@@ -258,7 +260,7 @@ func GetCodeStats(c fiber.Ctx) error {
 	}
 
 	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
-	stats, err := gitSvc.GetCodeStats(result.Owner.Username, result.Repo.Name)
+	stats, err := gitSvc.GetCodeStats(result.OwnerName(), result.Repo.Name)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to get code stats: " + err.Error()})
 	}
@@ -281,7 +283,7 @@ func GetCommitActivity(c fiber.Ctx) error {
 	}
 
 	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
-	activity, err := gitSvc.GetCommitActivity(result.Owner.Username, result.Repo.Name, days)
+	activity, err := gitSvc.GetCommitActivity(result.OwnerName(), result.Repo.Name, days)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to get commit activity: " + err.Error()})
 	}
@@ -313,7 +315,7 @@ func RebaseCommits(c fiber.Ctx) error {
 	}
 
 	gitSvc := services.NewGitService()
-	if err := gitSvc.RebaseCommits(result.Owner.Username, result.Repo.Name, req.Commits); err != nil {
+	if err := gitSvc.RebaseCommits(result.OwnerName(), result.Repo.Name, req.Commits); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
 
@@ -340,13 +342,13 @@ func StageFiles(c fiber.Ctx) error {
 	}
 
 	gitSvc := services.NewGitService()
-	if err := gitSvc.StageFiles(result.Owner.Username, result.Repo.Name, req.Files); err != nil {
+	if err := gitSvc.StageFiles(result.OwnerName(), result.Repo.Name, req.Files); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	stagedFiles, _ := gitSvc.GetStagedFiles(result.Owner.Username, result.Repo.Name)
-	workingFiles, _ := gitSvc.GetWorkingTreeFiles(result.Owner.Username, result.Repo.Name)
-	untrackedFiles, _ := gitSvc.GetUntrackedFiles(result.Owner.Username, result.Repo.Name)
+	stagedFiles, _ := gitSvc.GetStagedFiles(result.OwnerName(), result.Repo.Name)
+	workingFiles, _ := gitSvc.GetWorkingTreeFiles(result.OwnerName(), result.Repo.Name)
+	untrackedFiles, _ := gitSvc.GetUntrackedFiles(result.OwnerName(), result.Repo.Name)
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
 		"message":         "Files staged successfully",
@@ -380,13 +382,13 @@ func UnstageFiles(c fiber.Ctx) error {
 	}
 
 	gitSvc := services.NewGitService()
-	if err := gitSvc.UnstageFiles(result.Owner.Username, result.Repo.Name, req.Files); err != nil {
+	if err := gitSvc.UnstageFiles(result.OwnerName(), result.Repo.Name, req.Files); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	stagedFiles, _ := gitSvc.GetStagedFiles(result.Owner.Username, result.Repo.Name)
-	workingFiles, _ := gitSvc.GetWorkingTreeFiles(result.Owner.Username, result.Repo.Name)
-	untrackedFiles, _ := gitSvc.GetUntrackedFiles(result.Owner.Username, result.Repo.Name)
+	stagedFiles, _ := gitSvc.GetStagedFiles(result.OwnerName(), result.Repo.Name)
+	workingFiles, _ := gitSvc.GetWorkingTreeFiles(result.OwnerName(), result.Repo.Name)
+	untrackedFiles, _ := gitSvc.GetUntrackedFiles(result.OwnerName(), result.Repo.Name)
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
 		"message":         "Files unstaged successfully",
@@ -426,7 +428,7 @@ func CommitChanges(c fiber.Ctx) error {
 	}
 
 	gitSvc := services.NewGitService()
-	commitHash, err := gitSvc.CommitChangesWithHash(result.Owner.Username, result.Repo.Name, req.Message, user.Username, user.Email)
+	commitHash, err := gitSvc.CommitChangesWithHash(result.OwnerName(), result.Repo.Name, req.Message, user.Username, user.Email)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -437,9 +439,9 @@ func CommitChanges(c fiber.Ctx) error {
 	result.Repo.LastCommitAt = &now
 	db.Repository.Save().One(result.Repo)
 
-	stagedFiles, _ := gitSvc.GetStagedFiles(result.Owner.Username, result.Repo.Name)
-	workingFiles, _ := gitSvc.GetWorkingTreeFiles(result.Owner.Username, result.Repo.Name)
-	untrackedFiles, _ := gitSvc.GetUntrackedFiles(result.Owner.Username, result.Repo.Name)
+	stagedFiles, _ := gitSvc.GetStagedFiles(result.OwnerName(), result.Repo.Name)
+	workingFiles, _ := gitSvc.GetWorkingTreeFiles(result.OwnerName(), result.Repo.Name)
+	untrackedFiles, _ := gitSvc.GetUntrackedFiles(result.OwnerName(), result.Repo.Name)
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
 		"message":         "Committed successfully",
@@ -466,7 +468,7 @@ func GetCommitDetail(c fiber.Ctx) error {
 	}
 
 	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
-	detail, err := gitSvc.GetCommitDetail(result.Owner.Username, result.Repo.Name, sha)
+	detail, err := gitSvc.GetCommitDetail(result.OwnerName(), result.Repo.Name, sha)
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Commit not found"})
 	}
@@ -508,7 +510,7 @@ func CompareCommits(c fiber.Ctx) error {
 	}
 
 	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
-	compareResult, err := gitSvc.CompareCommits(result.Owner.Username, result.Repo.Name, base, head)
+	compareResult, err := gitSvc.CompareCommits(result.OwnerName(), result.Repo.Name, base, head)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -531,6 +533,52 @@ func getContentType(path string) string {
 	}
 	if ct, ok := contentTypes[ext]; ok {
 		return ct
+	}
+	textExts := map[string]bool{
+		".go": true, ".rs": true, ".py": true, ".rb": true,
+		".js": true, ".jsx": true, ".mjs": true, ".cjs": true,
+		".ts": true, ".tsx": true,
+		".java": true, ".kt": true, ".kts": true, ".scala": true,
+		".c": true, ".h": true, ".cpp": true, ".cc": true, ".cxx": true, ".hpp": true, ".hh": true,
+		".cs": true, ".fs": true,
+		".html": true, ".htm": true, ".xml": true, ".xsl": true, ".xslt": true,
+		".css": true, ".scss": true, ".sass": true, ".less": true,
+		".json": true, ".jsonc": true,
+		".yaml": true, ".yml": true,
+		".toml": true, ".ini": true, ".cfg": true, ".conf": true,
+		".md": true, ".markdown": true,
+		".sql": true,
+		".sh":  true, ".bash": true, ".zsh": true, ".fish": true,
+		".php": true, ".phtml": true,
+		".swift": true, ".m": true, ".mm": true,
+		".r": true, ".lua": true, ".vim": true,
+		".dart": true, ".groovy": true, ".gradle": true,
+		".ex": true, ".exs": true, ".erl": true, ".hrl": true,
+		".hs": true, ".lhs": true,
+		".ml": true, ".mli": true,
+		".clj": true, ".cljs": true,
+		".proto": true, ".thrift": true,
+		".tf": true, ".hcl": true,
+		".vue": true, ".svelte": true,
+		".pl": true, ".pm": true,
+		".tcl": true, ".nim": true, ".zig": true,
+		".sol": true,
+		".asm": true, ".s": true,
+		".mk": true, ".cmake": true,
+		".diff": true, ".patch": true,
+		".log": true, ".txt": true,
+		".env": true, ".gitignore": true, ".dockerignore": true,
+		".lock": true, ".mod": true, ".sum": true,
+		".csv": true, ".tsv": true,
+	}
+	base := strings.ToLower(filepath.Base(path))
+	if base == "dockerfile" || base == "makefile" || base == "gnumakefile" ||
+		base == "cmakelists.txt" || base == "jenkinsfile" || base == "vagrantfile" ||
+		base == "gemfile" || base == "rakefile" || base == "license" || base == "readme" {
+		return "text/plain; charset=utf-8"
+	}
+	if textExts[ext] {
+		return "text/plain; charset=utf-8"
 	}
 	return "application/octet-stream"
 }

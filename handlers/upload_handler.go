@@ -35,8 +35,8 @@ func UploadGroupAvatar(c fiber.Ctx) error {
 	}
 
 	member, err := db.GroupMember.Select().Where("group_id = ? AND user_id = ?", group.ID, userID).One()
-	if err != nil || (member.Role != "owner" && member.Role != "admin") {
-		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Only group owners or admins can upload avatar"})
+	if err != nil || member.Role != "leader" {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Only group leaders can upload avatar"})
 	}
 
 	uploadDir := "./uploads/avatars/groups"

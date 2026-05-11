@@ -25,8 +25,8 @@ func AddGroupMember(c fiber.Ctx) error {
 		req.Role = "member"
 	}
 
-	if req.Role != "member" && req.Role != "admin" && req.Role != "owner" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid role"})
+	if req.Role != "member" && req.Role != "leader" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid role, must be member or leader"})
 	}
 
 	db := models.GetDB()
@@ -37,8 +37,8 @@ func AddGroupMember(c fiber.Ctx) error {
 	}
 
 	currentMember, err := db.GroupMember.Select().Where("group_id = ? AND user_id = ?", group.ID, userID).One()
-	if err != nil || (currentMember.Role != "owner" && currentMember.Role != "admin") {
-		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Only group owners or admins can add members"})
+	if err != nil || currentMember.Role != "leader" {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Only group leaders can add members"})
 	}
 
 	newUser, err := db.User.Select().Where("username = ?", req.Username).One()
@@ -83,8 +83,8 @@ func RemoveGroupMember(c fiber.Ctx) error {
 	}
 
 	currentMember, err := db.GroupMember.Select().Where("group_id = ? AND user_id = ?", group.ID, userID).One()
-	if err != nil || (currentMember.Role != "owner" && currentMember.Role != "admin") {
-		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Only group owners or admins can remove members"})
+	if err != nil || currentMember.Role != "leader" {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Only group leaders can remove members"})
 	}
 
 	targetUser, err := db.User.Select().Where("username = ?", targetUsername).One()
@@ -97,8 +97,8 @@ func RemoveGroupMember(c fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "User is not a member"})
 	}
 
-	if targetMember.Role == "owner" {
-		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Cannot remove the owner"})
+	if targetMember.Role == "leader" {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Cannot remove the leader"})
 	}
 
 	err = db.GroupMember.Delete().Where("group_id = ? AND user_id = ?", group.ID, targetUser.ID).Exec()

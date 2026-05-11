@@ -20,8 +20,8 @@ func SyncPullRepository(c fiber.Ctx) error {
 
 	db := models.GetDB()
 
-	if !result.Repo.IsMirror() || result.Repo.LocalPath == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Not a mirror repository or local path not set"})
+	if !result.Repo.IsRemote() || result.Repo.LocalPath == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Not a remote repository or local path not set"})
 	}
 
 	syncSvc := services.NewSyncService(db)
@@ -71,8 +71,8 @@ func SyncIssuesData(c fiber.Ctx) error {
 
 	db := models.GetDB()
 
-	if !result.Repo.IsMirror() {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Not a mirror repository"})
+	if !result.Repo.IsRemote() {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Not a remote repository"})
 	}
 
 	syncSvc := services.NewSyncService(db)
@@ -154,11 +154,15 @@ func SyncPushRepository(c fiber.Ctx) error {
 		return err
 	}
 
+	if !result.Repo.CanPushRemote() {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Only public or private projects can push to remote"})
+	}
+
 	db := models.GetDB()
 
 	if result.Repo.LocalPath == "" {
 		syncSvc := services.NewSyncService(db)
-		localPath, err := syncSvc.InitBareRepository(result.Owner.Username, result.Repo.Name)
+		localPath, err := syncSvc.InitBareRepository(result.OwnerName(), result.Repo.Name)
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 		}

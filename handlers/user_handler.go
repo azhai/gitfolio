@@ -177,6 +177,7 @@ func UpdateUserByUsername(c fiber.Ctx) error {
 		Avatar   string `json:"avatar"`
 		IsActive *bool  `json:"is_active"`
 		Role     string `json:"role"`
+		Password string `json:"password"`
 	}
 
 	if err := c.Bind().JSON(&req); err != nil {
@@ -220,6 +221,14 @@ func UpdateUserByUsername(c fiber.Ctx) error {
 	if req.Role != "" {
 		targetUser.Role = req.Role
 	}
+	if req.Password != "" {
+		if len(req.Password) < 6 {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "password must be at least 6 characters"})
+		}
+		if err := targetUser.SetPassword(req.Password); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to hash password"})
+		}
+	}
 
 	err = db.User.Save().One(targetUser)
 	if err != nil {
@@ -248,8 +257,8 @@ func GetUserRepositories(c fiber.Ctx) error {
 	query := db.Repository.Select().Where("owner_id = ? AND owner_type = 'user'", userModel.ID)
 	currentUserID := middleware.GetCurrentUserID(c)
 	role := middleware.GetCurrentUserRole(c)
-	if currentUserID != userModel.ID && role != "admin" && role != "guest" {
-		query = query.Where("project_type = ?", "local")
+	if currentUserID != userModel.ID && role != "admin" {
+		query = query.Where("project_type IN ?", []string{"public", "mirror"})
 	}
 
 	repos, err := query.Skip((page - 1) * perPage).Take(perPage).All()
@@ -322,7 +331,7 @@ func CreateUser(c fiber.Ctx) error {
 	if role == "" {
 		role = "user"
 	}
-	validRoles := map[string]bool{"admin": true, "leader": true, "user": true, "guest": true}
+	validRoles := map[string]bool{"admin": true, "user": true, "guest": true}
 	if !validRoles[role] {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid role"})
 	}

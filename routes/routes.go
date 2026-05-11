@@ -108,8 +108,8 @@ func setupRepositoryRoutes(api fiber.Router) {
 func setupRepoCRUDRoutes(repo fiber.Router) {
 	repo.Get("", middleware.OptionalAuth(), handlers.GetRepository)
 	repo.Put("", middleware.AuthMiddleware(), middleware.GuestReadOnly(), handlers.UpdateRepository)
-	repo.Delete("", middleware.AuthMiddleware(), middleware.GuestReadOnly(), middleware.LeaderOrAdmin(), handlers.DeleteRepository)
-	repo.Post("/transfer", middleware.AuthMiddleware(), middleware.GuestReadOnly(), middleware.LeaderOrAdmin(), handlers.TransferRepository)
+	repo.Delete("", middleware.AuthMiddleware(), middleware.GuestReadOnly(), handlers.DeleteRepository)
+	repo.Post("/transfer", middleware.AuthMiddleware(), middleware.GuestReadOnly(), handlers.TransferRepository)
 }
 
 func setupRepoGitRoutes(repo fiber.Router) {
@@ -167,7 +167,7 @@ func setupPullRequestRoutes(repo fiber.Router) {
 	repo.Get("/pull_requests/:number/commits", middleware.OptionalAuth(), handlers.GetPRCommits)
 	repo.Get("/pull_requests/:number/files", middleware.OptionalAuth(), handlers.GetPRFiles)
 	repo.Put("/pull_requests/:number", middleware.AuthMiddleware(), middleware.GuestReadOnly(), handlers.UpdatePullRequest)
-	repo.Post("/pull_requests/:number/merge", middleware.AuthMiddleware(), middleware.GuestReadOnly(), middleware.LeaderOrAdmin(), handlers.MergePullRequest)
+	repo.Post("/pull_requests/:number/merge", middleware.AuthMiddleware(), middleware.GuestReadOnly(), handlers.MergePullRequest)
 	repo.Post("/pull_requests/:number/close", middleware.AuthMiddleware(), middleware.GuestReadOnly(), handlers.ClosePullRequest)
 	repo.Post("/pull_requests/:number/reopen", middleware.AuthMiddleware(), middleware.GuestReadOnly(), handlers.ReopenPullRequest)
 }

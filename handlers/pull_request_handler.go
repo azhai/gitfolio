@@ -343,8 +343,14 @@ func MergePullRequest(c fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Merge request not found"})
 	}
 
-	if result.Repo.OwnerID != userID {
-		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Only repository owner can merge"})
+	if result.Repo.IsGroupOwned() {
+		if !helpers.CheckGroupLeaderPermission(c, result.Group.ID) {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Only group leader can merge"})
+		}
+	} else {
+		if !helpers.CheckOwnerPermission(c, result.Repo.OwnerID) {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Only repository owner can merge"})
+		}
 	}
 
 	if mr.IsClosed || mr.IsMerged {
@@ -474,7 +480,7 @@ func GetPRCommits(c fiber.Ctx) error {
 
 	gitSvc := services.NewGitService()
 	commits, total, err := gitSvc.GetPRCommits(
-		result.Owner.Username, result.Repo.Name,
+		result.OwnerName(), result.Repo.Name,
 		mr.SourceBranch, mr.TargetBranch,
 		page, perPage,
 	)
@@ -515,7 +521,7 @@ func GetPRFiles(c fiber.Ctx) error {
 
 	gitSvc := services.NewGitService()
 	files, additions, deletions, err := gitSvc.GetPRFiles(
-		result.Owner.Username, result.Repo.Name,
+		result.OwnerName(), result.Repo.Name,
 		mr.SourceBranch, mr.TargetBranch,
 	)
 	if err != nil {

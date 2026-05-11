@@ -36,7 +36,6 @@ func TestGuestReadOnly(t *testing.T) {
 		{"guest is blocked", "guest", 1, fiber.StatusForbidden},
 		{"user passes", "user", 1, fiber.StatusOK},
 		{"admin passes", "admin", 1, fiber.StatusOK},
-		{"leader passes", "leader", 1, fiber.StatusOK},
 		{"no role passes", "", 0, fiber.StatusOK},
 	}
 
@@ -65,7 +64,6 @@ func TestAdminOnly(t *testing.T) {
 		{"admin passes", "admin", 1, fiber.StatusOK},
 		{"user blocked", "user", 1, fiber.StatusForbidden},
 		{"guest blocked", "guest", 1, fiber.StatusForbidden},
-		{"leader blocked", "leader", 1, fiber.StatusForbidden},
 		{"no role blocked", "", 0, fiber.StatusForbidden},
 	}
 
@@ -79,35 +77,6 @@ func TestAdminOnly(t *testing.T) {
 			}
 			if resp.StatusCode != tt.wantStatus {
 				t.Errorf("AdminOnly() status = %v, want %v", resp.StatusCode, tt.wantStatus)
-			}
-		})
-	}
-}
-
-func TestLeaderOrAdmin(t *testing.T) {
-	tests := []struct {
-		name       string
-		role       string
-		userID     int64
-		wantStatus int
-	}{
-		{"admin passes", "admin", 1, fiber.StatusOK},
-		{"leader passes", "leader", 1, fiber.StatusOK},
-		{"user blocked", "user", 1, fiber.StatusForbidden},
-		{"guest blocked", "guest", 1, fiber.StatusForbidden},
-		{"no role blocked", "", 0, fiber.StatusForbidden},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			app := setupTestApp(LeaderOrAdmin(), tt.role, tt.userID)
-			req := httptest.NewRequest(http.MethodGet, "/test", nil)
-			resp, err := app.Test(req)
-			if err != nil {
-				t.Fatalf("app.Test() error = %v", err)
-			}
-			if resp.StatusCode != tt.wantStatus {
-				t.Errorf("LeaderOrAdmin() status = %v, want %v", resp.StatusCode, tt.wantStatus)
 			}
 		})
 	}
@@ -188,7 +157,6 @@ func TestIsCurrentUserAdmin(t *testing.T) {
 		{"admin is admin", "admin", true},
 		{"user is not admin", "user", false},
 		{"guest is not admin", "guest", false},
-		{"leader is not admin", "leader", false},
 		{"no role is not admin", "", false},
 	}
 

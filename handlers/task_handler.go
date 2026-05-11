@@ -1150,7 +1150,7 @@ func GetTaskCommits(c fiber.Ctx) error {
 
 	var response []CommitSummary
 	for _, ref := range refs {
-		detail, err := gitSvc.GetCommitDetail(result.Owner.Username, result.Repo.Name, ref.CommitHash)
+		detail, err := gitSvc.GetCommitDetail(result.OwnerName(), result.Repo.Name, ref.CommitHash)
 		if err != nil {
 			response = append(response, CommitSummary{
 				Hash:    ref.CommitHash,

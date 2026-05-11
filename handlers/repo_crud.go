@@ -53,7 +53,9 @@ func CreateRepository(c fiber.Ctx) error {
 
 	if req.CloneURL != "" {
 		repo.MirrorURL = req.CloneURL
-		repo.ProjectType = "mirror"
+		if repo.ProjectType != "public" && repo.ProjectType != "private" {
+			repo.ProjectType = "mirror"
+		}
 
 		if strings.Contains(req.CloneURL, "github.com") {
 			syncSvc := services.NewSyncService(db)
@@ -75,6 +77,8 @@ func CreateRepository(c fiber.Ctx) error {
 		repo.LocalPath = localPath
 	} else {
 		repo.ProjectType = "local"
+		repo.OwnerID = 0
+		repo.OwnerType = "user"
 		gitSvc := services.NewGitService()
 		if err := gitSvc.InitRepository(ownerUser.Username, repo); err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -96,7 +100,7 @@ func CreateRepository(c fiber.Ctx) error {
 
 	schedulerSvc := services.NewSchedulerService(db)
 	syncType := "stats"
-	if repo.IsMirror() {
+	if repo.IsRemote() {
 		syncType = "mirror"
 	}
 	schedulerSvc.GetOrCreateSyncPoint(repo.ID, syncType)
@@ -163,17 +167,19 @@ func ListRepositories(c fiber.Ctx) error {
 	userID := middleware.GetCurrentUserID(c)
 	role := middleware.GetCurrentUserRole(c)
 
-	if role == "admin" || role == "guest" {
+	if role == "admin" {
+	} else if role == "guest" {
+		query = query.Where("project_type IN ?", []string{"public", "mirror"})
 	} else if userID == 0 {
-		query = query.Where("project_type = ?", "local")
+		query = query.Where("project_type IN ?", []string{"public", "mirror"})
 	} else {
 		groupIDs := getUserGroupIDs(db, userID)
 		if len(groupIDs) > 0 {
 			query = query.Filter(
 				goent.Or(
-					goent.Equals(db.Repository.Field("project_type"), "local"),
+					goent.In(db.Repository.Field("project_type"), []interface{}{"local", "public", "mirror"}),
 					goent.And(
-						goent.Equals(db.Repository.Field("project_type"), "mirror"),
+						goent.Equals(db.Repository.Field("project_type"), "private"),
 						goent.Or(
 							goent.And(
 								goent.Equals(db.Repository.Field("owner_type"), "user"),
@@ -190,9 +196,9 @@ func ListRepositories(c fiber.Ctx) error {
 		} else {
 			query = query.Filter(
 				goent.Or(
-					goent.Equals(db.Repository.Field("project_type"), "local"),
+					goent.In(db.Repository.Field("project_type"), []interface{}{"local", "public", "mirror"}),
 					goent.And(
-						goent.Equals(db.Repository.Field("project_type"), "mirror"),
+						goent.Equals(db.Repository.Field("project_type"), "private"),
 						goent.Equals(db.Repository.Field("owner_type"), "user"),
 						goent.Equals(db.Repository.Field("owner_id"), userID),
 					),
@@ -271,6 +277,10 @@ func ListRepositories(c fiber.Ctx) error {
 		for _, repo := range repos {
 			var ownerUser *models.User
 			var ownerGroup *models.Group
+			if repo.IsLocal() {
+				response = append(response, ToRepositoryResponse(repo, nil, nil))
+				continue
+			}
 			if repo.OwnerType == "group" {
 				ownerGroup = groupsMap[repo.OwnerID]
 				if ownerGroup == nil {
@@ -315,6 +325,21 @@ func UpdateRepository(c fiber.Ctx) error {
 		result.Repo.Homepage = req.Homepage
 	}
 	if req.ProjectType != "" {
+		oldType := result.Repo.ProjectType
+		newType := req.ProjectType
+		validTypes := map[string]bool{"local": true, "mirror": true, "public": true, "private": true}
+		if !validTypes[newType] {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid project type"})
+		}
+		if oldType == "local" && newType != "local" {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Local projects cannot be converted to remote types"})
+		}
+		if newType == "local" && oldType != "local" {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Remote projects cannot be converted to local"})
+		}
+		if oldType == "mirror" && newType != "mirror" && newType != "public" && newType != "private" {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Mirror projects can only be converted to public or private"})
+		}
 		result.Repo.ProjectType = req.ProjectType
 	}
 	if req.DefaultBranch != "" {

@@ -412,6 +412,9 @@ export const usersAPI = {
       body: formData,
     }).then(function(res) { return res.json() })
   },
+  update(username, data) {
+    return api.put('/users/' + username, data)
+  },
 }
 
 export const adminAPI = {

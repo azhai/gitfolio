@@ -34,6 +34,7 @@ type RepositoryResponse struct {
 	ProjectType   string `json:"project_type"`
 	IsFork        bool   `json:"is_fork"`
 	IsMirror      bool   `json:"is_mirror"`
+	CanPushRemote bool   `json:"can_push_remote"`
 	MirrorURL     string `json:"mirror_url"`
 	LocalPath     string `json:"local_path"`
 	LastSyncAt    string `json:"last_sync_at"`
@@ -75,7 +76,9 @@ func ToRepositoryResponse(repo *models.Repository, owner *models.User, group *mo
 	}
 
 	ownerName := ""
-	if repo.OwnerType == "group" && group != nil {
+	if repo.IsLocal() {
+		ownerName = "local"
+	} else if repo.OwnerType == "group" && group != nil {
 		ownerName = group.Name
 	} else if owner != nil {
 		ownerName = owner.Username
@@ -93,6 +96,7 @@ func ToRepositoryResponse(repo *models.Repository, owner *models.User, group *mo
 		ProjectType:   repo.ProjectType,
 		IsFork:        repo.IsFork,
 		IsMirror:      repo.IsMirror(),
+		CanPushRemote: repo.CanPushRemote(),
 		MirrorURL:     repo.MirrorURL,
 		LocalPath:     repo.LocalPath,
 		LastSyncAt:    lastSyncAt,

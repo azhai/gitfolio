@@ -117,16 +117,6 @@ func AdminOnly() fiber.Handler {
 	}
 }
 
-func LeaderOrAdmin() fiber.Handler {
-	return func(c fiber.Ctx) error {
-		role := GetCurrentUserRole(c)
-		if role != "admin" && role != "leader" {
-			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Leader or admin access required"})
-		}
-		return c.Next()
-	}
-}
-
 func GetCurrentUser(c fiber.Ctx) (*models.User, error) {
 	userID := c.Locals("user_id")
 	if userID == nil {

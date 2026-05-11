@@ -420,7 +420,7 @@ func UpdateCommitTimes(c fiber.Ctx) error {
 
 	for _, repo := range repos {
 		localPath := repo.LocalPath
-		if localPath == "" || repo.IsMirror() {
+		if localPath == "" || repo.IsRemote() {
 			skipped++
 			continue
 		}

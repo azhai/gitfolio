@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { Box, Text, Flex, HStack, VStack, Badge, Button, Spinner, Input, Switch, useToast, Tabs, TabList, Tab, TabPanels, TabPanel, Modal, ModalOverlay, ModalContent, ModalHeader, ModalBody, ModalFooter, ModalCloseButton, Select, useDisclosure } from '@chakra-ui/react'
 import { usersAPI, adminAPI } from '../api/index'
 import { t, timeAgo, getLanguage } from '../i18n/index'
-import { LuUsers as Users, LuClock as Clock, LuShield as Shield, LuMail as Mail, LuCalendar as Calendar, LuRefreshCw as RefreshCw, LuPause as Pause, LuPlay as Play, LuFileText as FileText, LuCircleCheck as CheckCircle, LuCircleX as XCircle, LuTimer as Timer, LuPlus as Plus } from 'react-icons/lu'
+import { LuUsers as Users, LuClock as Clock, LuShield as Shield, LuMail as Mail, LuCalendar as Calendar, LuRefreshCw as RefreshCw, LuPause as Pause, LuPlay as Play, LuFileText as FileText, LuCircleCheck as CheckCircle, LuCircleX as XCircle, LuTimer as Timer, LuPlus as Plus, LuKeyRound as KeyRound, LuPencil as Pencil } from 'react-icons/lu'
 
 function formatDateTime(dateStr) {
   if (!dateStr) return '-'
@@ -46,6 +46,16 @@ var UserManagementTab = function() {
   const [form, setForm] = useState({ username: '', email: '', password: '', full_name: '', role: 'user' })
   const [creating, setCreating] = useState(false)
 
+  const [editUser, setEditUser] = useState(null)
+  const [editRole, setEditRole] = useState('')
+  const [editRoleOpen, setEditRoleOpen] = useState(false)
+  const [savingRole, setSavingRole] = useState(false)
+
+  const [pwdUser, setPwdUser] = useState(null)
+  const [newPassword, setNewPassword] = useState('')
+  const [pwdOpen, setPwdOpen] = useState(false)
+  const [savingPwd, setSavingPwd] = useState(false)
+
   function fetchUsers() {
     setLoading(true)
     usersAPI.list().then(function(data) {
@@ -80,6 +90,45 @@ var UserManagementTab = function() {
     }).finally(function() { setCreating(false) })
   }
 
+  function openEditRole(user) {
+    setEditUser(user)
+    setEditRole(user.role || 'user')
+    setEditRoleOpen(true)
+  }
+
+  function handleSaveRole() {
+    if (!editUser) return
+    setSavingRole(true)
+    usersAPI.update(editUser.username, { role: editRole }).then(function() {
+      toast({ title: t('admin.updated'), status: 'success', duration: 2000 })
+      setEditRoleOpen(false)
+      fetchUsers()
+    }).catch(function(err) {
+      toast({ title: err.message || t('admin.updateFailed'), status: 'error', duration: 3000 })
+    }).finally(function() { setSavingRole(false) })
+  }
+
+  function openChangePwd(user) {
+    setPwdUser(user)
+    setNewPassword('')
+    setPwdOpen(true)
+  }
+
+  function handleSavePwd() {
+    if (!pwdUser) return
+    if (!newPassword || newPassword.length < 6) {
+      toast({ title: t('userMgmt.passwordMinLength'), status: 'warning', duration: 2000 })
+      return
+    }
+    setSavingPwd(true)
+    usersAPI.update(pwdUser.username, { password: newPassword }).then(function() {
+      toast({ title: t('admin.updated'), status: 'success', duration: 2000 })
+      setPwdOpen(false)
+    }).catch(function(err) {
+      toast({ title: err.message || t('admin.updateFailed'), status: 'error', duration: 3000 })
+    }).finally(function() { setSavingPwd(false) })
+  }
+
   if (loading) {
     return (
       <Box display="flex" justifyContent="center" py="60px">
@@ -90,10 +139,10 @@ var UserManagementTab = function() {
 
   return (
     <Box>
-      <Flex justify="space-between" align="center" mb="16px">
+      <Flex justify="space-between" align="center" my="16px">
         <Box bg="white" border="1px solid" borderColor="#e2e2e2" rounded="10px" p="12px 16px" flex={1} mr="12px">
           <Input placeholder={t('admin.searchUser')} value={search} onChange={function(e) { setSearch(e.target.value) }}
-            h="32px" fontSize="13px" borderRadius="6px" borderColor="#d1d5db"
+            h="32px" fontSize="13px" borderRadius="6px" borderColor="#d1d5db" autoComplete="off"
             _focus={{ borderColor: '#22c55e', boxShadow: '0 0 0 3px rgba(34,197,94,0.1)' }} />
         </Box>
         <Button h="32px" px="14px" fontSize="13px" rounded="6px" bg="#22c55e" color="white"
@@ -110,6 +159,7 @@ var UserManagementTab = function() {
               <th style={{ padding: '12px 16px', fontWeight: 500 }}>{t('admin.emailCol')}</th>
               <th style={{ padding: '12px 16px', fontWeight: 500 }}>{t('admin.roleCol')}</th>
               <th style={{ padding: '12px 16px', fontWeight: 500 }}>{t('admin.registeredAt')}</th>
+              <th style={{ padding: '12px 16px', fontWeight: 500 }}>{t('admin.actionCol')}</th>
             </tr>
           </thead>
           <tbody>
@@ -138,10 +188,8 @@ var UserManagementTab = function() {
                       <Badge fontSize="10px" px="6px" py="1px" rounded="4px" bg="#ede9fe" color="#7c3aed">
                         <HStack gap="4px"><Shield size={10} /><Text>{t('common.administrator')}</Text></HStack>
                       </Badge>
-                    ) : user.role === 'leader' ? (
-                      <Badge fontSize="10px" px="6px" py="1px" rounded="4px" bg="#dbeafe" color="#2563eb">{t('common.administrator')}</Badge>
                     ) : user.role === 'guest' ? (
-                      <Badge fontSize="10px" px="6px" py="1px" rounded="4px" bg="#fef3c7" color="#d97706">{t('nav.login')}</Badge>
+                      <Badge fontSize="10px" px="6px" py="1px" rounded="4px" bg="#fef3c7" color="#d97706">{t('common.guest')}</Badge>
                     ) : (
                       <Badge fontSize="10px" px="6px" py="1px" rounded="4px" bg="#f3f4f6" color="#666">{t('common.user')}</Badge>
                     )}
@@ -150,6 +198,18 @@ var UserManagementTab = function() {
                     <HStack gap="5px">
                       <Calendar size={13} />
                       <Text>{timeAgo(user.created_at)}</Text>
+                    </HStack>
+                  </td>
+                  <td style={{ padding: '12px 16px' }}>
+                    <HStack gap="6px">
+                      <Button h="26px" px="8px" fontSize="12px" rounded="4px" variant="outline" borderColor="#d1d5db" color="#666"
+                        leftIcon={<Pencil size={11} />} onClick={function() { openEditRole(user) }}>
+                        {t('admin.roleCol')}
+                      </Button>
+                      <Button h="26px" px="8px" fontSize="12px" rounded="4px" variant="outline" borderColor="#d1d5db" color="#666"
+                        leftIcon={<KeyRound size={11} />} onClick={function() { openChangePwd(user) }}>
+                        {t('admin.changePassword')}
+                      </Button>
                     </HStack>
                   </td>
                 </tr>
@@ -166,7 +226,7 @@ var UserManagementTab = function() {
         </Box>
       )}
 
-      <Modal isOpen={isOpen} onClose={onClose} isCentered>
+      <Modal isOpen={isOpen} onClose={onClose} isCentered blockScrollOnMount={false}>
         <ModalOverlay />
         <ModalContent mx="16px">
           <ModalHeader fontSize="16px" fontWeight={600}>{t('userMgmt.newUser')}</ModalHeader>
@@ -203,9 +263,8 @@ var UserManagementTab = function() {
                   onChange={function(e) { setForm(Object.assign({}, form, { role: e.target.value })) }}
                   borderColor="#d1d5db" _focus={{ borderColor: '#22c55e' }}>
                   <option value="user">{t('common.user')}</option>
-                  <option value="leader">Leader</option>
                   <option value="admin">{t('common.administrator')}</option>
-                  <option value="guest">Guest</option>
+                  <option value="guest">{t('common.guest')}</option>
                 </Select>
               </Box>
             </VStack>
@@ -215,6 +274,54 @@ var UserManagementTab = function() {
               mr="8px" onClick={onClose}>{t('common.cancel')}</Button>
             <Button h="32px" px="14px" fontSize="13px" rounded="6px" bg="#22c55e" color="white"
               _hover={{ bg: '#16a34a' }} isLoading={creating} onClick={handleCreate}>{t('userMgmt.createUser')}</Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      <Modal isOpen={editRoleOpen} onClose={function() { setEditRoleOpen(false) }} isCentered blockScrollOnMount={false}>
+        <ModalOverlay />
+        <ModalContent mx="16px">
+          <ModalHeader fontSize="16px" fontWeight={600}>{t('admin.editRole')} - {editUser ? editUser.username : ''}</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody pb="6px">
+            <Box w="100%">
+              <Text fontSize="12px" color="#888" mb="4px">{t('admin.roleCol')}</Text>
+              <Select h="36px" fontSize="13px" value={editRole}
+                onChange={function(e) { setEditRole(e.target.value) }}
+                borderColor="#d1d5db" _focus={{ borderColor: '#22c55e' }}>
+                <option value="user">{t('common.user')}</option>
+                <option value="admin">{t('common.administrator')}</option>
+                <option value="guest">{t('common.guest')}</option>
+              </Select>
+            </Box>
+          </ModalBody>
+          <ModalFooter pt="8px">
+            <Button h="32px" px="14px" fontSize="13px" rounded="6px" variant="outline" borderColor="#d1d5db" color="#666"
+              mr="8px" onClick={function() { setEditRoleOpen(false) }}>{t('common.cancel')}</Button>
+            <Button h="32px" px="14px" fontSize="13px" rounded="6px" bg="#22c55e" color="white"
+              _hover={{ bg: '#16a34a' }} isLoading={savingRole} onClick={handleSaveRole}>{t('common.save')}</Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      <Modal isOpen={pwdOpen} onClose={function() { setPwdOpen(false) }} isCentered blockScrollOnMount={false}>
+        <ModalOverlay />
+        <ModalContent mx="16px">
+          <ModalHeader fontSize="16px" fontWeight={600}>{t('admin.changePassword')} - {pwdUser ? pwdUser.username : ''}</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody pb="6px">
+            <Box w="100%">
+              <Text fontSize="12px" color="#888" mb="4px">{t('admin.newPassword')}</Text>
+              <Input h="36px" fontSize="13px" type="password" value={newPassword} placeholder={t('userMgmt.passwordMinLength')}
+                onChange={function(e) { setNewPassword(e.target.value) }}
+                borderColor="#d1d5db" autoComplete="new-password" _focus={{ borderColor: '#22c55e' }} />
+            </Box>
+          </ModalBody>
+          <ModalFooter pt="8px">
+            <Button h="32px" px="14px" fontSize="13px" rounded="6px" variant="outline" borderColor="#d1d5db" color="#666"
+              mr="8px" onClick={function() { setPwdOpen(false) }}>{t('common.cancel')}</Button>
+            <Button h="32px" px="14px" fontSize="13px" rounded="6px" bg="#22c55e" color="white"
+              _hover={{ bg: '#16a34a' }} isLoading={savingPwd} onClick={handleSavePwd}>{t('common.save')}</Button>
           </ModalFooter>
         </ModalContent>
       </Modal>
@@ -286,7 +393,7 @@ var SyncManagementTab = function() {
 
   return (
     <Box>
-      <Flex justify="space-between" align="center" mb="16px">
+      <Flex justify="space-between" align="center" my="16px">
         <Text fontSize="14px" color="#888">{t('admin.totalScheduledTasks', { count: syncPoints.length })}</Text>
         <HStack gap="8px">
           <Button h="28px" px="12px" fontSize="12px" rounded="6px"
@@ -404,9 +511,9 @@ var SyncManagementTab = function() {
                   <td style={{ padding: '10px 14px' }}>
                     <Text fontWeight={500} color="#333">{sp.owner_name}/{sp.repo_name}</Text>
                     {sp.project_type && <Badge ml="6px" fontSize="9px" px="4px" rounded="3px"
-                      bg={sp.project_type === 'mirror' ? '#eff6ff' : '#f3f4f6'}
-                      color={sp.project_type === 'mirror' ? '#2563eb' : '#6b7280'}>
-                      {sp.project_type === 'mirror' ? t('project.mirror') : t('common.local')}
+                      bg={sp.project_type === 'mirror' ? '#eff6ff' : sp.project_type === 'public' ? '#f0fdf4' : sp.project_type === 'private' ? '#fff7ed' : '#f3f4f6'}
+                      color={sp.project_type === 'mirror' ? '#2563eb' : sp.project_type === 'public' ? '#16a34a' : sp.project_type === 'private' ? '#ea580c' : '#6b7280'}>
+                      {sp.project_type === 'mirror' ? t('project.mirror') : sp.project_type === 'public' ? t('project.public') : sp.project_type === 'private' ? t('project.private') : t('common.local')}
                     </Badge>}
                   </td>
                   <td style={{ padding: '10px 14px' }}>
@@ -533,10 +640,10 @@ var AdminPage = function() {
         </TabList>
 
         <TabPanels>
-          <TabPanel p={0}>
+          <TabPanel p={0} pb="60px">
             <UserManagementTab />
           </TabPanel>
-          <TabPanel p={0}>
+          <TabPanel p={0} pb="60px">
             <SyncManagementTab />
           </TabPanel>
         </TabPanels>

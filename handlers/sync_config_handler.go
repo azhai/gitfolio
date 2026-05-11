@@ -21,7 +21,7 @@ func GetSyncConfig(c fiber.Ctx) error {
 	schedulerSvc := services.NewSchedulerService(db)
 
 	syncType := "stats"
-	if result.Repo.IsMirror() {
+	if result.Repo.IsRemote() {
 		syncType = "mirror"
 	}
 
@@ -81,7 +81,7 @@ func UpdateSyncConfig(c fiber.Ctx) error {
 	schedulerSvc := services.NewSchedulerService(db)
 
 	syncType := "stats"
-	if result.Repo.IsMirror() {
+	if result.Repo.IsRemote() {
 		syncType = "mirror"
 	}
 

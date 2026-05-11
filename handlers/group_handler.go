@@ -39,14 +39,14 @@ func ToGroupResponse(group *models.Group, membersCount int) *GroupResponse {
 	}
 }
 
-// findGroupByName 根据名称查找群组
+// findGroupByName 根据名称查找团队
 func findGroupByName(db *models.Database, name string) (*models.Group, error) {
 	return db.Group.Select().Filter(
 		goent.Equals(db.Group.Field("name"), name),
 	).One()
 }
 
-// getGroupMembersCount 查询群组成员数
+// getGroupMembersCount 查询团队成员数
 func getGroupMembersCount(db *models.Database, groupID int64) int {
 	count, _ := db.GroupMember.Select().Filter(
 		goent.Equals(db.GroupMember.Field("group_id"), groupID),
@@ -54,7 +54,7 @@ func getGroupMembersCount(db *models.Database, groupID int64) int {
 	return int(count)
 }
 
-// batchGetGroupMembersCount 批量查询群组成员数
+// batchGetGroupMembersCount 批量查询团队成员数
 func batchGetGroupMembersCount(db *models.Database, groupIDs []int64) map[int64]int {
 	result := make(map[int64]int)
 	if len(groupIDs) == 0 {
@@ -74,16 +74,16 @@ func batchGetGroupMembersCount(db *models.Database, groupIDs []int64) map[int64]
 	return result
 }
 
-// checkGroupAdmin 检查当前用户是否为群组管理员或所有者
-func checkGroupAdmin(db *models.Database, groupID, userID int64) error {
+// checkGroupLeader 检查当前用户是否为团队负责人
+func checkGroupLeader(db *models.Database, groupID, userID int64) error {
 	member, err := db.GroupMember.Select().Filter(
 		goent.And(
 			goent.Equals(db.GroupMember.Field("group_id"), groupID),
 			goent.Equals(db.GroupMember.Field("user_id"), userID),
 		),
 	).One()
-	if err != nil || (member.Role != "owner" && member.Role != "admin") {
-		return fiber.NewError(fiber.StatusForbidden, "Only group owners or admins can perform this action")
+	if err != nil || member.Role != "leader" {
+		return fiber.NewError(fiber.StatusForbidden, "Only group leaders can perform this action")
 	}
 	return nil
 }
@@ -169,7 +169,7 @@ func CreateGroup(c fiber.Ctx) error {
 	member := &models.GroupMember{
 		GroupID: group.ID,
 		UserID:  userID,
-		Role:    "owner",
+		Role:    "leader",
 	}
 	db.GroupMember.Insert().One(member)
 
@@ -199,7 +199,7 @@ func UpdateGroup(c fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Group not found"})
 	}
 
-	if err := checkGroupAdmin(db, group.ID, userID); err != nil {
+	if err := checkGroupLeader(db, group.ID, userID); err != nil {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": err.Error()})
 	}
 

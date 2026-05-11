@@ -80,9 +80,9 @@ const UserProfile = () => {
               <HStack gap="8px" mb="6px">
                 <Text fontSize="15px" fontWeight="600" color="#16a34a">{owner}/{name}</Text>
                 <Badge fontSize="10px" px="6px" py="1px" rounded="4px"
-                  bg={repo.project_type === 'mirror' ? '#eff6ff' : '#f3f4f6'}
-                  color={repo.project_type === 'mirror' ? '#2563eb' : '#6b7280'}>
-                  {repo.project_type === 'mirror' ? t('project.mirror') : t('common.local')}
+                  bg={repo.project_type === 'mirror' ? '#eff6ff' : repo.project_type === 'public' ? '#f0fdf4' : repo.project_type === 'private' ? '#fff7ed' : '#f3f4f6'}
+                  color={repo.project_type === 'mirror' ? '#2563eb' : repo.project_type === 'public' ? '#16a34a' : repo.project_type === 'private' ? '#ea580c' : '#6b7280'}>
+                  {repo.project_type === 'mirror' ? t('project.mirror') : repo.project_type === 'public' ? t('project.public') : repo.project_type === 'private' ? t('project.private') : t('common.local')}
                 </Badge>
               </HStack>
               <Text fontSize="13px" color="#666" mb="10px" noOfLines={2}>{repo.description || t('project.noDescription')}</Text>

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { Box, Text, Flex, VStack, HStack, Badge, Button, Spinner, Tabs, TabList, Tab, TabPanels, TabPanel } from '@chakra-ui/react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { prsAPI } from '../../api/index'
+import { prsAPI, reposAPI } from '../../api/index'
 import { t, timeAgo } from '../../i18n/index'
 import { LuGitPullRequest as GitPullRequest } from 'react-icons/lu'
 import { useAuth } from '../../contexts/AuthContext'
@@ -19,18 +19,27 @@ var STATUS_MAP = {
 const PRDetail = () => {
   const { owner, repo, number } = useParams()
   const navigate = useNavigate()
-  const { isGuest, isAdmin, isLeader } = useAuth()
+  const { isGuest, isAdmin, isUser, user } = useAuth()
   const [pr, setPr] = useState(null)
   const [prCommits, setPrCommits] = useState([])
   const [prFiles, setPrFiles] = useState([])
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState(false)
+  const [isRepoOwner, setIsRepoOwner] = useState(false)
 
   useEffect(() => {
     prsAPI.get(owner, repo, number).then(function(data) {
       setPr(data)
     }).catch(function() { setPr(null) }).finally(function() { setLoading(false) })
   }, [owner, repo, number])
+
+  useEffect(() => {
+    reposAPI.get(owner, repo).then(function(data) {
+      if (data && user) {
+        setIsRepoOwner(data.owner_id === user.id)
+      }
+    }).catch(function() {})
+  }, [owner, repo, user])
 
   function loadCommits() {
     prsAPI.commits(owner, repo, number).then(function(data) {
@@ -99,7 +108,7 @@ const PRDetail = () => {
         <HStack gap="8px">
           {status === 'open' && !isGuest && (
             <>
-              {(isAdmin || isLeader) && (
+              {(isAdmin || isUser || isRepoOwner) && (
                 <Button h="30px" px="14px" fontSize="13px" rounded="6px" bg="#7c3aed" color="white"
                   _hover={{ bg: '#6d28d9' }} onClick={function() { handleAction('merge') }} isLoading={actionLoading}>
                   {t('pr.merge')}

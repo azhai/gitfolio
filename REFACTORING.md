@@ -570,3 +570,109 @@ func GetRepository(c fiber.Ctx) error {
 ```
 
 代码从 20 行减少到 6 行，减少了 **70%** 的代码量。
+
+## 项目类型系统重构
+
+### 变更概述
+
+将原有的单一项目类型扩展为四种类型，每种类型具有不同的可见性、同步和推送权限。
+
+### 四种项目类型
+
+| 类型 | 可见性 | 远程同步 | 推送远程 | Owner ID | 说明 |
+|------|--------|---------|---------|----------|------|
+| `local` | 除 guest 外可见 | ❌ | ❌ | 0 | 本地项目，无远程关联 |
+| `mirror` | 所有人可见 | ✅ 拉取 | ❌ | 用户/团队 ID | 镜像项目，只读 |
+| `public` | 所有人可见 | ✅ | ✅ | 用户/团队 ID | 公开项目 |
+| `private` | 仅所有者和团队成员可见 | ✅ | ✅ | 用户/团队 ID | 私有项目 |
+
+### 类型转换规则
+
+- `mirror` ↔ `public`：可互转
+- `mirror` ↔ `private`：可互转
+- `public` ↔ `private`：可互转
+- `local`：不可转换为其他类型
+
+### 模型方法
+
+```go
+// models/tables.go
+func (r *Repository) IsMirror() bool      // project_type == "mirror"
+func (r *Repository) IsPrivate() bool     // project_type == "private"
+func (r *Repository) IsLocal() bool       // project_type == "local"
+func (r *Repository) IsRemote() bool      // mirror || public || private
+func (r *Repository) CanPushRemote() bool // public || private
+func (r *Repository) IsGroupOwned() bool  // owner_type == "group"
+```
+
+### ResourceResult.OwnerName() 方法
+
+为解决 local 项目无 Owner 导致的 nil 指针崩溃，在 `ResourceResult` 上添加了 `OwnerName()` 方法：
+
+```go
+// helpers/resources.go
+func (r *ResourceResult) OwnerName() string {
+    if r.Owner != nil {
+        return r.Owner.Username
+    }
+    if r.Group != nil {
+        return r.Group.Name
+    }
+    return "local"
+}
+```
+
+所有 `result.Owner.Username` 调用已替换为 `result.OwnerName()`，涉及文件：
+- `handlers/repo_git.go`（30 处）
+- `handlers/pull_request_handler.go`（2 处）
+- `handlers/repo_sync.go`（1 处）
+- `handlers/repo_star.go`（1 处）
+- `handlers/task_handler.go`（1 处）
+
+### 仓库列表过滤逻辑
+
+```go
+// handlers/repo_crud.go
+admin  → 可见所有项目
+guest  → 可见 public + mirror
+user   → 可见 local + public + mirror + 自己/团队的 private
+```
+
+### Raw 文件 Content-Type
+
+代码/文本文件返回 `text/plain; charset=utf-8`（浏览器直接显示），二进制文件返回 `application/octet-stream`（触发下载）。
+
+## 角色系统重构
+
+### 变更概述
+
+将用户角色从三种（admin/leader/user）简化为三种（admin/user/guest），团队角色独立为 Leader/Member。
+
+### 用户角色
+
+| 角色 | 中文名 | 权限 |
+|------|--------|------|
+| `admin` | 管理员 | 全部权限，包括管理所有用户和项目 |
+| `user` | 用户 | 管理自己的项目，参与团队项目 |
+| `guest` | 访客 | 只读访问公开和镜像项目 |
+
+> **变更**：原 `leader` 角色已合并到 `user` 角色。
+
+### 团队角色
+
+| 角色 | 中文名 | 权限 |
+|------|--------|------|
+| `leader` | 负责人 | 危险操作（删除项目、转移所有权）、合并 PR、所有成员权限 |
+| `member` | 成员 | 管理团队项目（非危险操作） |
+
+> 团队可以有多个 Leader。团队项目的 Owner 即为 Leader。
+
+### 权限检查函数
+
+```go
+// helpers/permissions.go
+CheckOwnerPermission(c, ownerID)      // 所有者检查（admin 放行，guest 拒绝）
+CheckPrivateAccess(c, isPrivate, ownerID) // 私有资源访问检查
+CheckGroupLeaderPermission(c, groupID)   // 团队 Leader 检查
+CheckGroupMemberPermission(c, groupID)   // 团队成员检查
+```

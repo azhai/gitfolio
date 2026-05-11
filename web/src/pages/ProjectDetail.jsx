@@ -134,6 +134,14 @@ const ProjectDetail = () => {
           <Badge fontSize="11px" px="8px" py="1px" rounded="4px"
             bg="#eff6ff" color="#2563eb" fontWeight="500">{t('project.mirror')}</Badge>
         )}
+        {info.project_type === 'public' && (
+          <Badge fontSize="11px" px="8px" py="1px" rounded="4px"
+            bg="#f0fdf4" color="#16a34a" fontWeight="500">{t('project.public')}</Badge>
+        )}
+        {info.project_type === 'private' && (
+          <Badge fontSize="11px" px="8px" py="1px" rounded="4px"
+            bg="#fff7ed" color="#ea580c" fontWeight="500">{t('project.private')}</Badge>
+        )}
         {info.project_type === 'local' && (
           <Badge fontSize="11px" px="8px" py="1px" rounded="4px"
             bg="#f3f4f6" color="#6b7280" fontWeight="500">{t('common.local')}</Badge>

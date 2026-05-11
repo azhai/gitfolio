@@ -51,7 +51,7 @@ export function AuthProvider({ children }) {
     role: user ? (user.role || 'user') : '',
     isGuest: !!(user && user.role === 'guest'),
     isAdmin: !!(user && user.role === 'admin'),
-    isLeader: !!(user && user.role === 'leader'),
+    isUser: !!(user && (user.role === 'user' || user.role === 'admin')),
     login,
     logout,
     refreshUser: fetchMe,

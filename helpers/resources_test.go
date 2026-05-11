@@ -16,7 +16,6 @@ func TestGetOwnerAndRepoWithPrivateAccess_MirrorPermissions(t *testing.T) {
 		{"admin can access mirror repo", "admin", 1, false},
 		{"guest can access mirror repo", "guest", 1, false},
 		{"user cannot access others mirror repo", "user", 2, true},
-		{"leader cannot access others mirror repo", "leader", 2, true},
 	}
 
 	for _, tt := range tests {
@@ -72,8 +71,14 @@ func TestRepository_IsMirror(t *testing.T) {
 	if !repo.IsMirror() {
 		t.Error("mirror repo should report IsMirror() = true")
 	}
-	if !repo.IsPrivate() {
-		t.Error("mirror repo should report IsPrivate() = true (same as IsMirror)")
+	if repo.IsPrivate() {
+		t.Error("mirror repo should report IsPrivate() = false")
+	}
+	if !repo.IsRemote() {
+		t.Error("mirror repo should report IsRemote() = true")
+	}
+	if repo.CanPushRemote() {
+		t.Error("mirror repo should report CanPushRemote() = false")
 	}
 
 	localRepo := &models.Repository{ProjectType: "local"}
@@ -82,6 +87,37 @@ func TestRepository_IsMirror(t *testing.T) {
 	}
 	if localRepo.IsPrivate() {
 		t.Error("local repo should report IsPrivate() = false")
+	}
+	if localRepo.IsRemote() {
+		t.Error("local repo should report IsRemote() = false")
+	}
+
+	publicRepo := &models.Repository{ProjectType: "public"}
+	if publicRepo.IsMirror() {
+		t.Error("public repo should report IsMirror() = false")
+	}
+	if publicRepo.IsPrivate() {
+		t.Error("public repo should report IsPrivate() = false")
+	}
+	if !publicRepo.IsRemote() {
+		t.Error("public repo should report IsRemote() = true")
+	}
+	if !publicRepo.CanPushRemote() {
+		t.Error("public repo should report CanPushRemote() = true")
+	}
+
+	privateRepo := &models.Repository{ProjectType: "private"}
+	if privateRepo.IsMirror() {
+		t.Error("private repo should report IsMirror() = false")
+	}
+	if !privateRepo.IsPrivate() {
+		t.Error("private repo should report IsPrivate() = true")
+	}
+	if !privateRepo.IsRemote() {
+		t.Error("private repo should report IsRemote() = true")
+	}
+	if !privateRepo.CanPushRemote() {
+		t.Error("private repo should report CanPushRemote() = true")
 	}
 }
 
@@ -106,5 +142,53 @@ func TestRepository_IsLocal(t *testing.T) {
 	mirrorRepo := &models.Repository{ProjectType: "mirror"}
 	if mirrorRepo.IsLocal() {
 		t.Error("mirror repo should report IsLocal() = false")
+	}
+}
+
+func TestResourceResult_OwnerName(t *testing.T) {
+	tests := []struct {
+		name     string
+		result   *ResourceResult
+		expected string
+	}{
+		{
+			"user owned repo returns username",
+			&ResourceResult{
+				Owner: &models.User{ID: 1, Username: "alice"},
+				Repo:  &models.Repository{ID: 100, Name: "myrepo"},
+			},
+			"alice",
+		},
+		{
+			"group owned repo returns group name",
+			&ResourceResult{
+				Group: &models.Group{ID: 10, Name: "myteam"},
+				Repo:  &models.Repository{ID: 200, Name: "teamrepo", OwnerType: "group"},
+			},
+			"myteam",
+		},
+		{
+			"local project without owner returns local",
+			&ResourceResult{
+				Repo: &models.Repository{ID: 300, Name: "localrepo", ProjectType: "local"},
+			},
+			"local",
+		},
+		{
+			"nil owner and nil group returns local",
+			&ResourceResult{
+				Repo: &models.Repository{ID: 400, Name: "orphan"},
+			},
+			"local",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.result.OwnerName()
+			if got != tt.expected {
+				t.Errorf("OwnerName() = %v, want %v", got, tt.expected)
+			}
+		})
 	}
 }

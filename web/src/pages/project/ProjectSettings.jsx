@@ -49,7 +49,7 @@ const ProjectSettings = () => {
   const { owner, repo } = useParams()
   const navigate = useNavigate()
   const toast = useToast()
-  const { isGuest, isAdmin, isLeader } = useAuth()
+  const { isGuest, isAdmin, isUser, user } = useAuth()
   const [repoInfo, setRepoInfo] = useState(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -199,6 +199,13 @@ const ProjectSettings = () => {
   }
 
   var isMirror = repoInfo && repoInfo.project_type === 'mirror'
+  var isPublic = repoInfo && repoInfo.project_type === 'public'
+  var isPrivate = repoInfo && repoInfo.project_type === 'private'
+  var isLocal = repoInfo && repoInfo.project_type === 'local'
+  var isRemote = isMirror || isPublic || isPrivate
+  var canPushRemote = isPublic || isPrivate
+  var isRepoOwner = repoInfo && user && repoInfo.owner_id === user.id
+  var canManage = isLocal ? !isGuest : (isAdmin || isUser || isRepoOwner)
 
   return (
     <Box>
@@ -243,28 +250,41 @@ const ProjectSettings = () => {
           <Box>
             <Text fontSize="13px" fontWeight="500" color="#555">{t('projectSettings.projectType')}</Text>
             <Text fontSize="12px" color="#888">
-              {isMirror
-                ? t('projectSettings.mirrorProjectDesc')
+              {isMirror ? t('projectSettings.mirrorProjectDesc')
+                : isPublic ? t('projectSettings.publicProjectDesc')
+                : isPrivate ? t('projectSettings.privateProjectDesc')
                 : t('projectSettings.localProjectDesc')}
             </Text>
           </Box>
           <HStack gap="6px">
-            {['mirror', 'local'].map(function(pt) {
-              var labelKey = pt === 'mirror' ? 'project.mirror' : 'common.local'
-              var selected = form.project_type === pt
-              return (
-                <Box key={pt} as="button" px="10px" py="4px" fontSize="12px" fontWeight="500" rounded="6px"
-                  border="1px solid" cursor="pointer" transition="all 0.15s"
-                  borderColor={selected ? '#22c55e' : '#d1d5db'}
-                  bg={selected ? '#f0fdf4' : 'white'}
-                  color={selected ? '#16a34a' : '#888'}
-                  _hover={{ borderColor: '#22c55e' }}
-                  onClick={function() { setForm(function(p) { return Object.assign({}, p, { project_type: pt }) }) }}
-                >
-                  {t(labelKey)}
-                </Box>
-              )
-            })}
+            {(function() {
+              var currentType = repoInfo.project_type || 'local'
+              var allowedTypes
+              if (currentType === 'local') {
+                allowedTypes = ['local']
+              } else if (currentType === 'mirror') {
+                allowedTypes = ['mirror', 'public', 'private']
+              } else {
+                allowedTypes = ['public', 'private']
+              }
+              return allowedTypes.map(function(pt) {
+                var labelMap = { mirror: 'project.mirror', public: 'project.public', private: 'project.private', local: 'common.local' }
+                var colorMap = { mirror: '#2563eb', public: '#16a34a', private: '#ea580c', local: '#6b7280' }
+                var selected = form.project_type === pt
+                return (
+                  <Box key={pt} as="button" px="10px" py="4px" fontSize="12px" fontWeight="500" rounded="6px"
+                    border="1px solid" cursor="pointer" transition="all 0.15s"
+                    borderColor={selected ? colorMap[pt] : '#d1d5db'}
+                    bg={selected ? (pt === 'mirror' ? '#eff6ff' : pt === 'public' ? '#f0fdf4' : pt === 'private' ? '#fff7ed' : '#f3f4f6') : 'white'}
+                    color={selected ? colorMap[pt] : '#888'}
+                    _hover={{ borderColor: colorMap[pt] }}
+                    onClick={function() { setForm(function(p) { return Object.assign({}, p, { project_type: pt }) }) }}
+                  >
+                    {t(labelMap[pt])}
+                  </Box>
+                )
+              })
+            })()}
           </HStack>
         </Flex>
 
@@ -274,7 +294,7 @@ const ProjectSettings = () => {
         </Button>
       </Box>
 
-      {isMirror && (<>
+      {isRemote && (<>
       <Box bg="white" border="1px solid" borderColor="#e2e2e2" rounded="10px" p="24px" mb="20px">
         <Text fontSize="15px" fontWeight="600" color="#333" mb="12px">{t('projectSettings.scheduledSync')}</Text>
         <Text fontSize="13px" color="#666" mb="16px">
@@ -402,10 +422,11 @@ const ProjectSettings = () => {
       </Box>
       </>)}
 
+      {isRemote && (
       <Box bg="white" border="1px solid" borderColor="#e2e2e2" rounded="10px" p="24px" mb="20px">
         <Text fontSize="15px" fontWeight="600" color="#333" mb="12px">{t('projectSettings.codeSync')}</Text>
         <Text fontSize="13px" color="#666" mb="14px">
-          {isMirror ? t('projectSettings.codeSyncDesc') : t('projectSettings.codeSyncLocalDesc')}
+          {t('projectSettings.codeSyncDesc')}
         </Text>
         <Box mb="14px">
           <Text fontSize="13px" fontWeight="500" color="#555" mb="4px">{t('projectSettings.remoteUrlLabel')}</Text>
@@ -415,27 +436,30 @@ const ProjectSettings = () => {
             _focus={{ borderColor: '#22c55e', boxShadow: '0 0 0 3px rgba(34,197,94,0.1)' }} />
         </Box>
         <HStack gap="10px" flexWrap="wrap">
-          {isMirror && (
+          {isRemote && (
             <Button h="32px" px="16px" fontSize="13px" rounded="6px" variant="outline"
               borderColor="#22c55e" color="#16a34a" _hover={{ bg: '#f0fdf4' }}
               onClick={handleSyncPull} isLoading={syncing.pull} isDisabled={isGuest}>
               {t('projectSettings.pullCode')}
             </Button>
           )}
-          {isMirror && (
+          {isRemote && (
             <Button h="32px" px="16px" fontSize="13px" rounded="6px" variant="outline"
               borderColor="#3b82f6" color="#2563eb" _hover={{ bg: '#eff6ff' }}
               onClick={handleSyncIssues} isLoading={syncing.issues} isDisabled={isGuest}>
               {t('projectSettings.pullIssues')}
             </Button>
           )}
-          <Button h="32px" px="16px" fontSize="13px" rounded="6px" variant="outline"
-            borderColor="#d1d5db" color="#666" _hover={{ borderColor: '#22c55e', color: '#16a34a' }}
-            onClick={handleSyncPush} isLoading={syncing.push} isDisabled={isGuest}>
-            {t('projectSettings.pushToRemote')}
-          </Button>
+          {canPushRemote && (
+            <Button h="32px" px="16px" fontSize="13px" rounded="6px" variant="outline"
+              borderColor="#d1d5db" color="#666" _hover={{ borderColor: '#22c55e', color: '#16a34a' }}
+              onClick={handleSyncPush} isLoading={syncing.push} isDisabled={isGuest}>
+              {t('projectSettings.pushToRemote')}
+            </Button>
+          )}
         </HStack>
       </Box>
+      )}
 
       <Box bg="white" border="1px solid" borderColor="#e2e2e2" rounded="10px" p="24px" mb="20px">
         <Text fontSize="15px" fontWeight="600" color="#333" mb="12px">{t('projectSettings.statsRefreshSection')}</Text>
@@ -457,7 +481,7 @@ const ProjectSettings = () => {
         <Text fontSize="15px" fontWeight="600" color="#dc2626" mb="8px">{t('projectSettings.dangerZone')}</Text>
         <Text fontSize="13px" color="#666" mb="14px">{t('projectSettings.dangerZoneDesc')}</Text>
 
-        {isMirror && (
+        {isRemote && (
           <Flex align="center" justify="space-between" mb="14px" py="10px" borderBottom="1px solid" borderColor="#fecaca">
             <Box>
               <Text fontSize="13px" fontWeight="500" color="#555">{t('projectSettings.transferOwnership')}</Text>
@@ -465,14 +489,14 @@ const ProjectSettings = () => {
             </Box>
             <Button h="30px" px="14px" fontSize="13px" rounded="6px" variant="outline"
               borderColor="#f59e0b" color="#d97706" _hover={{ bg: '#fffbeb' }}
-              onClick={function() { setTransferTarget(''); setTransferOpen(true) }} isDisabled={!(isAdmin || isLeader)}>
+              onClick={function() { setTransferTarget(''); setTransferOpen(true) }} isDisabled={!canManage}>
               {t('projectSettings.transferProject')}
             </Button>
           </Flex>
         )}
 
         <Button h="30px" px="14px" fontSize="13px" rounded="6px" bg="#dc2626" color="white"
-          _hover={{ bg: '#b91c1c' }} onClick={function() { setDeleteConfirm(''); setDeleteOpen(true) }} isDisabled={!(isAdmin || isLeader)}>
+          _hover={{ bg: '#b91c1c' }} onClick={function() { setDeleteConfirm(''); setDeleteOpen(true) }} isDisabled={!canManage}>
           {t('projectSettings.deleteProject')}
         </Button>
       </Box>
