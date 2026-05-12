@@ -34,7 +34,10 @@ async function request(url, opts = {}) {
   }
   if (res.status === 204 || opts.method === 'DELETE') return null
   var json = await res.json()
-  if (json && json.data !== undefined) return json.data
+  if (json && json.data !== undefined) {
+    if (json.total !== undefined) return json
+    return json.data
+  }
   return json
 }
 

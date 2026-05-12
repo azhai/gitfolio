@@ -166,6 +166,7 @@ func CreatePullRequest(c fiber.Ctx) error {
 	mr := &models.PullRequest{
 		Title:        req.Title,
 		Body:         req.Body,
+		Number:       helpers.GetNextPRNumber(db, result.Repo.ID),
 		RepositoryID: result.Repo.ID,
 		AuthorID:     userID,
 		SourceBranch: req.SourceBranch,
@@ -217,25 +218,25 @@ func ListPullRequests(c fiber.Ctx) error {
 
 	db := models.GetDB()
 
-	query := db.PullRequest.Select(
+	conds := []goent.Condition{goent.Equals(db.PullRequest.Field("repository_id"), result.Repo.ID)}
+	if state == "open" {
+		conds = append(conds, goent.Equals(db.PullRequest.Field("is_closed"), false))
+	} else if state == "closed" {
+		conds = append(conds, goent.Equals(db.PullRequest.Field("is_closed"), true))
+	}
+
+	mrs, err := db.PullRequest.Select(
 		"id", "created_at", "updated_at", "title", "body", "number",
 		"repository_id", "author_id", "source_branch", "target_branch",
 		"assignee_id", "status", "is_merged", "is_closed", "is_locked",
-	).Where("repository_id = ?", result.Repo.ID)
-
-	switch state {
-	case "open":
-		query = query.Where("is_closed = ? AND is_merged = ?", false, false)
-	case "closed":
-		query = query.Where("is_closed = ?", true)
-	case "merged":
-		query = query.Where("is_merged = ?", true)
-	}
-
-	mrs, err := query.Skip(helpers.GetOffset(pagination.Page, pagination.PerPage)).Take(pagination.PerPage).All()
+	).Filter(conds...).
+		Skip(helpers.GetOffset(pagination.Page, pagination.PerPage)).
+		Take(pagination.PerPage).All()
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch merge requests"})
 	}
+
+	total, _ := db.PullRequest.Select().Filter(conds...).Count("id")
 
 	contributorIDs := helpers.CollectPRContributorIDs(mrs)
 	contributorsMap := helpers.BatchGetContributors(db, contributorIDs)
@@ -267,6 +268,7 @@ func ListPullRequests(c fiber.Ctx) error {
 		"data":     response,
 		"page":     pagination.Page,
 		"per_page": pagination.PerPage,
+		"total":    total,
 	})
 }
 
@@ -359,7 +361,7 @@ func MergePullRequest(c fiber.Ctx) error {
 
 	mr.IsMerged = true
 	mr.IsClosed = true
-	mr.Status = "merged"
+	mr.Status = "closed"
 
 	err = db.PullRequest.Save().One(mr)
 	if err != nil {

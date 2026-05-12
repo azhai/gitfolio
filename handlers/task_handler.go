@@ -1101,8 +1101,8 @@ func GetTaskPullRequests(c fiber.Ctx) error {
 	var response []PRSummary
 	for _, pr := range prs {
 		status := pr.Status
-		if pr.IsMerged {
-			status = "merged"
+		if pr.IsClosed {
+			status = "closed"
 		}
 		response = append(response, PRSummary{
 			ID:           pr.ID,

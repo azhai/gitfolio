@@ -42,7 +42,7 @@ func SyncPullRepository(c fiber.Ctx) error {
 		})
 	}
 
-	now := time.Now()
+	now := time.Now().UTC()
 	result.Repo.LastSyncAt = &now
 	if err = db.Repository.Save().One(result.Repo); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update sync time"})
@@ -103,14 +103,19 @@ func SyncIssuesData(c fiber.Ctx) error {
 
 	ctx := context.Background()
 	startTime := time.Now()
-	syncResult, err := syncSvc.SyncRepositoryData(ctx, result.Repo.ID, remoteRepo.Platform, remoteRepo.Owner, remoteRepo.RepoName, token)
-	duration := time.Since(startTime).Milliseconds()
 
 	syncPoints, _ := db.SyncPoint.Select().Where("repository_id = ? AND sync_type = ?", result.Repo.ID, "mirror").All()
 	var syncPointID int64
+	var lastIssueSyncAt *time.Time
+	var lastPRSyncAt *time.Time
 	if len(syncPoints) > 0 {
 		syncPointID = syncPoints[0].ID
+		lastIssueSyncAt = syncPoints[0].LastIssueSyncAt
+		lastPRSyncAt = syncPoints[0].LastPRSyncAt
 	}
+
+	syncResult, err := syncSvc.SyncRepositoryData(ctx, result.Repo.ID, remoteRepo.Platform, remoteRepo.Owner, remoteRepo.RepoName, token, lastIssueSyncAt, lastPRSyncAt)
+	duration := time.Since(startTime).Milliseconds()
 
 	if err != nil {
 		if syncPointID > 0 {
@@ -126,9 +131,19 @@ func SyncIssuesData(c fiber.Ctx) error {
 		syncSvc.LogSync(syncPointID, "mirror", "success", "", duration, syncResult.IssuesInserted+syncResult.IssuesUpdated+syncResult.PRsInserted+syncResult.PRsUpdated, 0, "")
 	}
 
-	now := time.Now()
+	now := time.Now().UTC()
 	result.Repo.LastSyncAt = &now
 	db.Repository.Save().One(result.Repo)
+
+	if syncPointID > 0 {
+		sp := syncPoints[0]
+		sp.LastSyncAt = &now
+		sp.LastIssueSyncAt = &now
+		sp.LastPRSyncAt = &now
+		sp.LastIssueNumber = syncResult.IssuesInserted + syncResult.IssuesUpdated
+		sp.LastPRNumber = syncResult.PRsInserted + syncResult.PRsUpdated
+		db.SyncPoint.Save().One(sp)
+	}
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
 		"message":         "Issues synced successfully",

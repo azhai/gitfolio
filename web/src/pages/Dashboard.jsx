@@ -65,7 +65,7 @@ const Dashboard = () => {
         {[
           { label: t('dashboard.totalRepos'), value: s.total_repos || 0, sub: (s.total_repos || 0) + ' ' + t('dashboard.totalReposUnit') },
           { label: t('issue.openIssue'), value: s.open_issues || 0, sub: (s.closed_issues || 0) + ' ' + t('dashboard.closedIssues') },
-          { label: t('pr.mergeRequest'), value: s.open_prs || 0, sub: (s.merged_prs || 0) + ' ' + t('dashboard.mergedPRs') },
+          { label: t('pr.mergeRequest'), value: s.open_prs || 0, sub: (s.closed_prs || 0) + ' ' + t('pr.closed') },
           { label: t('dashboard.totalStars'), value: s.total_stars || 0, sub: (s.total_forks || 0) + ' ' + t('dashboard.totalForks') },
         ].map(function(item) {
           return (

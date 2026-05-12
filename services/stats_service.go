@@ -22,9 +22,8 @@ func (s *StatsService) UpdateRepositoryStats(repoID int64, owner, name string) e
 
 	openIssues, _ := s.db.Issue.Select().Where("repository_id = ? AND is_closed = ?", repoID, false).Count("*")
 	closedIssues, _ := s.db.Issue.Select().Where("repository_id = ? AND is_closed = ?", repoID, true).Count("*")
-	openPRs, _ := s.db.PullRequest.Select().Where("repository_id = ? AND is_closed = ? AND is_merged = ?", repoID, false, false).Count("*")
-	closedPRs, _ := s.db.PullRequest.Select().Where("repository_id = ? AND is_closed = ? AND is_merged = ?", repoID, true, false).Count("*")
-	mergedPRs, _ := s.db.PullRequest.Select().Where("repository_id = ? AND is_merged = ?", repoID, true).Count("*")
+	openPRs, _ := s.db.PullRequest.Select().Where("repository_id = ? AND is_closed = ?", repoID, false).Count("*")
+	closedPRs, _ := s.db.PullRequest.Select().Where("repository_id = ? AND is_closed = ?", repoID, true).Count("*")
 	contributors, _ := s.db.Contributor.Select().Where("repository_id = ?", repoID).Count("*")
 
 	gitSvc := NewGitService()
@@ -49,7 +48,7 @@ func (s *StatsService) UpdateRepositoryStats(repoID int64, owner, name string) e
 	stats.ClosedIssuesCount = int(closedIssues)
 	stats.OpenPRsCount = int(openPRs)
 	stats.ClosedPRsCount = int(closedPRs)
-	stats.MergedPRsCount = int(mergedPRs)
+	stats.MergedPRsCount = int(closedPRs)
 	stats.ContributorsCount = int(contributors)
 	stats.CommitsCount = commitsCount
 	stats.BranchesCount = branchesCount

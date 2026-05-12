@@ -371,21 +371,23 @@ type SyncPoint struct {
 	CreatedAt time.Time
 	UpdatedAt time.Time
 
-	RepositoryID    int64  `goe:"index"`
-	RemoteRepoID    int64  `goe:"index"`
-	SyncType        string `goe:"index"`
-	LastSyncAt      *time.Time
-	LastSuccessAt   *time.Time
-	LastFailureAt   *time.Time
-	FailureCount    int `goe:"default:0"`
-	LastCommitHash  string
-	LastIssueNumber int
-	LastPRNumber    int
-	LastETag        string
-	LastModified    string
-	NextSyncAt      *time.Time
-	SyncInterval    int `goe:"default:3600"`
-	LastError       string
+	RepositoryID      int64  `goe:"index"`
+	RemoteRepoID      int64  `goe:"index"`
+	SyncType          string `goe:"index"`
+	LastSyncAt        *time.Time
+	LastSuccessAt     *time.Time
+	LastFailureAt     *time.Time
+	FailureCount      int `goe:"default:0"`
+	LastCommitHash    string
+	LastIssueNumber   int
+	LastPRNumber      int
+	LastIssueSyncAt   *time.Time
+	LastPRSyncAt      *time.Time
+	LastETag          string
+	LastModified      string
+	NextSyncAt        *time.Time
+	SyncInterval      int `goe:"default:3600"`
+	LastError         string
 	IsPaused        bool `goe:"default:false"`
 }
 

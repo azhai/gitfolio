@@ -110,7 +110,6 @@ export var SidebarIcons = {
 export var StatusIcons = {
   open: { icon: CircleDot, color: '#22c55e', label: '开启' },
   closed: { icon: CheckCircle2, color: '#6b7280', label: '已关闭' },
-  merged: { icon: GitMerge, color: '#8b5cf6', label: '已合并' },
   draft: { icon: FileEdit, color: '#9ca3af', label: '草稿' },
   progress: { icon: Loader2, color: '#f59e0b', label: '进行中' },
   review: { icon: Eye, color: '#3b82f6', label: '评审中' },

@@ -161,6 +161,24 @@ func GetUser(db *models.Database, id int64) *models.User {
 	return u
 }
 
+// GetNextIssueNumber 获取仓库的下一个 Issue 编号
+func GetNextIssueNumber(db *models.Database, repoID int64) int {
+	issues, err := db.Issue.Select("number").Where("repository_id = ?", repoID).OrderBy("number DESC").Take(1).All()
+	if err != nil || len(issues) == 0 {
+		return 1
+	}
+	return issues[0].Number + 1
+}
+
+// GetNextPRNumber 获取仓库的下一个 PR 编号
+func GetNextPRNumber(db *models.Database, repoID int64) int {
+	prs, err := db.PullRequest.Select("number").Where("repository_id = ?", repoID).OrderBy("number DESC").Take(1).All()
+	if err != nil || len(prs) == 0 {
+		return 1
+	}
+	return prs[0].Number + 1
+}
+
 // FindOrCreateContributor 查找或创建贡献者记录
 func FindOrCreateContributor(db *models.Database, repoID int64, name, email, avatar string) *models.Contributor {
 	existing, _ := db.Contributor.Select().Filter(

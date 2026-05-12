@@ -17,7 +17,7 @@ type StatsResponse struct {
 	OpenIssues   int    `json:"open_issues"`
 	ClosedIssues int    `json:"closed_issues"`
 	OpenPRs      int    `json:"open_prs"`
-	MergedPRs    int    `json:"merged_prs"`
+	MergedPRs    int    `json:"closed_prs"`
 	TotalStars   int    `json:"total_stars"`
 	TotalForks   int    `json:"total_forks"`
 	Theme        string `json:"theme"`
@@ -36,13 +36,10 @@ func GetStats(c fiber.Ctx) error {
 	closedIssues, _ := db.Issue.Select().Filter(goent.Equals(db.Issue.Field("is_closed"), true)).Count("id")
 
 	openPRs, _ := db.PullRequest.Select().Filter(
-		goent.And(
-			goent.Equals(db.PullRequest.Field("is_closed"), false),
-			goent.Equals(db.PullRequest.Field("is_merged"), false),
-		),
+		goent.Equals(db.PullRequest.Field("is_closed"), false),
 	).Count("id")
-	mergedPRs, _ := db.PullRequest.Select().Filter(
-		goent.Equals(db.PullRequest.Field("is_merged"), true),
+	closedPRs, _ := db.PullRequest.Select().Filter(
+		goent.Equals(db.PullRequest.Field("is_closed"), true),
 	).Count("id")
 
 	totalStars, _ := db.RepositoryStats.SumFloat("stars_count")
@@ -56,7 +53,7 @@ func GetStats(c fiber.Ctx) error {
 		OpenIssues:   int(openIssues),
 		ClosedIssues: int(closedIssues),
 		OpenPRs:      int(openPRs),
-		MergedPRs:    int(mergedPRs),
+		MergedPRs:    int(closedPRs),
 		TotalStars:   int(totalStars),
 		TotalForks:   int(totalForks),
 		Theme:        config.GetTheme(),

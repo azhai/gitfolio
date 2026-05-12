@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/azhai/gitfolio/config"
@@ -130,9 +131,11 @@ type GitHubPR struct {
 
 func (s *SyncService) makeGitHubRequest(url string, token string) ([]byte, error) {
 	var lastErr error
-	for attempt := 0; attempt < 3; attempt++ {
+	for attempt := 0; attempt < 5; attempt++ {
 		if attempt > 0 {
-			time.Sleep(time.Duration(attempt) * 2 * time.Second)
+			backoff := time.Duration(attempt*attempt) * time.Second
+			fmt.Printf("Retry %d/%d after %v: %v\n", attempt+1, 5, backoff, lastErr)
+			time.Sleep(backoff)
 		}
 
 		req, err := http.NewRequest("GET", url, nil)
@@ -145,7 +148,7 @@ func (s *SyncService) makeGitHubRequest(url string, token string) ([]byte, error
 			req.Header.Set("Authorization", fmt.Sprintf("token %s", token))
 		}
 
-		client := NewHTTPClient(30 * time.Second)
+		client := NewHTTPClient(60 * time.Second)
 		resp, err := client.Do(req)
 		if err != nil {
 			lastErr = err
@@ -156,14 +159,26 @@ func (s *SyncService) makeGitHubRequest(url string, token string) ([]byte, error
 		if resp.StatusCode != http.StatusOK {
 			body, _ := io.ReadAll(resp.Body)
 			if resp.StatusCode == 403 && strings.Contains(string(body), "rate limit") {
-				return nil, fmt.Errorf("GitHub API rate limit exceeded. Please add a GitHub token for higher limits. URL: %s", url)
+				resetTime := resp.Header.Get("X-RateLimit-Reset")
+				return nil, fmt.Errorf("GitHub API rate limit exceeded (reset at %s). URL: %s", resetTime, url)
 			}
-			return nil, fmt.Errorf("GitHub API returned status %d for URL %s: %s", resp.StatusCode, url, string(body))
+			if resp.StatusCode == 403 || resp.StatusCode == 429 {
+				lastErr = fmt.Errorf("GitHub API returned status %d: %s", resp.StatusCode, string(body)[:min(len(body), 200)])
+				continue
+			}
+			return nil, fmt.Errorf("GitHub API returned status %d for URL %s: %s", resp.StatusCode, url, string(body)[:min(len(body), 200)])
 		}
 
 		return io.ReadAll(resp.Body)
 	}
-	return nil, fmt.Errorf("failed after 3 retries: %w", lastErr)
+	return nil, fmt.Errorf("failed after 5 retries: %w", lastErr)
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func (s *SyncService) FetchGitHubRepoInfo(cloneURL string) (*GitHubRepo, error) {
@@ -401,9 +416,7 @@ func (s *SyncService) SyncGiteaPRs(ctx context.Context, repoID int64, owner, rep
 			isClosed := giteaPR.State == "closed"
 			isMerged := giteaPR.MergedAt != nil
 			status := "open"
-			if isMerged {
-				status = "merged"
-			} else if isClosed {
+			if isClosed {
 				status = "closed"
 			}
 
@@ -493,7 +506,7 @@ func (s *SyncService) SyncGitHubRepo(ctx context.Context, owner, repo string, to
 
 	repos, err := s.db.Repository.Select().Where("name = ? AND owner_id = ?", ghRepo.Name, repoOwner.ID).All()
 	var repository models.Repository
-	now := time.Now()
+	now := time.Now().UTC()
 
 	if len(repos) > 0 {
 		repository = *repos[0]
@@ -571,13 +584,22 @@ func (s *SyncService) SyncGitHubRepo(ctx context.Context, owner, repo string, to
 	return &repository, nil
 }
 
-func (s *SyncService) SyncGitHubIssues(ctx context.Context, repoID int64, owner, repo, token string) (SyncResult, error) {
+func (s *SyncService) SyncGitHubIssues(ctx context.Context, repoID int64, owner, repo, token string, since *time.Time) (SyncResult, error) {
 	result := SyncResult{}
+
+	existingCount, _ := s.db.Issue.Select().Where("repository_id = ?", repoID).Count("id")
+	if existingCount == 0 {
+		since = nil
+	}
+
 	page := 1
 	perPage := 100
 
 	for {
-		url := fmt.Sprintf("https://api.github.com/repos/%s/%s/issues?state=all&per_page=%d&page=%d", owner, repo, perPage, page)
+		url := fmt.Sprintf("https://api.github.com/repos/%s/%s/issues?state=all&per_page=%d&page=%d&sort=updated&direction=desc", owner, repo, perPage, page)
+		if since != nil {
+			url += "&since=" + since.UTC().Format("2006-01-02T15:04:05Z")
+		}
 		data, err := s.makeGitHubRequest(url, token)
 		if err != nil {
 			return result, err
@@ -593,6 +615,7 @@ func (s *SyncService) SyncGitHubIssues(ctx context.Context, repoID int64, owner,
 		}
 
 		var issuesToInsert []*models.Issue
+		var issueLabelsToInsert [][]GitHubLabel
 		var issuesToUpdate []*models.Issue
 		var labelLinks []struct {
 			issueID int64
@@ -606,6 +629,9 @@ func (s *SyncService) SyncGitHubIssues(ctx context.Context, repoID int64, owner,
 		for _, ghIssue := range ghIssues {
 			if ghIssue.PullRequest != nil {
 				continue
+			}
+			if since != nil && ghIssue.UpdatedAt.Before(*since) {
+				break
 			}
 
 			contributor, err := s.getOrCreateContributor(repoID, ghIssue.User.Login, fmt.Sprintf("%d+%s@users.noreply.github.com", ghIssue.User.ID, ghIssue.User.Login))
@@ -623,6 +649,7 @@ func (s *SyncService) SyncGitHubIssues(ctx context.Context, repoID int64, owner,
 				issue := existingIssues[0]
 				issue.Title = ghIssue.Title
 				issue.Body = ghIssue.Body
+				issue.AuthorID = contributor.ID
 				issue.IsClosed = isClosed
 				issue.UpdatedAt = ghIssue.UpdatedAt
 				issuesToUpdate = append(issuesToUpdate, issue)
@@ -648,6 +675,7 @@ func (s *SyncService) SyncGitHubIssues(ctx context.Context, repoID int64, owner,
 					UpdatedAt:    ghIssue.UpdatedAt,
 				}
 				issuesToInsert = append(issuesToInsert, issue)
+				issueLabelsToInsert = append(issueLabelsToInsert, ghIssue.Labels)
 			}
 		}
 
@@ -659,20 +687,28 @@ func (s *SyncService) SyncGitHubIssues(ctx context.Context, repoID int64, owner,
 					end = len(issuesToInsert)
 				}
 				batch := issuesToInsert[i:end]
-				for _, issue := range batch {
-					if err := s.db.Issue.Insert().One(issue); err != nil {
-						fmt.Printf("Warning: failed to insert Issue #%d: %v\n", issue.Number, err)
-					} else {
-						result.IssuesInserted++
+				if err := s.db.Issue.Insert().All(true, batch); err != nil {
+					for _, issue := range batch {
+						if err2 := s.db.Issue.Insert().One(issue); err2 != nil {
+							fmt.Printf("Warning: failed to insert Issue #%d: %v\n", issue.Number, err2)
+						} else {
+							result.IssuesInserted++
+						}
 					}
+				} else {
+					result.IssuesInserted += len(batch)
 				}
 			}
 
-			for _, issue := range issuesToInsert {
+			for idx, issue := range issuesToInsert {
+				var labels []GitHubLabel
+				if idx < len(issueLabelsToInsert) {
+					labels = issueLabelsToInsert[idx]
+				}
 				labelLinks = append(labelLinks, struct {
 					issueID int64
 					labels  []GitHubLabel
-				}{issue.ID, ghIssues[0].Labels})
+				}{issue.ID, labels})
 
 				commentSyncs = append(commentSyncs, struct {
 					issueID     int64
@@ -682,19 +718,11 @@ func (s *SyncService) SyncGitHubIssues(ctx context.Context, repoID int64, owner,
 		}
 
 		if len(issuesToUpdate) > 0 {
-			batchSize := 100
-			for i := 0; i < len(issuesToUpdate); i += batchSize {
-				end := i + batchSize
-				if end > len(issuesToUpdate) {
-					end = len(issuesToUpdate)
-				}
-				batch := issuesToUpdate[i:end]
-				for _, issue := range batch {
-					if err := s.db.Issue.Save().One(issue); err != nil {
-						fmt.Printf("Warning: failed to update Issue #%d: %v\n", issue.Number, err)
-					} else {
-						result.IssuesUpdated++
-					}
+			for _, issue := range issuesToUpdate {
+				if err := s.db.Issue.Save().One(issue); err != nil {
+					fmt.Printf("Warning: failed to update Issue #%d: %v\n", issue.Number, err)
+				} else {
+					result.IssuesUpdated++
 				}
 			}
 		}
@@ -703,8 +731,26 @@ func (s *SyncService) SyncGitHubIssues(ctx context.Context, repoID int64, owner,
 			s.syncIssueLabels(repoID, link.issueID, link.labels)
 		}
 
-		for _, sync := range commentSyncs {
-			s.syncIssueComments(ctx, repoID, sync.issueID, sync.issueNumber, owner, repo, token)
+		if len(commentSyncs) > 0 {
+			sem := make(chan struct{}, 10)
+			var wg sync.WaitGroup
+			for _, sync := range commentSyncs {
+				wg.Add(1)
+				sem <- struct{}{}
+				go func(issueID int64, issueNumber int) {
+					defer wg.Done()
+					defer func() { <-sem }()
+					comments, err := s.fetchIssueComments(ctx, repoID, issueID, issueNumber, owner, repo, token)
+					if err != nil {
+						fmt.Printf("Warning: failed to fetch comments for Issue #%d: %v\n", issueNumber, err)
+						return
+					}
+					if len(comments) > 0 {
+						s.saveIssueComments(repoID, issueID, comments)
+					}
+				}(sync.issueID, sync.issueNumber)
+			}
+			wg.Wait()
 		}
 
 		page++
@@ -829,191 +875,181 @@ type GitHubComment struct {
 	UpdatedAt time.Time  `json:"updated_at"`
 }
 
-func (s *SyncService) syncIssueComments(ctx context.Context, repoID, issueID int64, issueNumber int, owner, repo, token string) error {
+func (s *SyncService) fetchIssueComments(ctx context.Context, repoID, issueID int64, issueNumber int, owner, repo, token string) ([]GitHubComment, error) {
+	var allComments []GitHubComment
 	page := 1
-	perPage := 100
-
 	for {
-		url := fmt.Sprintf("https://api.github.com/repos/%s/%s/issues/%d/comments?per_page=%d&page=%d", owner, repo, issueNumber, perPage, page)
+		url := fmt.Sprintf("https://api.github.com/repos/%s/%s/issues/%d/comments?per_page=100&page=%d", owner, repo, issueNumber, page)
 		data, err := s.makeGitHubRequest(url, token)
 		if err != nil {
-			return err
+			return nil, err
 		}
-
 		var ghComments []GitHubComment
 		if err := json.Unmarshal(data, &ghComments); err != nil {
-			return err
+			return nil, err
 		}
-
 		if len(ghComments) == 0 {
 			break
 		}
-
-		var commentsToInsert []*models.Comment
-		var commentsToUpdate []*models.Comment
-
-		for _, ghComment := range ghComments {
-			contributor, err := s.getOrCreateContributor(repoID, ghComment.User.Login, fmt.Sprintf("%d+%s@users.noreply.github.com", ghComment.User.ID, ghComment.User.Login))
-			if err != nil {
-				fmt.Printf("Warning: failed to get/create contributor for comment %d: %v\n", ghComment.ID, err)
-				continue
-			}
-			contributor.Avatar = ghComment.User.AvatarURL
-			s.db.Contributor.Save().One(contributor)
-
-			existingComments, _ := s.db.Comment.Select().Where("id = ?", ghComment.ID).All()
-			if len(existingComments) > 0 {
-				comment := existingComments[0]
-				comment.Body = ghComment.Body
-				comment.UpdatedAt = ghComment.UpdatedAt
-				commentsToUpdate = append(commentsToUpdate, comment)
-			} else {
-				comment := &models.Comment{
-					ID:        ghComment.ID,
-					Body:      ghComment.Body,
-					IssueID:   &issueID,
-					AuthorID:  contributor.ID,
-					CreatedAt: ghComment.CreatedAt,
-					UpdatedAt: ghComment.UpdatedAt,
-				}
-				commentsToInsert = append(commentsToInsert, comment)
-			}
-		}
-
-		if len(commentsToInsert) > 0 {
-			batchSize := 100
-			for i := 0; i < len(commentsToInsert); i += batchSize {
-				end := i + batchSize
-				if end > len(commentsToInsert) {
-					end = len(commentsToInsert)
-				}
-				batch := commentsToInsert[i:end]
-				for _, comment := range batch {
-					if err := s.db.Comment.Insert().One(comment); err != nil {
-						fmt.Printf("Warning: failed to insert comment %d: %v\n", comment.ID, err)
-					}
-				}
-			}
-		}
-
-		if len(commentsToUpdate) > 0 {
-			batchSize := 100
-			for i := 0; i < len(commentsToUpdate); i += batchSize {
-				end := i + batchSize
-				if end > len(commentsToUpdate) {
-					end = len(commentsToUpdate)
-				}
-				batch := commentsToUpdate[i:end]
-				for _, comment := range batch {
-					if err := s.db.Comment.Save().One(comment); err != nil {
-						fmt.Printf("Warning: failed to update comment %d: %v\n", comment.ID, err)
-					}
-				}
-			}
-		}
-
+		allComments = append(allComments, ghComments...)
 		page++
 	}
-
-	return nil
+	return allComments, nil
 }
 
-func (s *SyncService) syncPRComments(ctx context.Context, repoID, prID int64, prNumber int, owner, repo, token string) error {
+func (s *SyncService) fetchPRComments(ctx context.Context, repoID, prID int64, prNumber int, owner, repo, token string) ([]GitHubComment, error) {
+	var allComments []GitHubComment
 	page := 1
-	perPage := 100
-
 	for {
-		url := fmt.Sprintf("https://api.github.com/repos/%s/%s/pulls/%d/comments?per_page=%d&page=%d", owner, repo, prNumber, perPage, page)
+		url := fmt.Sprintf("https://api.github.com/repos/%s/%s/pulls/%d/comments?per_page=100&page=%d", owner, repo, prNumber, page)
 		data, err := s.makeGitHubRequest(url, token)
 		if err != nil {
-			return err
+			return nil, err
 		}
-
 		var ghComments []GitHubComment
 		if err := json.Unmarshal(data, &ghComments); err != nil {
-			return err
+			return nil, err
 		}
-
 		if len(ghComments) == 0 {
 			break
 		}
-
-		var commentsToInsert []*models.Comment
-		var commentsToUpdate []*models.Comment
-
-		for _, ghComment := range ghComments {
-			contributor, err := s.getOrCreateContributor(repoID, ghComment.User.Login, fmt.Sprintf("%d+%s@users.noreply.github.com", ghComment.User.ID, ghComment.User.Login))
-			if err != nil {
-				fmt.Printf("Warning: failed to get/create contributor for PR comment %d: %v\n", ghComment.ID, err)
-				continue
-			}
-			contributor.Avatar = ghComment.User.AvatarURL
-			s.db.Contributor.Save().One(contributor)
-
-			existingComments, _ := s.db.Comment.Select().Where("id = ?", ghComment.ID).All()
-			if len(existingComments) > 0 {
-				comment := existingComments[0]
-				comment.Body = ghComment.Body
-				comment.UpdatedAt = ghComment.UpdatedAt
-				commentsToUpdate = append(commentsToUpdate, comment)
-			} else {
-				comment := &models.Comment{
-					ID:            ghComment.ID,
-					Body:          ghComment.Body,
-					PullRequestID: &prID,
-					AuthorID:      contributor.ID,
-					CreatedAt:     ghComment.CreatedAt,
-					UpdatedAt:     ghComment.UpdatedAt,
-				}
-				commentsToInsert = append(commentsToInsert, comment)
-			}
-		}
-
-		if len(commentsToInsert) > 0 {
-			batchSize := 100
-			for i := 0; i < len(commentsToInsert); i += batchSize {
-				end := i + batchSize
-				if end > len(commentsToInsert) {
-					end = len(commentsToInsert)
-				}
-				batch := commentsToInsert[i:end]
-				for _, comment := range batch {
-					if err := s.db.Comment.Insert().One(comment); err != nil {
-						fmt.Printf("Warning: failed to insert PR comment %d: %v\n", comment.ID, err)
-					}
-				}
-			}
-		}
-
-		if len(commentsToUpdate) > 0 {
-			batchSize := 100
-			for i := 0; i < len(commentsToUpdate); i += batchSize {
-				end := i + batchSize
-				if end > len(commentsToUpdate) {
-					end = len(commentsToUpdate)
-				}
-				batch := commentsToUpdate[i:end]
-				for _, comment := range batch {
-					if err := s.db.Comment.Save().One(comment); err != nil {
-						fmt.Printf("Warning: failed to update PR comment %d: %v\n", comment.ID, err)
-					}
-				}
-			}
-		}
-
+		allComments = append(allComments, ghComments...)
 		page++
 	}
-
-	return nil
+	return allComments, nil
 }
 
-func (s *SyncService) SyncGitHubPRs(ctx context.Context, repoID int64, owner, repo, token string) (SyncResult, error) {
+func (s *SyncService) saveIssueComments(repoID, issueID int64, ghComments []GitHubComment) {
+	var commentsToInsert []*models.Comment
+	var commentsToUpdate []*models.Comment
+
+	for _, ghComment := range ghComments {
+		contributor, err := s.getOrCreateContributor(repoID, ghComment.User.Login, fmt.Sprintf("%d+%s@users.noreply.github.com", ghComment.User.ID, ghComment.User.Login))
+		if err != nil {
+			fmt.Printf("Warning: failed to get/create contributor for comment %d: %v\n", ghComment.ID, err)
+			continue
+		}
+		contributor.Avatar = ghComment.User.AvatarURL
+		s.db.Contributor.Save().One(contributor)
+
+		existingComments, _ := s.db.Comment.Select().Where("id = ?", ghComment.ID).All()
+		if len(existingComments) > 0 {
+			comment := existingComments[0]
+			comment.Body = ghComment.Body
+			comment.UpdatedAt = ghComment.UpdatedAt
+			commentsToUpdate = append(commentsToUpdate, comment)
+		} else {
+			comment := &models.Comment{
+				ID:        ghComment.ID,
+				Body:      ghComment.Body,
+				IssueID:   &issueID,
+				AuthorID:  contributor.ID,
+				CreatedAt: ghComment.CreatedAt,
+				UpdatedAt: ghComment.UpdatedAt,
+			}
+			commentsToInsert = append(commentsToInsert, comment)
+		}
+	}
+
+	if len(commentsToInsert) > 0 {
+		batchSize := 100
+		for i := 0; i < len(commentsToInsert); i += batchSize {
+			end := i + batchSize
+			if end > len(commentsToInsert) {
+				end = len(commentsToInsert)
+			}
+			batch := commentsToInsert[i:end]
+			if err := s.db.Comment.Insert().All(false, batch); err != nil {
+				for _, comment := range batch {
+					if err2 := s.db.Comment.Insert().One(comment); err2 != nil {
+						fmt.Printf("Warning: failed to insert comment %d: %v\n", comment.ID, err2)
+					}
+				}
+			}
+		}
+	}
+
+	if len(commentsToUpdate) > 0 {
+		for _, comment := range commentsToUpdate {
+			if err := s.db.Comment.Save().One(comment); err != nil {
+				fmt.Printf("Warning: failed to update comment %d: %v\n", comment.ID, err)
+			}
+		}
+	}
+}
+
+func (s *SyncService) savePRComments(repoID, prID int64, ghComments []GitHubComment) {
+	var commentsToInsert []*models.Comment
+	var commentsToUpdate []*models.Comment
+
+	for _, ghComment := range ghComments {
+		contributor, err := s.getOrCreateContributor(repoID, ghComment.User.Login, fmt.Sprintf("%d+%s@users.noreply.github.com", ghComment.User.ID, ghComment.User.Login))
+		if err != nil {
+			fmt.Printf("Warning: failed to get/create contributor for PR comment %d: %v\n", ghComment.ID, err)
+			continue
+		}
+		contributor.Avatar = ghComment.User.AvatarURL
+		s.db.Contributor.Save().One(contributor)
+
+		existingComments, _ := s.db.Comment.Select().Where("id = ?", ghComment.ID).All()
+		if len(existingComments) > 0 {
+			comment := existingComments[0]
+			comment.Body = ghComment.Body
+			comment.UpdatedAt = ghComment.UpdatedAt
+			commentsToUpdate = append(commentsToUpdate, comment)
+		} else {
+			comment := &models.Comment{
+				ID:            ghComment.ID,
+				Body:          ghComment.Body,
+				PullRequestID: &prID,
+				AuthorID:      contributor.ID,
+				CreatedAt:     ghComment.CreatedAt,
+				UpdatedAt:     ghComment.UpdatedAt,
+			}
+			commentsToInsert = append(commentsToInsert, comment)
+		}
+	}
+
+	if len(commentsToInsert) > 0 {
+		batchSize := 100
+		for i := 0; i < len(commentsToInsert); i += batchSize {
+			end := i + batchSize
+			if end > len(commentsToInsert) {
+				end = len(commentsToInsert)
+			}
+			batch := commentsToInsert[i:end]
+			if err := s.db.Comment.Insert().All(false, batch); err != nil {
+				for _, comment := range batch {
+					if err2 := s.db.Comment.Insert().One(comment); err2 != nil {
+						fmt.Printf("Warning: failed to insert PR comment %d: %v\n", comment.ID, err2)
+					}
+				}
+			}
+		}
+	}
+
+	if len(commentsToUpdate) > 0 {
+		for _, comment := range commentsToUpdate {
+			if err := s.db.Comment.Save().One(comment); err != nil {
+				fmt.Printf("Warning: failed to update PR comment %d: %v\n", comment.ID, err)
+			}
+		}
+	}
+}
+
+func (s *SyncService) SyncGitHubPRs(ctx context.Context, repoID int64, owner, repo, token string, since *time.Time) (SyncResult, error) {
 	result := SyncResult{}
+
+	existingCount, _ := s.db.PullRequest.Select().Where("repository_id = ?", repoID).Count("id")
+	if existingCount == 0 {
+		since = nil
+	}
+
 	page := 1
 	perPage := 100
 
 	for {
-		url := fmt.Sprintf("https://api.github.com/repos/%s/%s/pulls?state=all&per_page=%d&page=%d", owner, repo, perPage, page)
+		url := fmt.Sprintf("https://api.github.com/repos/%s/%s/pulls?state=all&per_page=%d&page=%d&sort=updated&direction=desc", owner, repo, perPage, page)
 		data, err := s.makeGitHubRequest(url, token)
 		if err != nil {
 			return result, err
@@ -1029,6 +1065,7 @@ func (s *SyncService) SyncGitHubPRs(ctx context.Context, repoID int64, owner, re
 		}
 
 		var prsToInsert []*models.PullRequest
+		var prLabelsToInsert [][]GitHubLabel
 		var prsToUpdate []*models.PullRequest
 		var labelLinks []struct {
 			prID   int64
@@ -1040,6 +1077,9 @@ func (s *SyncService) SyncGitHubPRs(ctx context.Context, repoID int64, owner, re
 		}
 
 		for _, ghPR := range ghPRs {
+			if since != nil && ghPR.UpdatedAt.Before(*since) {
+				break
+			}
 			contributor, err := s.getOrCreateContributor(repoID, ghPR.User.Login, fmt.Sprintf("%d+%s@users.noreply.github.com", ghPR.User.ID, ghPR.User.Login))
 			if err != nil {
 				fmt.Printf("Warning: failed to get/create contributor for PR #%d: %v\n", ghPR.Number, err)
@@ -1051,9 +1091,7 @@ func (s *SyncService) SyncGitHubPRs(ctx context.Context, repoID int64, owner, re
 			isClosed := ghPR.State == "closed"
 			isMerged := ghPR.MergedAt != nil
 			status := "open"
-			if isMerged {
-				status = "merged"
-			} else if isClosed {
+			if isClosed {
 				status = "closed"
 			}
 
@@ -1063,6 +1101,7 @@ func (s *SyncService) SyncGitHubPRs(ctx context.Context, repoID int64, owner, re
 				pr := existingPRs[0]
 				pr.Title = ghPR.Title
 				pr.Body = ghPR.Body
+				pr.AuthorID = contributor.ID
 				pr.SourceBranch = ghPR.Head.Ref
 				pr.TargetBranch = ghPR.Base.Ref
 				pr.Status = status
@@ -1096,6 +1135,7 @@ func (s *SyncService) SyncGitHubPRs(ctx context.Context, repoID int64, owner, re
 					UpdatedAt:    ghPR.UpdatedAt,
 				}
 				prsToInsert = append(prsToInsert, pr)
+				prLabelsToInsert = append(prLabelsToInsert, ghPR.Labels)
 			}
 		}
 
@@ -1107,20 +1147,28 @@ func (s *SyncService) SyncGitHubPRs(ctx context.Context, repoID int64, owner, re
 					end = len(prsToInsert)
 				}
 				batch := prsToInsert[i:end]
-				for _, pr := range batch {
-					if err := s.db.PullRequest.Insert().One(pr); err != nil {
-						fmt.Printf("Warning: failed to insert PR #%d: %v\n", pr.Number, err)
-					} else {
-						result.PRsInserted++
+				if err := s.db.PullRequest.Insert().All(true, batch); err != nil {
+					for _, pr := range batch {
+						if err2 := s.db.PullRequest.Insert().One(pr); err2 != nil {
+							fmt.Printf("Warning: failed to insert PR #%d: %v\n", pr.Number, err2)
+						} else {
+							result.PRsInserted++
+						}
 					}
+				} else {
+					result.PRsInserted += len(batch)
 				}
 			}
 
-			for _, pr := range prsToInsert {
+			for idx, pr := range prsToInsert {
+				var labels []GitHubLabel
+				if idx < len(prLabelsToInsert) {
+					labels = prLabelsToInsert[idx]
+				}
 				labelLinks = append(labelLinks, struct {
 					prID   int64
 					labels []GitHubLabel
-				}{pr.ID, ghPRs[0].Labels})
+				}{pr.ID, labels})
 
 				commentSyncs = append(commentSyncs, struct {
 					prID     int64
@@ -1130,19 +1178,11 @@ func (s *SyncService) SyncGitHubPRs(ctx context.Context, repoID int64, owner, re
 		}
 
 		if len(prsToUpdate) > 0 {
-			batchSize := 100
-			for i := 0; i < len(prsToUpdate); i += batchSize {
-				end := i + batchSize
-				if end > len(prsToUpdate) {
-					end = len(prsToUpdate)
-				}
-				batch := prsToUpdate[i:end]
-				for _, pr := range batch {
-					if err := s.db.PullRequest.Save().One(pr); err != nil {
-						fmt.Printf("Warning: failed to update PR #%d: %v\n", pr.Number, err)
-					} else {
-						result.PRsUpdated++
-					}
+			for _, pr := range prsToUpdate {
+				if err := s.db.PullRequest.Save().One(pr); err != nil {
+					fmt.Printf("Warning: failed to update PR #%d: %v\n", pr.Number, err)
+				} else {
+					result.PRsUpdated++
 				}
 			}
 		}
@@ -1151,8 +1191,26 @@ func (s *SyncService) SyncGitHubPRs(ctx context.Context, repoID int64, owner, re
 			s.syncPRLabels(repoID, link.prID, link.labels)
 		}
 
-		for _, sync := range commentSyncs {
-			s.syncPRComments(ctx, repoID, sync.prID, sync.prNumber, owner, repo, token)
+		if len(commentSyncs) > 0 {
+			sem := make(chan struct{}, 10)
+			var wg sync.WaitGroup
+			for _, sync := range commentSyncs {
+				wg.Add(1)
+				sem <- struct{}{}
+				go func(prID int64, prNumber int) {
+					defer wg.Done()
+					defer func() { <-sem }()
+					comments, err := s.fetchPRComments(ctx, repoID, prID, prNumber, owner, repo, token)
+					if err != nil {
+						fmt.Printf("Warning: failed to fetch comments for PR #%d: %v\n", prNumber, err)
+						return
+					}
+					if len(comments) > 0 {
+						s.savePRComments(repoID, prID, comments)
+					}
+				}(sync.prID, sync.prNumber)
+			}
+			wg.Wait()
 		}
 
 		page++
@@ -1230,7 +1288,7 @@ func (s *SyncService) UpdateSyncPoint(syncPointID int64, success bool, message s
 	}
 
 	syncPoint := *syncPoints[0]
-	now := time.Now()
+	now := time.Now().UTC()
 	syncPoint.LastSyncAt = &now
 
 	if success {
@@ -1255,7 +1313,7 @@ func (s *SyncService) LogSync(syncPointID int64, syncType, status, message strin
 		ItemsSynced: itemsSynced,
 		ItemsFailed: itemsFailed,
 		Details:     details,
-		CreatedAt:   time.Now(),
+		CreatedAt:   time.Now().UTC(),
 	}
 
 	return s.db.SyncLog.Insert().One(&log)
@@ -1574,18 +1632,18 @@ func (s *SyncService) PushRepository(localPath, remoteURL string) error {
 	return nil
 }
 
-func (s *SyncService) SyncRepositoryData(ctx context.Context, repoID int64, platform, owner, repoName, token string) (SyncResult, error) {
+func (s *SyncService) SyncRepositoryData(ctx context.Context, repoID int64, platform, owner, repoName, token string, issueSince, prSince *time.Time) (SyncResult, error) {
 	result := SyncResult{}
 
 	switch platform {
 	case "github":
-		issueResult, err := s.SyncGitHubIssues(ctx, repoID, owner, repoName, token)
+		issueResult, err := s.SyncGitHubIssues(ctx, repoID, owner, repoName, token, issueSince)
 		if err != nil {
 			return result, fmt.Errorf("failed to sync issues: %w", err)
 		}
 		result.Add(issueResult)
 
-		prResult, err := s.SyncGitHubPRs(ctx, repoID, owner, repoName, token)
+		prResult, err := s.SyncGitHubPRs(ctx, repoID, owner, repoName, token, prSince)
 		if err != nil {
 			return result, fmt.Errorf("failed to sync PRs: %w", err)
 		}
@@ -1610,13 +1668,13 @@ func (s *SyncService) SyncRepositoryData(ctx context.Context, repoID int64, plat
 		}
 		result.Add(prResult)
 	default:
-		issueResult, err := s.SyncGitHubIssues(ctx, repoID, owner, repoName, token)
+		issueResult, err := s.SyncGitHubIssues(ctx, repoID, owner, repoName, token, issueSince)
 		if err != nil {
 			return result, fmt.Errorf("failed to sync issues: %w", err)
 		}
 		result.Add(issueResult)
 
-		prResult, err := s.SyncGitHubPRs(ctx, repoID, owner, repoName, token)
+		prResult, err := s.SyncGitHubPRs(ctx, repoID, owner, repoName, token, prSince)
 		if err != nil {
 			return result, fmt.Errorf("failed to sync PRs: %w", err)
 		}

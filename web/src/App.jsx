@@ -21,7 +21,7 @@ import UserSettings from './pages/UserSettings'
 import ProjectDetail from './pages/ProjectDetail'
 import ProjectTree from './pages/project/ProjectTree'
 import ProjectIssues from './pages/project/ProjectIssues'
-import ProjectMRs from './pages/project/ProjectMRs'
+import ProjectPRs from './pages/project/ProjectPRs'
 import ProjectCommits from './pages/project/ProjectCommits'
 import ProjectBranches from './pages/project/ProjectBranches'
 import ProjectTags from './pages/project/ProjectTags'
@@ -66,7 +66,7 @@ function App() {
             <Route path="issues" element={<ProjectIssues />} />
             <Route path="issues/new" element={<NewIssue />} />
             <Route path="issues/:number" element={<IssueDetail />} />
-            <Route path="pull_requests" element={<ProjectMRs />} />
+            <Route path="pull_requests" element={<ProjectPRs />} />
             <Route path="pull_requests/new" element={<NewPR />} />
             <Route path="pull_requests/:number" element={<PRDetail />} />
             <Route path="commits" element={<ProjectCommits />} />

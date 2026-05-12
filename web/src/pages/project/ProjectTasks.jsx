@@ -32,8 +32,8 @@ const ProjectTasks = () => {
     setLoading(true)
     var params = {}
     if (statusFilter) params.status = statusFilter
-    tasksAPI.list(owner, repo, params).then(function(data) {
-      setTasks(Array.isArray(data) ? data : [])
+    tasksAPI.list(owner, repo, params).then(function(res) {
+      setTasks(Array.isArray(res.data) ? res.data : [])
     }).catch(function() { setTasks([]) }).finally(function() { setLoading(false) })
   }, [owner, repo, statusFilter])
 

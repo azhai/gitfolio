@@ -12,17 +12,17 @@ const ProjectReleases = () => {
   const [syncing, setSyncing] = useState(false)
 
   useEffect(() => {
-    releasesAPI.list(owner, repo).then(function(data) {
-      setReleases(Array.isArray(data) ? data : [])
+    releasesAPI.list(owner, repo).then(function(res) {
+      setReleases(Array.isArray(res.data) ? res.data : [])
     }).catch(function() { setReleases([]) }).finally(function() { setLoading(false) })
   }, [owner, repo])
 
   function handleSync() {
     setSyncing(true)
-    releasesAPI.sync(owner, repo).then(function(data) {
+    releasesAPI.sync(owner, repo).then(function() {
       return releasesAPI.list(owner, repo)
-    }).then(function(data) {
-      setReleases(Array.isArray(data) ? data : [])
+    }).then(function(res) {
+      setReleases(Array.isArray(res.data) ? res.data : [])
     }).catch(function() {}).finally(function() { setSyncing(false) })
   }
 

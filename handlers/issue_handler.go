@@ -40,21 +40,21 @@ type CommentResponse struct {
 }
 
 type IssueResponse struct {
-	ID            int64              `json:"id"`
-	Number        int                `json:"number"`
-	Title         string             `json:"title"`
-	Body          string             `json:"body"`
-	RepositoryID  int64              `json:"repository_id"`
-	Author        string             `json:"author"`
-	AuthorID      int64              `json:"author_id"`
-	Assignee      string             `json:"assignee,omitempty"`
-	AssigneeID    *int64             `json:"assignee_id,omitempty"`
+	ID            int64               `json:"id"`
+	Number        int                 `json:"number"`
+	Title         string              `json:"title"`
+	Body          string              `json:"body"`
+	RepositoryID  int64               `json:"repository_id"`
+	Author        string              `json:"author"`
+	AuthorID      int64               `json:"author_id"`
+	Assignee      string              `json:"assignee,omitempty"`
+	AssigneeID    *int64              `json:"assignee_id,omitempty"`
 	Labels        []helpers.LabelInfo `json:"labels"`
-	IsClosed      bool               `json:"is_closed"`
-	IsLocked      bool               `json:"is_locked"`
-	CommentsCount int                `json:"comments_count"`
-	CreatedAt     string             `json:"created_at"`
-	UpdatedAt     string             `json:"updated_at"`
+	IsClosed      bool                `json:"is_closed"`
+	IsLocked      bool                `json:"is_locked"`
+	CommentsCount int                 `json:"comments_count"`
+	CreatedAt     string              `json:"created_at"`
+	UpdatedAt     string              `json:"updated_at"`
 }
 
 func ToIssueResponse(issue *models.Issue, author *models.Contributor, assignee *models.Contributor, labels []helpers.LabelInfo, commentsCount int) *IssueResponse {
@@ -114,6 +114,7 @@ func CreateIssue(c fiber.Ctx) error {
 	issueModel := &models.Issue{
 		Title:        req.Title,
 		Body:         req.Body,
+		Number:       helpers.GetNextIssueNumber(db, result.Repo.ID),
 		RepositoryID: result.Repo.ID,
 		AuthorID:     authorContrib.ID,
 	}
@@ -203,6 +204,8 @@ func ListIssues(c fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch issues"})
 	}
 
+	total, _ := db.Issue.Select().Filter(conds...).Count("id")
+
 	contributorIDs := helpers.CollectContributorIDs(issues)
 	contributorsMap := helpers.BatchGetContributors(db, contributorIDs)
 
@@ -252,6 +255,7 @@ func ListIssues(c fiber.Ctx) error {
 		"data":     response,
 		"page":     pagination.Page,
 		"per_page": pagination.PerPage,
+		"total":    total,
 	})
 }
 

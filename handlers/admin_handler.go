@@ -204,7 +204,7 @@ func CreateMirror(c fiber.Ctx) error {
 
 	repos, _ := db.Repository.Select().Where("name = ? AND owner_id = ? AND owner_type = 'user'", req.Repo, owner.ID).All()
 	var repo models.Repository
-	now := time.Now()
+	now := time.Now().UTC()
 
 	if len(repos) > 0 {
 		repo = *repos[0]
@@ -254,7 +254,7 @@ func CreateMirror(c fiber.Ctx) error {
 		}
 
 		ctx := context.Background()
-		if syncResult, err := syncSvc.SyncRepositoryData(ctx, repo.ID, req.Platform, req.Owner, req.Repo, token); err != nil {
+		if syncResult, err := syncSvc.SyncRepositoryData(ctx, repo.ID, req.Platform, req.Owner, req.Repo, token, nil, nil); err != nil {
 			result["sync_error"] = err.Error()
 		} else {
 			result["synced"] = true
@@ -359,7 +359,7 @@ func ImportFromRemote(c fiber.Ctx) error {
 	if req.ImportIssues {
 		switch req.Platform {
 		case "github":
-			if syncResult, err := syncSvc.SyncGitHubIssues(ctx, repository.ID, req.Owner, req.Repo, req.Token); err != nil {
+			if syncResult, err := syncSvc.SyncGitHubIssues(ctx, repository.ID, req.Owner, req.Repo, req.Token, nil); err != nil {
 				result["issues_error"] = err.Error()
 			} else {
 				result["issues_inserted"] = syncResult.IssuesInserted
@@ -379,7 +379,7 @@ func ImportFromRemote(c fiber.Ctx) error {
 	if req.ImportPRs {
 		switch req.Platform {
 		case "github":
-			if syncResult, err := syncSvc.SyncGitHubPRs(ctx, repository.ID, req.Owner, req.Repo, req.Token); err != nil {
+			if syncResult, err := syncSvc.SyncGitHubPRs(ctx, repository.ID, req.Owner, req.Repo, req.Token, nil); err != nil {
 				result["prs_error"] = err.Error()
 			} else {
 				result["prs_inserted"] = syncResult.PRsInserted

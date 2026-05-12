@@ -1,24 +1,83 @@
 import React, { useState, useEffect } from 'react'
 import { Box, Text, Flex, VStack, HStack, Badge, Button, Spinner, Input } from '@chakra-ui/react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { prsAPI } from '../../api/index'
+import { prsAPI, reposAPI } from '../../api/index'
 import { t, timeAgo } from '../../i18n/index'
 import { useAuth } from '../../contexts/AuthContext'
 
+var PAGE_SIZE = 30
+
+function PaginationBar(_ref) {
+  var page = _ref.page
+  var totalPages = _ref.totalPages
+  var onPageChange = _ref.onPageChange
+
+  if (totalPages <= 1) return null
+
+  var start = Math.floor((page - 1) / 5) * 5 + 1
+  var end = Math.min(start + 4, totalPages)
+  var pages = []
+  for (var i = start; i <= end; i++) {
+    pages.push(i)
+  }
+
+  return (
+    <Flex justify="center" align="center" gap="6px" mt="16px">
+      <Button h="28px" px="10px" fontSize="12px" rounded="6px"
+        isDisabled={page <= 1}
+        onClick={function() { onPageChange(page - 1) }}
+        variant="outline" borderColor="#d1d5db">
+        ‹
+      </Button>
+      {start > 1 && (
+        <Button h="28px" px="10px" fontSize="12px" rounded="6px"
+          variant="outline" borderColor="#d1d5db"
+          onClick={function() { onPageChange(start - 1) }}>
+          ...
+        </Button>
+      )}
+      {pages.map(function(p) {
+        return (
+          <Button key={p} h="28px" px="12px" fontSize="12px" rounded="6px"
+            bg={p === page ? '#22c55e' : 'transparent'}
+            color={p === page ? 'white' : '#666'}
+            variant={p === page ? 'solid' : 'outline'}
+            borderColor={p === page ? '#22c55e' : '#d1d5db'}
+            _hover={p === page ? { bg: '#16a34a' } : { bg: '#f9fafb' }}
+            onClick={function() { onPageChange(p) }}>
+            {p}
+          </Button>
+        )
+      })}
+      {end < totalPages && (
+        <Button h="28px" px="10px" fontSize="12px" rounded="6px"
+          variant="outline" borderColor="#d1d5db"
+          onClick={function() { onPageChange(end + 1) }}>
+          ...
+        </Button>
+      )}
+      <Button h="28px" px="10px" fontSize="12px" rounded="6px"
+        isDisabled={page >= totalPages}
+        onClick={function() { onPageChange(page + 1) }}
+        variant="outline" borderColor="#d1d5db">
+        ›
+      </Button>
+    </Flex>
+  )
+}
+
 var STATUS_MAP = {
   open: { bg: '#dcfce7', color: '#16a34a' },
-  merged: { bg: '#ede9fe', color: '#7c3aed' },
   closed: { bg: '#fef2f2', color: '#dc2626' },
 }
 
 var STATUS_TABS = [
   { key: 'open', label: '🟢 ' + t('pr.open') },
-  { key: 'merged', label: '🔀 ' + t('pr.merged') },
   { key: 'closed', label: '✅ ' + t('pr.closed') },
   { key: 'all', label: '📋 ' + t('common.all') },
 ]
 
-const ProjectMRs = () => {
+const ProjectPRs = () => {
   const { owner, repo } = useParams()
   const navigate = useNavigate()
   const { isGuest } = useAuth()
@@ -26,23 +85,50 @@ const ProjectMRs = () => {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('open')
+  const [page, setPage] = useState(1)
+  const [total, setTotal] = useState(0)
+  const [openCount, setOpenCount] = useState(0)
+  const [closedCount, setClosedCount] = useState(0)
+  const [repoInfo, setRepoInfo] = useState(null)
 
-  useEffect(() => {
-    prsAPI.list(owner, repo).then(function(data) {
-      setPrs(Array.isArray(data) ? data : [])
-    }).catch(function() { setPrs([]) }).finally(function() { setLoading(false) })
+  useEffect(function() {
+    reposAPI.get(owner, repo).then(function(data) { setRepoInfo(data) }).catch(function() {})
   }, [owner, repo])
 
-  var openCount = prs.filter(function(pr) { return !pr.is_closed && !pr.is_merged }).length
-  var mergedCount = prs.filter(function(pr) { return pr.is_merged }).length
-  var closedCount = prs.filter(function(pr) { return pr.is_closed && !pr.is_merged }).length
+  useEffect(function() {
+    setLoading(true)
+    setPage(1)
+  }, [statusFilter])
+
+  useEffect(function() {
+    setLoading(true)
+    var params = { page: page, per_page: PAGE_SIZE }
+    if (statusFilter !== 'all') params.state = statusFilter
+    prsAPI.list(owner, repo, params).then(function(res) {
+      setPrs(Array.isArray(res.data) ? res.data : [])
+      setTotal(res.total || 0)
+      if (statusFilter === 'open') setOpenCount(res.total || 0)
+      if (statusFilter === 'closed') setClosedCount(res.total || 0)
+    }).catch(function() {
+      setPrs([])
+      setTotal(0)
+    }).finally(function() { setLoading(false) })
+  }, [owner, repo, page, statusFilter])
+
+  useEffect(function() {
+    prsAPI.list(owner, repo, { page: 1, per_page: 1, state: 'open' }).then(function(res) {
+      setOpenCount(res.total || 0)
+    }).catch(function() {})
+    prsAPI.list(owner, repo, { page: 1, per_page: 1, state: 'closed' }).then(function(res) {
+      setClosedCount(res.total || 0)
+    }).catch(function() {})
+  }, [owner, repo])
+
+  var totalPages = Math.ceil(total / PAGE_SIZE) || 1
 
   var filtered = prs.filter(function(pr) {
     var matchSearch = pr.title.toLowerCase().indexOf(search.toLowerCase()) >= 0
     if (!matchSearch) return false
-    if (statusFilter === 'open') return !pr.is_closed && !pr.is_merged
-    if (statusFilter === 'merged') return pr.is_merged
-    if (statusFilter === 'closed') return pr.is_closed && !pr.is_merged
     return true
   })
 
@@ -60,22 +146,23 @@ const ProjectMRs = () => {
         <HStack gap="4px" fontSize="13.5px" fontWeight="600">
           {STATUS_TABS.map(function(tab) {
             var isActive = statusFilter === tab.key
-            var count = tab.key === 'open' ? openCount : (tab.key === 'merged' ? mergedCount : (tab.key === 'closed' ? closedCount : prs.length))
             return (
               <Button key={tab.key} h="30px" px="12px" fontSize="13px" rounded="6px" variant="ghost"
                 color={isActive ? '#16a34a' : '#888'}
                 bg={isActive ? '#f0fdf4' : 'transparent'}
                 _hover={{ bg: isActive ? '#f0fdf4' : '#f9fafb', color: isActive ? '#16a34a' : '#333' }}
                 onClick={function() { setStatusFilter(tab.key) }}>
-                {tab.label} ({count})
+                {tab.label} ({tab.key === 'all' ? (openCount + closedCount) : (tab.key === 'open' ? openCount : closedCount)})
               </Button>
             )
           })}
         </HStack>
+        {repoInfo && repoInfo.project_type !== 'mirror' && (
         <Button h="30px" px="14px" fontSize="13px" rounded="6px" bg="#22c55e" color="white" _hover={{ bg: '#16a34a' }}
           onClick={function() { navigate('/' + owner + '/' + repo + '/pull_requests/new') }} isDisabled={isGuest}>
           {t('pr.newPR')}
         </Button>
+        )}
       </Flex>
 
       <Box bg="white" border="1px solid" borderColor="#e2e2e2" rounded="10px" p="16px" mb="16px">
@@ -86,9 +173,9 @@ const ProjectMRs = () => {
 
       <VStack spacing="10px" align="stretch">
         {filtered.map(function(pr) {
-          var status = pr.is_merged ? 'merged' : (pr.is_closed ? 'closed' : 'open')
+          var status = pr.is_closed ? 'closed' : 'open'
           var cfg = STATUS_MAP[status] || STATUS_MAP.open
-          var statusLabel = status === 'merged' ? t('pr.merged') : (status === 'closed' ? t('pr.closed') : t('pr.open'))
+          var statusLabel = status === 'closed' ? t('pr.closed') : t('pr.open')
           return (
             <Box key={pr.id} bg="white" border="1px solid" borderColor="#e2e2e2"
               rounded="8px" p="16px 20px" transition="all 0.15s"
@@ -116,6 +203,8 @@ const ProjectMRs = () => {
         })}
       </VStack>
 
+      <PaginationBar page={page} totalPages={totalPages} onPageChange={setPage} />
+
       {!loading && filtered.length === 0 && (
         <Box textAlign="center" py="50px" color="#aaa">
           <Text fontSize="36px" mb="6px">🔀</Text>
@@ -126,4 +215,4 @@ const ProjectMRs = () => {
   )
 }
 
-export default ProjectMRs
+export default ProjectPRs

@@ -9,7 +9,7 @@ const (
 // 分页默认值
 const (
 	DefaultPage    = 1
-	DefaultPerPage = 30
+	DefaultPerPage = 100
 	DefaultBranch  = "main"
 
 	MaxPerPage = 1000
@@ -38,7 +38,6 @@ const (
 const (
 	PRStatusOpen   = "open"
 	PRStatusClosed = "closed"
-	PRStatusMerged = "merged"
 )
 
 // 同步方向

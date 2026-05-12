@@ -220,7 +220,7 @@ func AdminUpdateSyncPoint(c fiber.Ctx) error {
 	sp.SyncInterval = req.SyncInterval
 	sp.IsPaused = req.IsPaused
 	if !req.IsPaused && req.SyncInterval > 0 {
-		now := time.Now()
+		now := time.Now().UTC()
 		nextSync := now.Add(time.Duration(req.SyncInterval) * time.Second)
 		sp.NextSyncAt = &nextSync
 	} else if req.SyncInterval <= 0 {

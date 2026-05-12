@@ -12,7 +12,6 @@ function shortHash(hash) {
 
 var STATUS_MAP = {
   open: { bg: '#dcfce7', color: '#16a34a' },
-  merged: { bg: '#ede9fe', color: '#7c3aed' },
   closed: { bg: '#fef2f2', color: '#dc2626' },
 }
 
@@ -82,9 +81,9 @@ const PRDetail = () => {
     )
   }
 
-  var status = pr.is_merged ? 'merged' : (pr.is_closed ? 'closed' : 'open')
+  var status = pr.is_closed ? 'closed' : 'open'
   var cfg = STATUS_MAP[status] || STATUS_MAP.open
-  var statusLabel = status === 'open' ? t('common.open') : (status === 'merged' ? t('common.merged') : t('common.closed'))
+  var statusLabel = status === 'open' ? t('common.open') : t('common.closed')
 
   return (
     <Box>

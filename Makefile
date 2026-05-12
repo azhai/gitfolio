@@ -1,6 +1,6 @@
 SINGLETON = folio
 COMMANDS  =
-SERVER_PORT = 3000
+SERVER_PORT = 9000
 
 ifndef GOAMD64
 	GOAMD64 = v2
@@ -10,23 +10,28 @@ GOBIN    = go
 UPXBIN   = upx
 GOARCH  = $(shell uname -m | tr [A-Z] [a-z])
 ifeq ($(GOARCH), amd64)
-	GOARGS = GOEXPERIMENT=greenteagc GOAMD64=$(GOAMD64)
+	GOARGS = GOAMD64=$(GOAMD64)
 else
-	GOARGS = GOEXPERIMENT=greenteagc
+	GOARGS =
 endif
 RELEASE  = "-s -w"
 GOBUILD  = $(GOARGS) $(GOBIN) build -ldflags=$(RELEASE)
 BINFILES = $(SINGLETON) $(COMMANDS)
 
 
-.PHONY: all build clean upx upxx dev $(BINFILES)
+.PHONY: all one build clean upx upxx dev $(BINFILES)
 
 all: $(BINFILES)
 	@echo "✅ Build success."
 
+one:
+	@echo "Compile $(SINGLETON) ..."
+	cd web && npx vite build
+	CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 $(GOBUILD) -o ./bin/$(SINGLETON) ./
+
 $(SINGLETON):
 	@echo "Compile $@ ..."
-	cd web && npx vite build
+	cd web && npx vite build --minify --mode production
 	CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 $(GOBUILD) -o ./bin/$@.darwin-arm64 ./
 	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 $(GOBUILD) -o ./bin/$@.darwin-amd64 ./
 	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(GOBUILD) -o ./bin/$@.linux-arm64 ./
@@ -44,10 +49,9 @@ $(COMMANDS):
 dev:
 	@echo ""
 	@echo "💡 Tips:"
-	@echo "   - Frontend: http://localhost:5173"
-	@echo "   - Backend:  http://localhost:$(SERVER_PORT)"
-	@echo "   - HMR:      Enabled"
-	cd web && npx vite &
+	@echo "   - Visit:  http://127.0.0.1:$(SERVER_PORT)"
+	@echo "   - HMR:    Disabled"
+	cd web && npx vite build &
 	go run *.go
 
 clean:

@@ -94,7 +94,7 @@ func (s *SchedulerService) run(ctx context.Context) {
 }
 
 func (s *SchedulerService) tick() {
-	now := time.Now()
+	now := time.Now().UTC()
 
 	repos, err := s.db.Repository.Select().All()
 	if err != nil {
@@ -149,7 +149,7 @@ func (s *SchedulerService) checkMirrorSync(repo *models.Repository, now time.Tim
 
 	startTime := time.Now()
 	ctx := context.Background()
-	_, err = syncSvc.SyncRepositoryData(ctx, repo.ID, remoteRepo.Platform, remoteRepo.Owner, remoteRepo.RepoName, token)
+	syncResult, err := syncSvc.SyncRepositoryData(ctx, repo.ID, remoteRepo.Platform, remoteRepo.Owner, remoteRepo.RepoName, token, sp.LastIssueSyncAt, sp.LastPRSyncAt)
 	duration := time.Since(startTime).Milliseconds()
 
 	if err != nil {
@@ -159,7 +159,14 @@ func (s *SchedulerService) checkMirrorSync(repo *models.Repository, now time.Tim
 	} else {
 		log.Printf("[Scheduler] Sync succeeded for %s/%s", ownerName, repo.Name)
 		syncSvc.UpdateSyncPoint(sp.ID, true, "")
-		syncSvc.LogSync(sp.ID, "mirror", "success", "", duration, 0, 0, "")
+		syncSvc.LogSync(sp.ID, "mirror", "success", "", duration, syncResult.IssuesInserted+syncResult.IssuesUpdated+syncResult.PRsInserted+syncResult.PRsUpdated, 0, "")
+
+		sp.LastIssueNumber += syncResult.IssuesInserted + syncResult.IssuesUpdated
+		sp.LastPRNumber += syncResult.PRsInserted + syncResult.PRsUpdated
+		now := time.Now().UTC()
+		sp.LastIssueSyncAt = &now
+		sp.LastPRSyncAt = &now
+		s.db.SyncPoint.Save().One(sp)
 
 		if repo.LocalPath != "" {
 			syncSvc.SyncPullRepository(repo.LocalPath)
@@ -236,7 +243,7 @@ func (s *SchedulerService) GetOrCreateSyncPoint(repoID int64, syncType string) (
 		SyncInterval: 43200,
 		IsPaused:     false,
 	}
-	now := time.Now()
+	now := time.Now().UTC()
 	nextSync := now.Add(43200 * time.Second)
 	sp.NextSyncAt = &nextSync
 	if err := s.db.SyncPoint.Insert().One(&sp); err != nil {
@@ -251,7 +258,7 @@ func (s *SchedulerService) UpdateSyncConfig(repoID int64, syncType string, inter
 		return nil, err
 	}
 
-	now := time.Now()
+	now := time.Now().UTC()
 	sp.SyncInterval = interval
 	sp.IsPaused = paused
 	if !paused && interval > 0 {
