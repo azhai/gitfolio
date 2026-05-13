@@ -1,213 +1,166 @@
-# GitFolio 同步系统使用指南
+# GitFolio 快速开始
 
-## 快速开始
+## 安装和运行
 
-### 1. 安装和编译
+### 1. 环境要求
 
-```bash
-# 编译所有工具
-make
+- Go 1.26+
+- Node.js 18+
+- SQLite（默认）或 PostgreSQL
 
-# 编译后的工具位于 ./bin/ 目录
-ls -la ./bin/
-# folio    - 主程序
-# mirror   - 镜像工具
-# sync     - 同步工具
-# account  - 账号管理工具
-```
-
-### 2. 添加平台账号
+### 2. 安装
 
 ```bash
-# 添加GitHub账号
-./bin/account -platform=github -username=azhai -token=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
+git clone https://github.com/azhai/gitfolio.git
+cd gitfolio
 
-# 添加Gitea账号
-./bin/account -platform=gitea -username=azhai -token=b0c475de8a7f607f31ba8a6302730bb8e0cb8345
+# 安装前端依赖
+cd web && npm install && cd ..
+
+# 配置环境变量
+cp .env.example .env
+# 编辑 .env，至少修改 JWT_SECRET
 ```
 
-### 3. 同步仓库
+### 3. 运行
 
 ```bash
-# 同步GitHub仓库（包括Issues和PRs）
-./bin/sync -owner=golang -repo=go -token=ghp_xxx
+# 开发模式
+make dev
 
-# 同步Gitea仓库
-./bin/mirror -owner=xorm -repo=builder -prs=true -code=true
+# 或直接运行
+go run main.go
 ```
 
-## 功能特性
+服务器将在 `http://localhost:9000` 启动。
 
-### ✅ 已实现
+### 4. 默认账号
 
-1. **多平台支持**
-   - GitHub（完整支持）
-   - Gitea（基础支持）
-   - GitFolio（待实现）
-   - GitLab（待实现）
+| 用户名 | 密码 | 角色 |
+|--------|------|------|
+| admin | FolioAdmin | 管理员 |
+| demo | demo123 | 访客 |
 
-2. **数据同步**
-   - 仓库信息
-   - Issues
-   - Pull Requests
-   - 代码仓库
+## 创建项目
 
-3. **账号管理**
-   - 多平台账号
-   - Token管理
-   - 安全存储
+### 本地项目
 
-4. **同步管理**
-   - 同步点记录
-   - 增量同步
-   - 失败重试
+1. 登录后点击"新建项目"
+2. 填写项目名称和描述
+3. 选择项目类型为"本地项目"
+4. 点击创建
 
-5. **项目类型**
-   - local：本地项目，无远程关联
-   - mirror：镜像项目，只读同步
-   - public：公开项目，可推送远程
-   - private：私有项目，可推送远程
+### 镜像项目
 
-6. **角色系统**
-   - 用户角色：admin、user、guest
-   - 团队角色：leader（负责人）、member（成员）
+1. 登录后点击"导入项目"
+2. 输入 GitHub 仓库 URL（如 `https://github.com/golang/go`）
+3. 系统自动创建镜像项目并同步数据
 
-### 🚧 待实现
+也可以通过管理后台创建：
 
-1. **推送功能**
-   - 推送到远程平台
-   - 多平台同步
+1. 以 admin 身份登录
+2. 进入管理后台 → 平台账号
+3. 添加 GitHub 账号和 Token
+4. 点击"创建镜像"，输入 owner/repo
 
-2. **高级功能**
-   - 定时同步
-   - Webhook
-   - 冲突解决
+## 同步功能
 
-## 使用示例
+### 手动同步
 
-### 示例1：同步公开仓库
+在项目设置页面点击"同步"按钮，触发一次同步。
+
+### 定时同步
+
+1. 进入项目设置页面
+2. 在"同步配置"中设置同步间隔（秒）
+3. 保存配置，系统将自动定时拉取
+
+### 同步内容
+
+- 仓库信息（描述、默认分支等）
+- Issues 和评论
+- Pull Requests 和评论
+- 标签（Labels）
+- 版本发布（Releases）
+
+### 增量同步
+
+系统基于时间戳实现增量同步：
+- Issue 和 PR 各自维护独立的同步时间点
+- 首次同步为全量拉取，后续只同步变更
+
+## 项目类型
+
+| 类型 | 可见性 | 远程同步 | 推送远程 | 说明 |
+|------|--------|---------|---------|------|
+| `local` | 除 guest 外可见 | ❌ | ❌ | 本地项目，无远程关联 |
+| `mirror` | 所有人可见 | ✅ 拉取 | ❌ | 镜像项目，只读 |
+| `public` | 所有人可见 | ✅ | ✅ | 公开项目 |
+| `private` | 仅所有者和团队成员可见 | ✅ | ✅ | 私有项目 |
+
+类型转换规则：mirror ↔ public/private 可互转，public ↔ private 可互转，local 不可转换。
+
+## 角色系统
+
+### 用户角色
+
+| 角色 | 权限 |
+|------|------|
+| `admin` | 全部权限 |
+| `user` | 管理自己的项目，参与团队项目 |
+| `guest` | 只读访问公开和镜像项目 |
+
+### 团队角色
+
+| 角色 | 权限 |
+|------|------|
+| `leader` | 危险操作（删除、转移）、合并 PR |
+| `member` | 管理团队项目（非危险操作） |
+
+## 环境变量
+
+| 变量名 | 默认值 | 说明 |
+|--------|--------|------|
+| `APP_MODE` | `debug` | 运行模式 |
+| `SERVER_PORT` | `9000` | 服务端口 |
+| `BASE_URL` | `http://127.0.0.1:9000` | 站点 URL |
+| `DB_TYPE` | `sqlite` | 数据库类型（sqlite/pgsql） |
+| `DB_DSN` | `gitfolio.db` | 数据库连接串 |
+| `JWT_SECRET` | - | JWT 签名密钥 |
+| `REPO_ROOT` | `./repos` | 仓库存储根目录 |
+| `PROXY_URL` | - | 代理地址（可选） |
+
+PostgreSQL 连接串示例：`postgres://user:password@127.0.0.1:5432/dbname?sslmode=disable`
+
+## 构建生产版本
 
 ```bash
-# 同步golang/go仓库
-./bin/sync -owner=golang -repo=go -token=YOUR_TOKEN
+# 构建当前平台
+make one
 
-# 输出：
-# === Syncing golang/go from github ===
-# Repository synced: go (ID: 4)
-# Issues synced successfully
-# Pull Requests synced successfully
-# ✓ Sync completed successfully!
-```
+# 构建所有平台
+make folio
 
-### 示例2：镜像私有仓库
-
-```bash
-# 添加账号
-./bin/account -platform=github -username=yourname -token=YOUR_TOKEN
-
-# 同步仓库
-./bin/mirror -owner=yourname -repo=yourrepo -prs=true -code=true
-```
-
-### 示例3：查看同步状态
-
-```bash
-# 查询数据库
-psql -d test -c "SELECT * FROM folio.sync_point;"
-
-# 查看同步日志
-psql -d test -c "SELECT * FROM folio.sync_log ORDER BY created_at DESC LIMIT 10;"
-```
-
-## 数据库查询示例
-
-### 查看账号列表
-
-```sql
-SELECT id, platform, username, apiurl 
-FROM folio.platform_account;
-```
-
-### 查看同步的仓库
-
-```sql
-SELECT id, name, project_type, is_mirror, mirror_url, last_sync_at
-FROM folio.repository
-WHERE is_mirror = true;
-```
-
-### 查看同步统计
-
-```sql
-SELECT 
-    r.name,
-    COUNT(DISTINCT i.id) as issues_count,
-    COUNT(DISTINCT mr.id) as prs_count,
-    r.last_sync_at
-FROM folio.repository r
-LEFT JOIN folio.issue i ON r.id = i.repository_id
-LEFT JOIN folio.merge_request mr ON r.id = mr.repository_id
-GROUP BY r.id, r.name, r.last_sync_at;
+# 清理
+make clean
 ```
 
 ## 故障排查
 
-### 问题1：Token无效
+### Token 无效
 
-```bash
-# 错误信息
-GitHub API returned status 401
+检查 GitHub Token 是否正确，是否有 `repo` 权限。在管理后台更新 Token。
 
-# 解决方法
-# 检查Token是否正确，是否有足够的权限
-./bin/account -platform=github -username=azhai -token=NEW_TOKEN
-```
+### 仓库不存在
 
-### 问题2：仓库不存在
+确认仓库名称正确，私有仓库需要 Token 有访问权限。
 
-```bash
-# 错误信息
-GitHub API returned status 404
+### 数据库连接失败
 
-# 解决方法
-# 检查仓库名称是否正确
-# 如果是私有仓库，确保Token有访问权限
-```
+检查 `.env` 中的数据库配置，确保 PostgreSQL 服务正在运行。
 
-### 问题3：数据库连接失败
+### 同步失败
 
-```bash
-# 错误信息
-Failed to init database: connection refused
-
-# 解决方法
-# 检查数据库配置
-cat .env | grep DB_
-
-# 测试数据库连接
-psql -h 127.0.0.1 -U dba -d test
-```
-
-## 最佳实践
-
-1. **Token管理**
-   - 使用最小权限原则
-   - 定期更新Token
-   - 不要提交Token到代码库
-
-2. **同步策略**
-   - 首次同步使用完整同步
-   - 后续使用增量同步
-   - 设置合理的同步间隔
-
-3. **错误处理**
-   - 查看同步日志
-   - 检查网络连接
-   - 验证Token权限
-
-## 更多信息
-
-详细文档请查看：
-- [完整功能文档](./docs/SYNC_SYSTEM.md)
-- [API文档](./docs/API.md)（待实现）
-- [开发指南](./docs/DEVELOPMENT.md)（待实现）
+1. 查看项目设置中的同步日志
+2. 检查 GitHub API 速率限制
+3. 确认 Token 权限
