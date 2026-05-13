@@ -1,294 +1,228 @@
-# GitFolio - Git代码管理和同步系统
+# GitFolio 同步系统
 
-GitFolio是一个完整的Git代码管理和同步系统，支持从多个平台镜像同步仓库数据。
+GitFolio 支持从 GitHub 镜像同步仓库数据，包括仓库信息、Issues、Pull Requests、标签和版本发布。
 
-## 功能特性
+## 同步架构
 
-### ✅ 已完成功能
+```
+GitHub API ──→ SyncService ──→ Database
+                  │
+                  ├── 仓库信息同步
+                  ├── Issue 同步（含评论）
+                  ├── PR 同步（含评论）
+                  ├── 标签同步
+                  └── Release 同步
+```
 
-1. **数据库模型设计**
-   - 平台账号表 (platform_account)
-   - 同步令牌表 (sync_token)
-   - 远程仓库表 (remote_repository)
-   - 同步点表 (sync_point)
-   - 同步日志表 (sync_log)
-   - 项目类型支持（镜像项目、持有项目、Fork项目）
+### 核心组件
 
-2. **账号和Token管理**
-   - 支持多平台账号管理（GitHub、Gitea、GitFolio、GitLab）
-   - 安全存储访问令牌
-   - 支持令牌过期时间和作用域管理
+| 组件 | 文件 | 说明 |
+|------|------|------|
+| SyncService | `services/sync_service.go` | 同步逻辑，并发获取和写入 |
+| SchedulerService | `services/scheduler_service.go` | 定时调度，管理同步间隔 |
+| GitHubService | `services/github_service.go` | GitHub API 封装 |
+| AdminHandler | `handlers/admin_handler.go` | 管理后台接口 |
+| RepoSyncHandler | `handlers/repo_sync.go` | 项目同步接口 |
 
-3. **镜像项目同步**
-   - ✅ GitHub仓库同步
-   - ✅ GitHub Issues同步
-   - ✅ GitHub Pull Requests同步
-   - ✅ Gitea仓库同步（基础支持）
-   - ✅ 记录镜像源URL和最后同步时间
-   - ✅ 自动创建用户账号
+## 同步方式
 
-4. **同步点管理**
-   - 记录同步状态
-   - 支持增量同步
-   - 失败重试机制
+### 1. 手动同步
 
-## 安装
+在项目设置页面点击"同步"按钮，或调用 API：
 
 ```bash
-# 编译所有工具
-make
+# 拉取代码
+curl -X POST http://localhost:9000/api/v1/owner/repo/sync/pull \
+  -H "Authorization: Bearer <token>"
 
-# 或单独编译
-make mirror    # 镜像工具
-make sync      # 同步工具
-make account   # 账号管理工具
+# 同步 Issue 和 PR
+curl -X POST http://localhost:9000/api/v1/owner/repo/sync/issues \
+  -H "Authorization: Bearer <token>"
 ```
 
-## 使用方法
+### 2. 定时同步
 
-### 1. 添加平台账号
+系统内置调度器，根据配置的同步间隔自动触发同步。
+
+配置方式：
+1. 项目设置 → 同步配置 → 设置同步间隔（秒）
+2. 或通过 API：`PUT /api/v1/:owner/:repo/sync/config`
+
+### 3. 增量同步
+
+基于时间戳实现增量同步，Issue 和 PR 各自维护独立的同步时间点：
+
+- **首次同步**：项目 Issue/PR 数量为 0 时，执行全量拉取
+- **后续同步**：使用 `since` 参数，只获取上次同步以来的变更
+- **SyncPoint**：记录 `LastIssueSyncAt` 和 `LastPRSyncAt` 两个独立时间点
+
+## 同步流程
+
+### Issue 同步
+
+```
+1. 检查项目 Issue 数量，为 0 则全量拉取
+2. 使用 since 参数增量获取 Issue 列表
+3. 批量保存/更新 Issue 到数据库
+4. 同步 Issue 标签关联
+5. 并发获取 Issue 评论（10 个并发）
+6. 批量保存评论
+7. 更新 SyncPoint.LastIssueSyncAt
+```
+
+### PR 同步
+
+```
+1. 检查项目 PR 数量，为 0 则全量拉取
+2. 使用 since 参数增量获取 PR 列表
+3. 批量保存/更新 PR 到数据库
+4. 同步 PR 标签关联
+5. 并发获取 PR 评论（10 个并发）
+6. 批量保存评论
+7. 更新 SyncPoint.LastPRSyncAt
+```
+
+## 并发与性能
+
+### 评论并发获取
+
+Issue 和 PR 的评论采用并发获取策略：
+
+- 使用 goroutine 并发请求 GitHub API
+- 信号量控制并发数为 10，避免触发 API 速率限制
+- 获取和写入在同一 goroutine 中完成（goent ORM 线程安全）
+
+### 批量写入
+
+数据库操作使用批量写入，减少 I/O 开销。
+
+### 线程安全
+
+goent ORM 的 QueryBuilder 已实现线程安全：
+- `Build()` 方法通过 `sync.Mutex` 保护
+- 每次查询使用独立的 `bytes.Buffer`
+- 移除了全局 Buffer Pool，避免跨 goroutine 共享
+
+## 数据模型
+
+### SyncPoint（同步点）
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| RepositoryID | int64 | 仓库 ID |
+| RemoteRepoID | int64 | 远程仓库 ID |
+| SyncType | string | 同步类型 |
+| LastIssueSyncAt | *time.Time | Issue 最后同步时间 |
+| LastPRSyncAt | *time.Time | PR 最后同步时间 |
+| SyncInterval | int | 同步间隔（秒），默认 3600 |
+| IsPaused | bool | 是否暂停 |
+| FailureCount | int | 连续失败次数 |
+| LastError | string | 最后错误信息 |
+
+### SyncLog（同步日志）
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| SyncPointID | int64 | 同步点 ID |
+| SyncType | string | 同步类型 |
+| Status | string | 状态（success/failed） |
+| Message | string | 消息 |
+| Duration | int64 | 耗时（毫秒） |
+| ItemsSynced | int | 成功同步数 |
+| ItemsFailed | int | 失败数 |
+
+### PlatformAccount（平台账号）
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| Platform | string | 平台（github/gitea/gitlab） |
+| Username | string | 平台用户名 |
+| UserID | int64 | 关联本地用户 ID |
+| IsActive | bool | 是否激活 |
+
+## 管理接口
+
+### 平台账号管理
 
 ```bash
-# 添加GitHub账号
-./bin/account -platform=github -username=azhai -token=ghp_xxx
+# 列出账号
+GET /api/v1/admin/accounts
 
-# 添加Gitea账号
-./bin/account -platform=gitea -username=azhai -token=b0c475xxx
+# 创建账号
+POST /api/v1/admin/accounts
+{
+  "platform": "github",
+  "username": "yourname",
+  "token": "ghp_xxx"
+}
 
-# 查看帮助
-./bin/account -help
+# 删除账号
+DELETE /api/v1/admin/accounts/:id
 ```
 
-### 2. 同步GitHub仓库
+### 创建镜像项目
 
 ```bash
-# 同步仓库（包括Issues和PRs）
-./bin/sync -owner=golang -repo=go -token=ghp_xxx
-
-# 只同步Issues
-./bin/sync -owner=golang -repo=go -token=ghp_xxx -prs=false
-
-# 只同步PRs
-./bin/sync -owner=golang -repo=go -token=ghp_xxx -issues=false
-
-# 查看帮助
-./bin/sync -help
+POST /api/v1/admin/mirror
+{
+  "owner": "golang",
+  "repo": "go",
+  "platform": "github"
+}
 ```
-
-### 3. 镜像Gitea仓库
-
-```bash
-# 同步xorm/builder仓库
-./bin/mirror -owner=xorm -repo=builder
-
-# 同步仓库和PRs
-./bin/mirror -owner=xorm -repo=builder -prs=true
-
-# 同步仓库代码
-./bin/mirror -owner=xorm -repo=builder -code=true
-
-# 完整同步
-./bin/mirror -owner=xorm -repo=builder -prs=true -code=true
-```
-
-## 数据库结构
-
-### 核心表
-
-#### platform_account (平台账号表)
-```sql
-id            serial PRIMARY KEY
-platform      text          -- github, gitea, gitfolio, gitlab
-username      text          -- 平台用户名
-email         text          -- 邮箱
-avatar_url    text          -- 头像URL
-apiurl        text          -- API地址
-is_active     boolean       -- 是否激活
-user_id       integer       -- 关联的本地用户ID
-```
-
-#### sync_token (同步令牌表)
-```sql
-id            serial PRIMARY KEY
-platform      text          -- 平台类型
-name          text          -- 令牌名称
-access_token  text          -- 访问令牌
-refresh_token text          -- 刷新令牌
-token_type    text          -- 令牌类型
-expires_at    timestamp     -- 过期时间
-scopes        text          -- 权限范围
-account_id    integer       -- 关联账号ID
-repository_id integer       -- 关联仓库ID（可选）
-is_active     boolean       -- 是否激活
-```
-
-#### remote_repository (远程仓库表)
-```sql
-id            serial PRIMARY KEY
-platform      text          -- 平台类型
-owner         text          -- 仓库所有者
-repo_name     text          -- 仓库名称
-clone_url     text          -- 克隆URL
-sshurl        text          -- SSH URL
-apiurl        text          -- API URL
-web_url       text          -- Web URL
-repository_id integer       -- 关联的本地仓库ID
-account_id    integer       -- 关联账号ID
-is_primary    boolean       -- 是否主仓库
-direction     text          -- pull/push/both
-last_sync_at  timestamp     -- 最后同步时间
-sync_enabled  boolean       -- 是否启用同步
-```
-
-#### sync_point (同步点表)
-```sql
-id                serial PRIMARY KEY
-repository_id     integer       -- 仓库ID
-remote_repo_id    integer       -- 远程仓库ID
-sync_type         text          -- 同步类型
-last_sync_at      timestamp     -- 最后同步时间
-last_success_at   timestamp     -- 最后成功时间
-last_failure_at   timestamp     -- 最后失败时间
-failure_count     integer       -- 失败次数
-last_commit_hash  text          -- 最后提交哈希
-last_issue_number integer       -- 最后Issue编号
-last_pr_number    integer       -- 最后PR编号
-last_etag         text          -- ETag
-last_modified     text          -- Last-Modified
-next_sync_at      timestamp     -- 下次同步时间
-sync_interval     integer       -- 同步间隔（秒）
-last_error        text          -- 最后错误信息
-is_paused         boolean       -- 是否暂停
-```
-
-#### sync_log (同步日志表)
-```sql
-id           serial PRIMARY KEY
-sync_point_id integer       -- 同步点ID
-sync_type    text           -- 同步类型
-status       text           -- 状态
-message      text           -- 消息
-duration     bigint         -- 持续时间（毫秒）
-items_synced integer        -- 同步项目数
-items_failed integer        -- 失败项目数
-details      text           -- 详细信息
-```
-
-## 项目类型
-
-### 1. 镜像项目 (mirror)
-- 从远程平台同步代码、Issues、PRs
-- 只读，不能直接修改，不能推送远程
-- 定期自动同步
-- 所有人可见
-- 可转换为 public 或 private
-
-### 2. 公开项目 (public)
-- 本地创建和维护
-- 可以推送到远程平台
-- 所有人可见
-- 可转换为 mirror 或 private
-
-### 3. 私有项目 (private)
-- 本地创建和维护
-- 可以推送到远程平台
-- 仅所有者和团队成员可见
-- 可转换为 mirror 或 public
-
-### 4. 本地项目 (local)
-- 本地创建，无远程关联
-- 除 guest 外所有角色可见
-- Owner ID 为 0，不可转换为其他类型
-
-## 配置文件
-
-环境变量配置 (`.env`):
-
-```bash
-# Server Configuration
-APP_MODE=debug
-SERVER_PORT=3000
-BASE_URL=http://127.0.0.1:3000
-
-# Database Configuration
-DB_TYPE=pgsql
-DB_HOST=127.0.0.1
-DB_PORT=5432
-DB_USER=dba
-DB_PASSWORD=pass
-DB_NAME=test
-
-# Authentication
-JWT_SECRET=your-super-secret-jwt-key-change-in-production
-SESSION_SECRET=your-session-secret-key
-TOKEN_EXPIRY=24
-
-# Repository Storage
-REPO_ROOT=./repos
-```
-
-## API端点（待实现）
-
-### 账号管理
-- `GET /api/accounts` - 获取账号列表
-- `POST /api/accounts` - 创建账号
-- `PUT /api/accounts/:id` - 更新账号
-- `DELETE /api/accounts/:id` - 删除账号
-
-### 同步管理
-- `POST /api/sync/repo` - 同步仓库
-- `GET /api/sync/status/:id` - 获取同步状态
-- `POST /api/sync/pause/:id` - 暂停同步
-- `POST /api/sync/resume/:id` - 恢复同步
 
 ### 同步点管理
-- `GET /api/sync-points` - 获取同步点列表
-- `GET /api/sync-points/:id/logs` - 获取同步日志
-- `PUT /api/sync-points/:id` - 更新同步点配置
-
-## 待实现功能
-
-### 高优先级
-- [ ] 实现持有项目的推送功能
-- [ ] 完善Gitea同步功能
-- [ ] 实现GitFolio平台间同步
-- [ ] 创建Web管理界面
-
-### 中优先级
-- [ ] 实现定时自动同步
-- [ ] 添加Webhook支持
-- [ ] 实现冲突解决机制
-- [ ] 添加同步进度显示
-
-### 低优先级
-- [ ] 支持GitLab平台
-- [ ] 实现代码审查功能
-- [ ] 添加CI/CD集成
-- [ ] 实现团队协作功能
-
-## 开发指南
-
-### 添加新平台支持
-
-1. 在 `models/models.go` 中添加平台常量
-2. 在 `services/sync_service.go` 中实现同步方法
-3. 在 `cmd/sync/main.go` 中添加平台分支
-4. 更新文档
-
-### 运行测试
 
 ```bash
-# 运行所有测试
-go test ./...
+# 列出所有同步点
+GET /api/v1/admin/sync-points
 
-# 运行特定包的测试
-go test ./services
+# 更新同步点配置
+PUT /api/v1/admin/sync-points/:id
+{
+  "sync_interval": 1800,
+  "is_paused": false
+}
+
+# 查看同步日志
+GET /api/v1/admin/sync-logs
 ```
 
-## 许可证
+## 项目设置中的同步
 
-MIT License
+每个项目设置页面提供：
 
-## 贡献
+- **同步按钮**：手动触发一次同步
+- **同步配置**：设置同步间隔、暂停/恢复
+- **同步日志**：查看最近的同步记录
+- **推送配置**：public/private 项目可配置推送远程
 
-欢迎提交Issue和Pull Request！
+## 支持的平台
+
+| 平台 | 状态 | 说明 |
+|------|------|------|
+| GitHub | ✅ 完整支持 | 仓库、Issue、PR、评论、标签、Release |
+| Gitea | 🚧 基础支持 | 仓库信息同步 |
+| GitLab | 📋 计划中 | - |
+| GitFolio | 📋 计划中 | 平台间同步 |
+
+## 故障排查
+
+### 同步失败
+
+1. 查看同步日志中的错误信息
+2. 检查 GitHub Token 是否有效
+3. 确认 Token 有 `repo` 权限
+4. 检查 API 速率限制（每小时 5000 次）
+
+### 同步速度慢
+
+- 评论采用并发获取，默认 10 并发
+- 如果网络较慢，可能是 GitHub API 响应延迟
+- 可通过代理加速：设置 `PROXY_URL` 环境变量
+
+### 数据不完整
+
+- 首次同步为全量拉取，确保同步完成
+- 增量同步基于时间戳，如果远程有回退操作可能遗漏
+- 可删除 SyncPoint 中的时间记录，触发全量重新同步
