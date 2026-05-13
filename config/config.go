@@ -8,6 +8,7 @@ type Config struct {
 	Server     ServerConfig
 	Database   DatabaseConfig
 	Auth       AuthConfig
+	Admin      AdminConfig
 	Repository RepositoryConfig
 	Github     GithubConfig
 	Proxy      ProxyConfig
@@ -35,6 +36,12 @@ type AuthConfig struct {
 	JWTSecret     string
 	SessionSecret string
 	TokenExpiry   int
+}
+
+type AdminConfig struct {
+	Username string
+	Password string
+	Email    string
 }
 
 type RepositoryConfig struct {
@@ -70,6 +77,10 @@ func Load(env *utils.Environ) *Config {
 			JWTSecret:     env.GetStr("JWT_SECRET", "your-secret-key-change-in-production"),
 			SessionSecret: env.GetStr("SESSION_SECRET", "session-secret-key"),
 			TokenExpiry:   env.GetInt("TOKEN_EXPIRY", 24),
+		},
+		Admin: AdminConfig{
+			Username: env.GetStr("ADMIN_USERNAME", "admin"),
+			Password: env.GetStr("ADMIN_PASSWORD", ""),
 		},
 		Repository: RepositoryConfig{
 			Root: env.GetStr("REPO_ROOT", "./repos"),

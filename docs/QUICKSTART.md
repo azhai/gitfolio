@@ -38,7 +38,7 @@ go run main.go
 
 | 用户名 | 密码 | 角色 |
 |--------|------|------|
-| admin | FolioAdmin | 管理员 |
+| admin | xxxxxx | 管理员 |
 | demo | demo123 | 访客 |
 
 ## 创建项目
