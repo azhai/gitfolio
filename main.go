@@ -49,7 +49,10 @@ func main() {
 		log.Fatalf("Failed to create repository root: %v", err)
 	}
 
-	seedUsers()
+	if cfg.Admin.Username == "" || cfg.Admin.Password == "" {
+		log.Fatalf("Admin username or password is empty, please set them in the environment variables")
+	}
+	seedUsers(cfg.Admin.Username, cfg.Admin.Password)
 
 	app := CreateApp()
 	scheduler := services.NewSchedulerService(models.GetDB())
@@ -130,18 +133,18 @@ func ErrorHandler(c fiber.Ctx, err error) error {
 	return c.Status(code).JSON(fiber.Map{"error": msg})
 }
 
-func seedUsers() {
+func seedUsers(username, password string) {
 	db := models.GetDB()
 
 	users := []struct {
-		Username string
 		Email    string
+		Username string
 		Password string
 		FullName string
 		Role     string
 	}{
-		{"admin", "admin@gitfolio.local", "FolioAdmin", "管理员", "admin"},
-		{"demo", "demo@gitfolio.local", "demo123", "游客", "guest"},
+		{"admin@gitfolio.local", username, password, "管理员", "admin"},
+		{"demo@gitfolio.local", "demo", "demo123", "游客", "guest"},
 	}
 
 	for _, u := range users {
