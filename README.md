@@ -72,7 +72,7 @@ go run main.go
 
 | 用户名 | 密码 | 角色 |
 |--------|------|------|
-| admin | FolioAdmin | 管理员 |
+| admin | xxxxxxxx | 管理员 |
 | demo | demo123 | 访客 |
 
 ### 环境变量
