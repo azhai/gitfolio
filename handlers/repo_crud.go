@@ -69,12 +69,7 @@ func CreateRepository(c fiber.Ctx) error {
 			}
 		}
 
-		gitSvc := services.NewGitService()
-		localPath, err := gitSvc.CloneRepository(ownerUser.Username, req.Name, req.CloneURL, true)
-		if err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
-		}
-		repo.LocalPath = localPath
+		repo.MigrateStatus = "cloning"
 	} else {
 		repo.ProjectType = "local"
 		repo.OwnerID = 0
@@ -85,7 +80,7 @@ func CreateRepository(c fiber.Ctx) error {
 				"error": fmt.Sprintf("Failed to initialize repository: %v", err),
 			})
 		}
-		repo.LocalPath = filepath.Join(config.GetRepoRoot(), "local", req.Name)
+		repo.LocalPath = filepath.Join(config.GetLocalRoot(), req.Name)
 	}
 
 	err = db.Repository.Insert().One(repo)
@@ -105,7 +100,79 @@ func CreateRepository(c fiber.Ctx) error {
 	}
 	schedulerSvc.GetOrCreateSyncPoint(repo.ID, syncType)
 
+	if repo.MigrateStatus == "cloning" {
+		go func() {
+			gitSvc := services.NewGitServiceWithDB(db)
+			localPath, cloneErr := gitSvc.CloneRepository(ownerUser.Username, repo.Name, repo.MirrorURL, true)
+
+			refreshedRepo, findErr := db.Repository.Select().Where("id = ?", repo.ID).One()
+			if findErr != nil {
+				fmt.Printf("Migrate: failed to find repo %d after clone: %v\n", repo.ID, findErr)
+				return
+			}
+
+			if cloneErr != nil {
+				refreshedRepo.MigrateStatus = "failed"
+				refreshedRepo.MigrateError = cloneErr.Error()
+			} else {
+				refreshedRepo.MigrateStatus = "completed"
+				refreshedRepo.MigrateError = ""
+				refreshedRepo.LocalPath = localPath
+			}
+			if saveErr := db.Repository.Save().One(refreshedRepo); saveErr != nil {
+				fmt.Printf("Migrate: failed to update repo %d status: %v\n", repo.ID, saveErr)
+			}
+		}()
+	}
+
 	return c.Status(fiber.StatusCreated).JSON(ToRepositoryResponse(repo, ownerUser, nil))
+}
+
+func RetryMigrate(c fiber.Ctx) error {
+	result, err := helpers.RequireOwnerAndRepoFromParams(c)
+	if err != nil {
+		return err
+	}
+
+	repo := result.Repo
+	if repo.MirrorURL == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Not a remote repository"})
+	}
+	if repo.MigrateStatus != "failed" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Repository is not in failed migration state"})
+	}
+
+	db := models.GetDB()
+	repo.MigrateStatus = "cloning"
+	repo.MigrateError = ""
+	if err := db.Repository.Save().One(repo); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update migration status"})
+	}
+
+	go func() {
+		gitSvc := services.NewGitServiceWithDB(db)
+		localPath, cloneErr := gitSvc.CloneRepository(result.OwnerName(), repo.Name, repo.MirrorURL, true)
+
+		refreshedRepo, findErr := db.Repository.Select().Where("id = ?", repo.ID).One()
+		if findErr != nil {
+			fmt.Printf("RetryMigrate: failed to find repo %d after clone: %v\n", repo.ID, findErr)
+			return
+		}
+
+		if cloneErr != nil {
+			refreshedRepo.MigrateStatus = "failed"
+			refreshedRepo.MigrateError = cloneErr.Error()
+		} else {
+			refreshedRepo.MigrateStatus = "completed"
+			refreshedRepo.MigrateError = ""
+			refreshedRepo.LocalPath = localPath
+		}
+		if saveErr := db.Repository.Save().One(refreshedRepo); saveErr != nil {
+			fmt.Printf("RetryMigrate: failed to update repo %d status: %v\n", repo.ID, saveErr)
+		}
+	}()
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Migration retry started"})
 }
 
 // GetGitHubRepoInfo 获取 GitHub 仓库信息（名称、描述、主页）
@@ -365,10 +432,77 @@ func DeleteRepository(c fiber.Ctx) error {
 		return err
 	}
 
+	repo := result.Repo
 	db := models.GetDB()
-	err = db.Repository.Delete().Where("id = ?", result.Repo.ID).Exec()
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to delete repository"})
+
+	issues, _ := db.Issue.Select("id").Where("repository_id = ?", repo.ID).All()
+	issueIDs := make([]int64, len(issues))
+	for i, issue := range issues {
+		issueIDs[i] = issue.ID
+	}
+	if len(issueIDs) > 0 {
+		db.IssueLabel.Delete().Where("issue_id IN ?", issueIDs).Exec()
+	}
+
+	prs, _ := db.PullRequest.Select("id").Where("repository_id = ?", repo.ID).All()
+	prIDs := make([]int64, len(prs))
+	for i, pr := range prs {
+		prIDs[i] = pr.ID
+	}
+	if len(prIDs) > 0 {
+		db.PullRequestLabel.Delete().Where("pull_request_id IN ?", prIDs).Exec()
+	}
+
+	tasks, _ := db.Task.Select("id").Where("repository_id = ?", repo.ID).All()
+	taskIDs := make([]int64, len(tasks))
+	for i, task := range tasks {
+		taskIDs[i] = task.ID
+	}
+	if len(taskIDs) > 0 {
+		db.TaskAttachment.Delete().Where("task_id IN ?", taskIDs).Exec()
+		db.TaskSchedule.Delete().Where("task_id IN ?", taskIDs).Exec()
+		db.TaskIssue.Delete().Where("task_id IN ?", taskIDs).Exec()
+		db.TaskTransition.Delete().Where("task_id IN ?", taskIDs).Exec()
+		db.TaskPullRequest.Delete().Where("task_id IN ?", taskIDs).Exec()
+		db.TaskTimeLog.Delete().Where("task_id IN ?", taskIDs).Exec()
+	}
+
+	db.Comment.Delete().Where("issue_id IN ?", issueIDs).Exec()
+	db.Comment.Delete().Where("pull_request_id IN ?", prIDs).Exec()
+	db.Comment.Delete().Where("task_id IN ?", taskIDs).Exec()
+
+	syncPoints, _ := db.SyncPoint.Select("id").Where("repository_id = ?", repo.ID).All()
+	syncPointIDs := make([]int64, len(syncPoints))
+	for i, sp := range syncPoints {
+		syncPointIDs[i] = sp.ID
+	}
+	if len(syncPointIDs) > 0 {
+		db.SyncLog.Delete().Where("sync_point_id IN ?", syncPointIDs).Exec()
+	}
+
+	db.Issue.Delete().Where("repository_id = ?", repo.ID).Exec()
+	db.PullRequest.Delete().Where("repository_id = ?", repo.ID).Exec()
+	db.Task.Delete().Where("repository_id = ?", repo.ID).Exec()
+	db.Label.Delete().Where("repository_id = ?", repo.ID).Exec()
+	db.Branch.Delete().Where("repository_id = ?", repo.ID).Exec()
+	db.Release.Delete().Where("repository_id = ?", repo.ID).Exec()
+	db.Milestone.Delete().Where("repository_id = ?", repo.ID).Exec()
+	db.Webhook.Delete().Where("repository_id = ?", repo.ID).Exec()
+	db.Star.Delete().Where("repository_id = ?", repo.ID).Exec()
+	db.Watch.Delete().Where("repository_id = ?", repo.ID).Exec()
+	db.RepositoryStats.Delete().Where("repository_id = ?", repo.ID).Exec()
+	db.RemoteRepository.Delete().Where("repository_id = ?", repo.ID).Exec()
+	db.SyncPoint.Delete().Where("repository_id = ?", repo.ID).Exec()
+	db.GitCommandLog.Delete().Where("repository_id = ?", repo.ID).Exec()
+	db.Activity.Delete().Where("repository_id = ?", repo.ID).Exec()
+	db.CommitReference.Delete().Where("repository_id = ?", repo.ID).Exec()
+	db.Snippet.Delete().Where("repository_id = ?", repo.ID).Exec()
+
+	db.Repository.Delete().Where("id = ?", repo.ID).Exec()
+
+	if !repo.IsLocal() {
+		gitSvc := services.NewGitService()
+		gitSvc.DeleteRepository(result.OwnerName(), repo.Name)
 	}
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Repository deleted successfully"})

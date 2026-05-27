@@ -152,24 +152,43 @@ func GetIssue(c fiber.Ctx) error {
 
 	db := models.GetDB()
 
-	issueModel, err := db.Issue.Select().Filter(
-		goent.And(
-			goent.Equals(db.Issue.Field("repository_id"), result.Repo.ID),
-			goent.Equals(db.Issue.Field("number"), issueNumber),
-		),
-	).One()
+	issueModel, err := db.Issue.Select().With("author_id", "assignee_id", "labels").
+		Filter(
+			goent.And(
+				goent.Equals(db.Issue.Field("repository_id"), result.Repo.ID),
+				goent.Equals(db.Issue.Field("number"), issueNumber),
+			),
+		).One()
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Issue not found"})
 	}
 
-	authorContrib := helpers.GetContributor(db, issueModel.AuthorID)
-
-	var assigneeContrib *models.Contributor
-	if issueModel.AssigneeID != nil {
-		assigneeContrib, _ = db.Contributor.Select().Where("id = ?", *issueModel.AssigneeID).One()
+	authorContrib := issueModel.Author
+	if authorContrib == nil {
+		authorContrib = &models.Contributor{Name: "Unknown"}
 	}
 
-	labels := helpers.GetIssueLabels(db, issueModel.ID)
+	var assigneeContrib *models.Contributor
+	if issueModel.Assignee != nil {
+		assigneeContrib = issueModel.Assignee
+	}
+
+	// 从预加载的 IssueLabels 中提取 Label 信息
+	var allLabelIDs []int64
+	for _, il := range issueModel.Labels {
+		allLabelIDs = append(allLabelIDs, il.LabelID)
+	}
+	labelMap := helpers.BatchGetLabels(db, allLabelIDs)
+	var labels []helpers.LabelInfo
+	for _, il := range issueModel.Labels {
+		if l, ok := labelMap[il.LabelID]; ok {
+			labels = append(labels, helpers.ModelToLabelInfo(l))
+		}
+	}
+	if labels == nil {
+		labels = []helpers.LabelInfo{}
+	}
+
 	commentsCount, _ := db.Comment.Select().Filter(
 		goent.Equals(db.Comment.Field("issue_id"), issueModel.ID),
 	).Count("id")
@@ -198,6 +217,7 @@ func ListIssues(c fiber.Ctx) error {
 	}
 
 	issues, err := db.Issue.Select().Filter(conds...).
+		With("author_id", "assignee_id", "labels").
 		Skip(helpers.GetOffset(pagination.Page, pagination.PerPage)).
 		Take(pagination.PerPage).All()
 	if err != nil {
@@ -206,30 +226,41 @@ func ListIssues(c fiber.Ctx) error {
 
 	total, _ := db.Issue.Select().Filter(conds...).Count("id")
 
-	contributorIDs := helpers.CollectContributorIDs(issues)
-	contributorsMap := helpers.BatchGetContributors(db, contributorIDs)
-
+	// 批量统计评论数
 	var issueIDs []int64
 	for _, issue := range issues {
 		issueIDs = append(issueIDs, issue.ID)
 	}
-	labelsMap := helpers.BatchGetIssueLabels(db, issueIDs)
 	commentsCountMap := helpers.BatchGetCommentsCount(db, issueIDs, "issue")
+
+	// 批量查询 IssueLabel 关联的 Label
+	var allLabelIDs []int64
+	for _, issue := range issues {
+		for _, il := range issue.Labels {
+			allLabelIDs = append(allLabelIDs, il.LabelID)
+		}
+	}
+	labelMap := helpers.BatchGetLabels(db, allLabelIDs)
 
 	var response []*IssueResponse
 	response = make([]*IssueResponse, 0)
 	for _, issue := range issues {
-		authorContrib := contributorsMap[issue.AuthorID]
+		authorContrib := issue.Author
 		if authorContrib == nil {
 			authorContrib = &models.Contributor{Name: "Unknown"}
 		}
 
 		var assigneeContrib *models.Contributor
-		if issue.AssigneeID != nil {
-			assigneeContrib = contributorsMap[*issue.AssigneeID]
+		if issue.Assignee != nil {
+			assigneeContrib = issue.Assignee
 		}
 
-		labels := labelsMap[issue.ID]
+		var labels []helpers.LabelInfo
+		for _, il := range issue.Labels {
+			if l, ok := labelMap[il.LabelID]; ok {
+				labels = append(labels, helpers.ModelToLabelInfo(l))
+			}
+		}
 		if labels == nil {
 			labels = []helpers.LabelInfo{}
 		}
@@ -411,29 +442,19 @@ func GetComments(c fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Issue not found"})
 	}
 
-	comments, err := db.Comment.Select().Filter(
+	comments, err := db.Comment.Select().With("author_id").Filter(
 		goent.Equals(db.Comment.Field("issue_id"), issueModel.ID),
 	).All()
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch comments"})
 	}
 
-	var contributorIDs []int64
-	for _, comment := range comments {
-		if comment.AuthorID != 0 {
-			contributorIDs = append(contributorIDs, comment.AuthorID)
-		}
-	}
-
-	contributorsMap := helpers.BatchGetContributors(db, contributorIDs)
-
 	var response []*CommentResponse
 	response = make([]*CommentResponse, 0)
 	for _, comment := range comments {
-		authorContrib := contributorsMap[comment.AuthorID]
 		authorName := ""
-		if authorContrib != nil {
-			authorName = authorContrib.Name
+		if comment.Author != nil {
+			authorName = comment.Author.Name
 		}
 		response = append(response, &CommentResponse{
 			ID:        comment.ID,

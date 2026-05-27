@@ -12,6 +12,7 @@ import (
 	"github.com/azhai/gitfolio/middleware"
 	"github.com/azhai/gitfolio/models"
 	"github.com/azhai/gitfolio/services"
+	"github.com/azhai/goent"
 	"github.com/gofiber/fiber/v3"
 )
 
@@ -101,9 +102,9 @@ func ListAccounts(c fiber.Ctx) error {
 	var accounts []*models.PlatformAccount
 	var err error
 	if platform != "" {
-		accounts, err = db.PlatformAccount.Select().Where("platform = ?", platform).All()
+		accounts, err = db.PlatformAccount.Select().With("tokens").Where("platform = ?", platform).All()
 	} else {
-		accounts, err = db.PlatformAccount.Select().All()
+		accounts, err = db.PlatformAccount.Select().With("tokens").All()
 	}
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
@@ -116,8 +117,7 @@ func ListAccounts(c fiber.Ctx) error {
 
 	results := make([]accountWithToken, 0, len(accounts))
 	for _, acc := range accounts {
-		tokens, _ := db.SyncToken.Select().Where("account_id = ?", acc.ID).All()
-		results = append(results, accountWithToken{Account: acc, Tokens: tokens})
+		results = append(results, accountWithToken{Account: acc, Tokens: acc.Tokens})
 	}
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"accounts": results})
@@ -253,15 +253,18 @@ func CreateMirror(c fiber.Ctx) error {
 			token = tokens[0].AccessToken
 		}
 
-		ctx := context.Background()
-		if syncResult, err := syncSvc.SyncRepositoryData(ctx, repo.ID, req.Platform, req.Owner, req.Repo, token, nil, nil); err != nil {
-			result["sync_error"] = err.Error()
-		} else {
+		if services.TryLockSync(repo.ID) {
+			go func() {
+				defer services.UnlockSync(repo.ID)
+				ctx := context.Background()
+				if _, err := syncSvc.SyncRepositoryData(ctx, repo.ID, req.Platform, req.Owner, req.Repo, token, nil, nil, 0, 0); err != nil {
+					fmt.Printf("Warning: async sync failed for %s/%s: %v\n", req.Owner, req.Repo, err)
+				}
+			}()
 			result["synced"] = true
-			result["issues_inserted"] = syncResult.IssuesInserted
-			result["issues_updated"] = syncResult.IssuesUpdated
-			result["prs_inserted"] = syncResult.PRsInserted
-			result["prs_updated"] = syncResult.PRsUpdated
+		} else {
+			result["sync_skipped"] = true
+			result["sync_reason"] = "already syncing"
 		}
 	}
 
@@ -336,7 +339,29 @@ func ImportFromRemote(c fiber.Ctx) error {
 	result["repository_id"] = repository.ID
 
 	if req.CleanData {
-		db.IssueLabel.Delete().Where("issue_id IN (SELECT id FROM issues WHERE repository_id = ?)", repository.ID).Exec()
+		// 使用 WITH 查询替代外键子查询：先查出 issue IDs，再批量删除关联数据
+		issues, _ := db.Issue.Select("id").Where("repository_id = ?", repository.ID).All()
+		var issueIDs []int64
+		for _, iss := range issues {
+			issueIDs = append(issueIDs, iss.ID)
+		}
+		if len(issueIDs) > 0 {
+			db.IssueLabel.Delete().Filter(
+				goent.In(db.IssueLabel.Field("issue_id"), issueIDs),
+			).Exec()
+		}
+
+		prs, _ := db.PullRequest.Select("id").Where("repository_id = ?", repository.ID).All()
+		var prIDs []int64
+		for _, pr := range prs {
+			prIDs = append(prIDs, pr.ID)
+		}
+		if len(prIDs) > 0 {
+			db.PullRequestLabel.Delete().Filter(
+				goent.In(db.PullRequestLabel.Field("pull_request_id"), prIDs),
+			).Exec()
+		}
+
 		db.Issue.Delete().Where("repository_id = ?", repository.ID).Exec()
 		db.PullRequest.Delete().Where("repository_id = ?", repository.ID).Exec()
 		db.Contributor.Delete().Where("repository_id = ?", repository.ID).Exec()
@@ -356,51 +381,32 @@ func ImportFromRemote(c fiber.Ctx) error {
 		}
 	}
 
-	if req.ImportIssues {
-		switch req.Platform {
-		case "github":
-			if syncResult, err := syncSvc.SyncGitHubIssues(ctx, repository.ID, req.Owner, req.Repo, req.Token, nil); err != nil {
-				result["issues_error"] = err.Error()
-			} else {
-				result["issues_inserted"] = syncResult.IssuesInserted
-				result["issues_updated"] = syncResult.IssuesUpdated
+	if req.ImportIssues || req.ImportPRs || req.ImportContributors {
+		go func() {
+			ctx := context.Background()
+			if req.ImportIssues {
+				switch req.Platform {
+				case "github":
+					syncSvc.SyncGitHubIssues(ctx, repository.ID, req.Owner, req.Repo, req.Token, nil, 0)
+				case "gitea":
+					syncSvc.SyncGiteaIssues(ctx, repository.ID, req.Owner, req.Repo, req.Token)
+				}
 			}
-		case "gitea":
-			if syncResult, err := syncSvc.SyncGiteaIssues(ctx, repository.ID, req.Owner, req.Repo, req.Token); err != nil {
-				result["issues_error"] = err.Error()
-			} else {
-				result["issues_inserted"] = syncResult.IssuesInserted
-				result["issues_updated"] = syncResult.IssuesUpdated
+			if req.ImportPRs {
+				switch req.Platform {
+				case "github":
+					syncSvc.SyncGitHubPRs(ctx, repository.ID, req.Owner, req.Repo, req.Token, nil, 0)
+				case "gitea":
+					syncSvc.SyncGiteaPRs(ctx, repository.ID, req.Owner, req.Repo, req.Token)
+				}
 			}
-		}
-		result["issues_synced"] = true
-	}
-
-	if req.ImportPRs {
-		switch req.Platform {
-		case "github":
-			if syncResult, err := syncSvc.SyncGitHubPRs(ctx, repository.ID, req.Owner, req.Repo, req.Token, nil); err != nil {
-				result["prs_error"] = err.Error()
-			} else {
-				result["prs_inserted"] = syncResult.PRsInserted
-				result["prs_updated"] = syncResult.PRsUpdated
+			if req.ImportContributors {
+				syncSvc.SyncGitHubContributors(ctx, repository.ID, req.Owner, req.Repo, req.Token)
 			}
-		case "gitea":
-			if syncResult, err := syncSvc.SyncGiteaPRs(ctx, repository.ID, req.Owner, req.Repo, req.Token); err != nil {
-				result["prs_error"] = err.Error()
-			} else {
-				result["prs_inserted"] = syncResult.PRsInserted
-				result["prs_updated"] = syncResult.PRsUpdated
-			}
-		}
-		result["prs_synced"] = true
-	}
-
-	if req.ImportContributors {
-		if err := syncSvc.SyncGitHubContributors(ctx, repository.ID, req.Owner, req.Repo, req.Token); err != nil {
-			result["contributors_error"] = err.Error()
-		}
-		result["contributors_synced"] = true
+		}()
+		result["issues_synced"] = req.ImportIssues
+		result["prs_synced"] = req.ImportPRs
+		result["contributors_synced"] = req.ImportContributors
 	}
 
 	return c.Status(fiber.StatusOK).JSON(result)

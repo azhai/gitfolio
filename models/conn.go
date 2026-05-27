@@ -4,17 +4,15 @@ package models
 
 import (
 	"fmt"
-	"strings"
 
-	"github.com/azhai/gitfolio/config"
 	"github.com/azhai/goent"
-	"github.com/azhai/goent/drivers/pgsql"
-	"github.com/azhai/goent/drivers/sqlite"
-	"github.com/azhai/goent/model"
-	"github.com/azhai/goent/utils"
+	"github.com/azhai/goent/drivers"
 )
 
-var db *Database
+var (
+	db     *Database
+	initDb = false
+)
 
 type Database struct {
 	FolioSchema `goe:"folio"`
@@ -31,29 +29,20 @@ func CloseDB() {
 	}
 }
 
-func OpenDB(cfg config.DatabaseConfig) (*Database, error) {
-	// 连接数据库
-	var err error
-	db, err = Connect(cfg.Type, cfg.DSN, cfg.LogFile)
+func OpenDB(cfg drivers.DatabaseConfig) (*Database, error) {
+	drv, err := drivers.Connect(cfg)
 	if err != nil {
-		return nil, fmt.Errorf("连接数据库失败: %v", err)
+		return nil, err
 	}
-
-	if err = goent.AutoMigrate(db); err != nil {
-		return nil, fmt.Errorf("迁移失败: %v", err)
+	db, err = goent.Open[Database](drv)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to connect database: %v", err)
+	}
+	if initDb {
+		err = goent.AutoMigrate(db)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("Failed to migrate database: %v", err)
 	}
 	return db, nil
-}
-
-func Connect(dbType, dbDSN, logFile string) (*Database, error) {
-	var drv model.Driver
-	if dbType == "pgsql" || dbType == "postgres" {
-		drv = pgsql.OpenDSN(dbDSN)
-	} else if dbType == "" && strings.HasPrefix(dbDSN, "postgres://") {
-		drv = pgsql.OpenDSN(dbDSN)
-	} else {
-		_ = utils.MakeDirForFile(dbDSN)
-		drv = sqlite.OpenDSN(dbDSN)
-	}
-	return goent.Open[Database](drv, logFile)
 }

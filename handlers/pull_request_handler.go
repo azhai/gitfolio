@@ -225,11 +225,8 @@ func ListPullRequests(c fiber.Ctx) error {
 		conds = append(conds, goent.Equals(db.PullRequest.Field("is_closed"), true))
 	}
 
-	mrs, err := db.PullRequest.Select(
-		"id", "created_at", "updated_at", "title", "body", "number",
-		"repository_id", "author_id", "source_branch", "target_branch",
-		"assignee_id", "status", "is_merged", "is_closed", "is_locked",
-	).Filter(conds...).
+	mrs, err := db.PullRequest.Select().Filter(conds...).
+		With("author_id", "assignee_id").
 		Skip(helpers.GetOffset(pagination.Page, pagination.PerPage)).
 		Take(pagination.PerPage).All()
 	if err != nil {
@@ -237,9 +234,6 @@ func ListPullRequests(c fiber.Ctx) error {
 	}
 
 	total, _ := db.PullRequest.Select().Filter(conds...).Count("id")
-
-	contributorIDs := helpers.CollectPRContributorIDs(mrs)
-	contributorsMap := helpers.BatchGetContributors(db, contributorIDs)
 
 	var prIDs []int64
 	for _, mr := range mrs {
@@ -250,14 +244,14 @@ func ListPullRequests(c fiber.Ctx) error {
 	var response []*PRResponse
 	response = make([]*PRResponse, 0, len(mrs))
 	for _, mr := range mrs {
-		authorContrib := contributorsMap[mr.AuthorID]
+		authorContrib := mr.Author
 		if authorContrib == nil {
 			authorContrib = &models.Contributor{Name: "Unknown"}
 		}
 
 		var assigneeContrib *models.Contributor
-		if mr.AssigneeID != nil {
-			assigneeContrib = contributorsMap[*mr.AssigneeID]
+		if mr.Assignee != nil {
+			assigneeContrib = mr.Assignee
 		}
 
 		commentsCount := commentsCountMap[mr.ID]

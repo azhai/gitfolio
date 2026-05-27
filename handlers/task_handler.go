@@ -262,25 +262,23 @@ func ListTasks(c fiber.Ctx) error {
 	}
 	total, _ := countQuery.Count("*")
 
-	tasks, err := query.Skip(helpers.GetOffset(pagination.Page, pagination.PerPage)).Take(pagination.PerPage).All()
+	tasks, err := query.With("initiator_id", "verifier_id", "handler_id").
+		Skip(helpers.GetOffset(pagination.Page, pagination.PerPage)).Take(pagination.PerPage).All()
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch tasks"})
 	}
 
-	userIDs := collectTaskUserIDs(tasks)
-	usersMap := helpers.BatchGetUsers(db, userIDs)
-
 	var response []TaskResponse
 	response = make([]TaskResponse, 0)
 	for _, task := range tasks {
-		initiator := usersMap[task.InitiatorID]
+		initiator := task.Initiator
 		var verifier *models.User
-		if task.VerifierID != nil {
-			verifier = usersMap[*task.VerifierID]
+		if task.Verifier != nil {
+			verifier = task.Verifier
 		}
 		var handler *models.User
-		if task.HandlerID != nil {
-			handler = usersMap[*task.HandlerID]
+		if task.Handler != nil {
+			handler = task.Handler
 		}
 
 		response = append(response, ToTaskResponse(task, initiator, verifier, handler, nil, nil, nil))
@@ -313,25 +311,10 @@ func GetTask(c fiber.Ctx) error {
 }
 
 func getTaskSchedules(db *models.Database, taskID int64) []TaskScheduleResp {
-	schedules, err := db.TaskSchedule.Select().Where("task_id = ?", taskID).All()
+	schedules, err := db.TaskSchedule.Select().With("user1_id", "user2_id", "user3_id").Where("task_id = ?", taskID).All()
 	if err != nil {
 		return []TaskScheduleResp{}
 	}
-
-	var userIDs []int64
-	for _, s := range schedules {
-		if s.User1ID != nil && *s.User1ID != 0 {
-			userIDs = append(userIDs, *s.User1ID)
-		}
-		if s.User2ID != nil && *s.User2ID != 0 {
-			userIDs = append(userIDs, *s.User2ID)
-		}
-		if s.User3ID != nil && *s.User3ID != 0 {
-			userIDs = append(userIDs, *s.User3ID)
-		}
-	}
-
-	usersMap := helpers.BatchGetUsers(db, userIDs)
 
 	var result []TaskScheduleResp
 	for _, s := range schedules {
@@ -358,20 +341,14 @@ func getTaskSchedules(db *models.Database, taskID int64) []TaskScheduleResp {
 		resp.ActualStartNoon = s.ActualStartNoon
 		resp.ActualEndNoon = s.ActualEndNoon
 
-		if s.User1ID != nil {
-			if u := usersMap[*s.User1ID]; u != nil {
-				resp.User1 = u.Username
-			}
+		if s.User1 != nil {
+			resp.User1 = s.User1.Username
 		}
-		if s.User2ID != nil {
-			if u := usersMap[*s.User2ID]; u != nil {
-				resp.User2 = u.Username
-			}
+		if s.User2 != nil {
+			resp.User2 = s.User2.Username
 		}
-		if s.User3ID != nil {
-			if u := usersMap[*s.User3ID]; u != nil {
-				resp.User3 = u.Username
-			}
+		if s.User3 != nil {
+			resp.User3 = s.User3.Username
 		}
 
 		result = append(result, resp)
@@ -832,18 +809,10 @@ func GetTaskTransitions(c fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Task not found"})
 	}
 
-	transitions, err := db.TaskTransition.Select().Where("task_id = ?", task.ID).OrderBy("created_at DESC").All()
+	transitions, err := db.TaskTransition.Select().With("user_id").Where("task_id = ?", task.ID).OrderBy("created_at DESC").All()
 	if err != nil {
 		return c.Status(fiber.StatusOK).JSON([]interface{}{})
 	}
-
-	var userIDs []int64
-	for _, t := range transitions {
-		if t.UserID != 0 {
-			userIDs = append(userIDs, t.UserID)
-		}
-	}
-	usersMap := helpers.BatchGetUsers(db, userIDs)
 
 	type TransitionResponse struct {
 		ID         int64  `json:"id"`
@@ -858,8 +827,8 @@ func GetTaskTransitions(c fiber.Ctx) error {
 	var response []TransitionResponse
 	for _, t := range transitions {
 		username := ""
-		if u := usersMap[t.UserID]; u != nil {
-			username = u.Username
+		if t.User != nil {
+			username = t.User.Username
 		}
 		response = append(response, TransitionResponse{
 			ID:         t.ID,
@@ -890,18 +859,10 @@ func GetTaskComments(c fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Task not found"})
 	}
 
-	comments, err := db.Comment.Select().Where("task_id = ?", task.ID).OrderBy("created_at ASC").All()
+	comments, err := db.Comment.Select().With("author_id").Where("task_id = ?", task.ID).OrderBy("created_at ASC").All()
 	if err != nil {
 		return c.Status(fiber.StatusOK).JSON([]interface{}{})
 	}
-
-	var authorIDs []int64
-	for _, c := range comments {
-		if c.AuthorID != 0 {
-			authorIDs = append(authorIDs, c.AuthorID)
-		}
-	}
-	usersMap := helpers.BatchGetUsers(db, authorIDs)
 
 	type CommentResponse struct {
 		ID        int64  `json:"id"`
@@ -915,8 +876,8 @@ func GetTaskComments(c fiber.Ctx) error {
 	var response []CommentResponse
 	for _, c := range comments {
 		author := ""
-		if u := usersMap[c.AuthorID]; u != nil {
-			author = u.Username
+		if c.Author != nil {
+			author = c.Author.Name
 		}
 		response = append(response, CommentResponse{
 			ID:        c.ID,
@@ -1272,18 +1233,10 @@ func GetTaskTimeLogs(c fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Task not found"})
 	}
 
-	logs, err := db.TaskTimeLog.Select().Where("task_id = ?", task.ID).OrderBy("created_at DESC").All()
+	logs, err := db.TaskTimeLog.Select().With("user_id").Where("task_id = ?", task.ID).OrderBy("created_at DESC").All()
 	if err != nil {
 		return c.Status(fiber.StatusOK).JSON([]interface{}{})
 	}
-
-	var userIDs []int64
-	for _, l := range logs {
-		if l.UserID != 0 {
-			userIDs = append(userIDs, l.UserID)
-		}
-	}
-	usersMap := helpers.BatchGetUsers(db, userIDs)
 
 	type TimeLogResponse struct {
 		ID        int64  `json:"id"`
@@ -1298,8 +1251,8 @@ func GetTaskTimeLogs(c fiber.Ctx) error {
 	var response []TimeLogResponse
 	for _, l := range logs {
 		username := ""
-		if u := usersMap[l.UserID]; u != nil {
-			username = u.Username
+		if l.User != nil {
+			username = l.User.Username
 		}
 		resp := TimeLogResponse{
 			ID:        l.ID,

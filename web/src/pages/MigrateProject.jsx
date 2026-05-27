@@ -36,7 +36,11 @@ const MigrateProject = () => {
     }
     setSubmitting(true)
     reposAPI.create(Object.assign({}, form)).then(function(data) {
-      navigate('/' + (data.owner || 'ryan') + '/' + data.name)
+      if (data.migrate_status === 'cloning') {
+        navigate('/' + (data.owner || 'ryan') + '/' + data.name + '?migrating=1')
+      } else {
+        navigate('/' + (data.owner || 'ryan') + '/' + data.name)
+      }
     }).catch(function(err) {
       toast({ title: err.message || t('migrateProject.migrateFailed'), status: 'error', duration: 3000 })
     }).finally(function() { setSubmitting(false) })

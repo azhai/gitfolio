@@ -6,7 +6,9 @@ import { useAuth } from '../contexts/AuthContext'
 import { t } from '../i18n/index'
 import { LuSettings as Settings, LuUser as User, LuKey as Key, LuCamera as Camera, LuPalette as Palette } from 'react-icons/lu'
 import { getCodeTheme, setCodeTheme, getAllThemes, getThemeStyle } from '../codeThemes'
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
+import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter'
+import { javascript } from 'react-syntax-highlighter/dist/esm/languages/prism'
+SyntaxHighlighter.registerLanguage('javascript', javascript)
 
 const UserSettings = () => {
   const navigate = useNavigate()
@@ -30,6 +32,20 @@ const UserSettings = () => {
   })
   const [selectedTheme, setSelectedTheme] = useState(getCodeTheme())
   const allThemes = getAllThemes()
+  const [themeStyles, setThemeStyles] = useState({})
+
+  useEffect(function() {
+    var keys = Object.keys(allThemes)
+    Promise.all(keys.map(function(key) {
+      return getThemeStyle(key).then(function(style) {
+        return { key: key, style: style }
+      })
+    })).then(function(results) {
+      var map = {}
+      results.forEach(function(r) { map[r.key] = r.style })
+      setThemeStyles(map)
+    })
+  }, [selectedTheme])
 
   useEffect(() => {
     usersAPI.getMe().then(function(data) {
@@ -304,7 +320,7 @@ const UserSettings = () => {
                       <Box rounded="6px" overflow="hidden" border="1px solid" borderColor="#e5e7eb">
                         <SyntaxHighlighter
                           language="javascript"
-                          style={theme.style}
+                          style={themeStyles[key] || {}}
                           customStyle={{
                             margin: 0,
                             borderRadius: '6px',

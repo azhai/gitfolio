@@ -5,6 +5,7 @@ import { useNavigate, useLocation, Link as RouterLink } from 'react-router-dom'
 import { reposAPI } from '../api/index'
 import { t, timeAgo } from '../i18n/index'
 import { ProjectTabIcons, IconMap } from '../components/Icons'
+import MigrateProgress from './MigrateProgress'
 
 const TABS = [
   { key: 'tree', labelKey: 'project.files', icon: 'code' },
@@ -45,11 +46,13 @@ const ProjectDetail = () => {
       .catch(function() { setRepoInfo(null) })
       .finally(function() { setLoading(false) })
     reposAPI.refreshStats(owner, repo).then(function() {
-      reposAPI.get(owner, repo).then(function(info) {
-        setRepoInfo(info)
-        setStarCount(info.stars_count || 0)
-        setWatchCount(info.watch_count || 0)
-      }).catch(function() {})
+      setTimeout(function() {
+        reposAPI.get(owner, repo).then(function(info) {
+          setRepoInfo(info)
+          setStarCount(info.stars_count || 0)
+          setWatchCount(info.watch_count || 0)
+        }).catch(function() {})
+      }, 2000)
     }).catch(function() {})
   }, [owner, repo])
 
@@ -117,6 +120,11 @@ const ProjectDetail = () => {
   }
 
   var info = repoInfo || {}
+
+  if (info.migrate_status === 'cloning' || info.migrate_status === 'failed') {
+    return <MigrateProgress repoInfo={repoInfo} onStatusChange={setRepoInfo} />
+  }
+
   return (
     <Box>
       <HStack gap="10px" mb="16px" align="center" flexWrap="wrap">

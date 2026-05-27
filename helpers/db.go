@@ -201,3 +201,23 @@ func FindOrCreateContributor(db *models.Database, repoID int64, name, email, ava
 	db.Contributor.Insert().One(c)
 	return c
 }
+
+// BatchGetLabels 批量查询标签，返回 ID -> Label 映射
+func BatchGetLabels(db *models.Database, ids []int64) map[int64]*models.Label {
+	result := make(map[int64]*models.Label)
+	if len(ids) == 0 {
+		return result
+	}
+
+	labels, err := db.Label.Select().Filter(
+		goent.In(db.Label.Field("id"), ids),
+	).All()
+	if err != nil {
+		return result
+	}
+
+	for _, l := range labels {
+		result[l.ID] = l
+	}
+	return result
+}

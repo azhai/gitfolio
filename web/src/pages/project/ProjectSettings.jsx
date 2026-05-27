@@ -123,15 +123,53 @@ const ProjectSettings = () => {
 
   function handleSyncIssues() {
     setSyncing(function(p) { return Object.assign({}, p, { issues: true }) })
-    reposAPI.syncIssues(owner, repo).then(function(data) {
-      var msg = t('projectSettings.issuesSyncStarted')
-      if (data && data.total_synced > 0) {
-        msg = t('projectSettings.issuesSyncResult', { count: data.total_synced })
+    var beforeLogID = 0
+    reposAPI.getSyncLogs(owner, repo).then(function(data) {
+      var logs = data.logs || []
+      if (logs.length > 0) {
+        beforeLogID = logs[0].id || 0
       }
-      toast({ title: msg, status: 'success', duration: 3000 })
+    }).catch(function() {}).then(function() {
+      return reposAPI.syncIssues(owner, repo)
+    }).then(function() {
+      toast({ title: t('projectSettings.syncStarted'), status: 'info', duration: 3000 })
+      var pollCount = 0
+      var pollTimer = setInterval(function() {
+        pollCount++
+        if (pollCount > 100) {
+          clearInterval(pollTimer)
+          setSyncing(function(p) { return Object.assign({}, p, { issues: false }) })
+          return
+        }
+        reposAPI.getSyncLogs(owner, repo).then(function(data) {
+          var logs = data.logs || []
+          setSyncLogs(logs)
+          for (var i = 0; i < logs.length; i++) {
+            var log = logs[i]
+            if (log.id <= beforeLogID) break
+            if (log.status === 'success') {
+              clearInterval(pollTimer)
+              setSyncing(function(p) { return Object.assign({}, p, { issues: false }) })
+              var count = log.items_synced || 0
+              if (count > 0) {
+                toast({ title: t('projectSettings.issuesSyncResult', { count: count }), status: 'success', duration: 3000 })
+              } else {
+                toast({ title: t('projectSettings.issuesSyncStarted'), status: 'success', duration: 3000 })
+              }
+              return
+            } else if (log.status === 'failure') {
+              clearInterval(pollTimer)
+              setSyncing(function(p) { return Object.assign({}, p, { issues: false }) })
+              toast({ title: t('projectSettings.syncFailed'), status: 'error', duration: 3000 })
+              return
+            }
+          }
+        }).catch(function() {})
+      }, 3000)
     }).catch(function(err) {
       toast({ title: err.message || t('projectSettings.syncFailed'), status: 'error', duration: 3000 })
-    }).finally(function() { setSyncing(function(p) { return Object.assign({}, p, { issues: false }) }) })
+      setSyncing(function(p) { return Object.assign({}, p, { issues: false }) })
+    })
   }
 
   function handleSyncPush() {
@@ -392,18 +430,27 @@ const ProjectSettings = () => {
           <VStack spacing="0" align="stretch">
             {syncLogs.map(function(log, idx) {
               var isSuccess = log.status === 'success'
+              var isRunning = log.status === 'running'
+              var statusIcon = isSuccess
+                ? <CheckCircle size={14} color="#16a34a" />
+                : isRunning
+                  ? <Spinner size="xs" color="#3b82f6" />
+                  : <XCircle size={14} color="#dc2626" />
+              var statusText = isSuccess
+                ? t('projectSettings.success')
+                : isRunning
+                  ? t('projectSettings.currentlyRunning')
+                  : t('projectSettings.failed')
               return (
                 <Flex key={log.id || idx} align="center" justify="space-between"
                   py="10px" borderBottom={idx < syncLogs.length - 1 ? '1px solid' : 'none'}
                   borderColor="#f0f0f0">
                   <Flex align="center" gap="8px">
-                    {isSuccess
-                      ? <CheckCircle size={14} color="#16a34a" />
-                      : <XCircle size={14} color="#dc2626" />}
+                    {statusIcon}
                     <Box>
                       <Text fontSize="13px" color="#333" fontWeight="500">
                         {log.sync_type === 'mirror' ? t('projectSettings.mirrorSync') : t('projectSettings.statsRefresh')}
-                        {' '}{isSuccess ? t('projectSettings.success') : t('projectSettings.failed')}
+                        {' '}{statusText}
                       </Text>
                       {log.message && (
                         <Text fontSize="12px" color="#888" noOfLines={1}>{log.message}</Text>

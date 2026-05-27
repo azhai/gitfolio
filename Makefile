@@ -5,29 +5,31 @@ SERVER_PORT = 9000
 ifndef GOAMD64
 	GOAMD64 = v2
 endif
-
-GOBIN    = go
-UPXBIN   = upx
 GOARCH  = $(shell uname -m | tr [A-Z] [a-z])
 ifeq ($(GOARCH), amd64)
 	GOARGS = GOAMD64=$(GOAMD64)
 else
 	GOARGS =
 endif
+
+GOBIN    = go
+UPXBIN   = upx
 RELEASE  = "-s -w"
 GOBUILD  = $(GOARGS) $(GOBIN) build -ldflags=$(RELEASE)
 BINFILES = $(SINGLETON) $(COMMANDS)
 
 
-.PHONY: all one build clean upx upxx dev $(BINFILES)
-
-all: $(BINFILES)
-	@echo "✅ Build success."
+.PHONY: one all build dev clean upx upxx $(BINFILES)
 
 one:
 	@echo "Compile $(SINGLETON) ..."
 	cd web && npx vite build
 	CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 $(GOBUILD) -o ./bin/$(SINGLETON) ./
+
+all: clean one build
+
+build: $(BINFILES)
+	@echo "✅ Build success."
 
 $(SINGLETON):
 	@echo "Compile $@ ..."
@@ -51,7 +53,9 @@ dev:
 	@echo "💡 Tips:"
 	@echo "   - Visit:  http://127.0.0.1:$(SERVER_PORT)"
 	@echo "   - HMR:    Disabled"
-	cd web && npx vite build &
+	@echo "📦 Building frontend..."
+	cd web && npx vite build
+	@echo "🚀 Starting backend..."
 	go run *.go
 
 clean:

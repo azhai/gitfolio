@@ -312,7 +312,15 @@ function highlightLine(line, lang) {
   return escaped
 }
 
-function renderMarkdown(text) {
+function resolveImageUrl(src, owner, repo, filePath, ref) {
+  if (!src) return src
+  if (/^(https?:\/\/|\/\/|data:|\/)/.test(src)) return src
+  var dir = filePath.substring(0, filePath.lastIndexOf('/'))
+  var resolved = dir ? dir + '/' + src : src
+  return getRawUrl(owner, repo, resolved, ref)
+}
+
+function renderMarkdown(text, owner, repo, filePath, ref) {
   var html = text
   html = html.replace(/```(\w*)\n([\s\S]*?)```/g, function(_, lang, code) {
     var l = lang || 'text'
@@ -332,7 +340,19 @@ function renderMarkdown(text) {
   html = html.replace(/^\- (.+)$/gm, '<li style="margin-left:20px;list-style:disc">$1</li>')
   html = html.replace(/^\d+\. (.+)$/gm, '<li style="margin-left:20px;list-style:decimal">$1</li>')
   html = html.replace(/^&gt; (.+)$/gm, '<blockquote style="border-left:3px solid #22c55e;padding-left:12px;color:#666;margin:8px 0">$1</blockquote>')
-  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" style="color:#16a34a;text-decoration:underline">$1</a>')
+  html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, function(_, alt, src) {
+    var url = resolveImageUrl(src, owner, repo, filePath, ref)
+    return '<img src="' + url + '" alt="' + alt + '" style="max-width:100%;border-radius:6px" />'
+  })
+  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, function(_, text, href) {
+    if (/^(https?:\/\/|\/\/|\/|#|mailto:)/.test(href)) {
+      return '<a href="' + href + '" style="color:#16a34a;text-decoration:underline">' + text + '</a>'
+    }
+    var dir = filePath.substring(0, filePath.lastIndexOf('/'))
+    var resolved = dir ? dir + '/' + href : href
+    var url = getRawUrl(owner, repo, resolved, ref)
+    return '<a href="' + url + '" style="color:#16a34a;text-decoration:underline">' + text + '</a>'
+  })
   html = html.replace(/^---$/gm, '<hr style="border:none;border-top:1px solid #e5e7eb;margin:16px 0"/>')
   html = html.replace(/\n\n/g, '</p><p style="margin:8px 0">')
   html = html.replace(/\n/g, '<br/>')
@@ -477,7 +497,7 @@ const FileViewer = ({ filePath: propFilePath, owner: propOwner, repo: propRepo, 
             {t('fileViewer.viewSource')}
           </Button>
         </Flex>
-        <Box dangerouslySetInnerHTML={{ __html: renderMarkdown(content) }} />
+        <Box dangerouslySetInnerHTML={{ __html: renderMarkdown(content, owner, repo, filePath, ref) }} />
       </Box>
     )
   }

@@ -172,6 +172,30 @@ export const reposAPI = {
   syncPull(owner, repo) {
     return api.post('/' + owner + '/' + repo + '/sync/pull')
   },
+  setDefaultBranch(owner, repo, branch) {
+    return api.put('/' + owner + '/' + repo + '/default-branch', { branch: branch })
+  },
+  createTag(owner, repo, name, branch) {
+    return api.post('/' + owner + '/' + repo + '/tags', { name: name, branch: branch })
+  },
+  deleteTag(owner, repo, name) {
+    return api.del('/' + owner + '/' + repo + '/tags/' + name)
+  },
+  deleteCommitRange(owner, repo, fromSHA, toSHA) {
+    return api.post('/' + owner + '/' + repo + '/delete-commits', { from_sha: fromSHA, to_sha: toSHA })
+  },
+  revertCommit(owner, repo, sha) {
+    return api.post('/' + owner + '/' + repo + '/revert', { sha })
+  },
+  resetCommits(owner, repo, count) {
+    return api.post('/' + owner + '/' + repo + '/reset', { count })
+  },
+  abortOperation(owner, repo, type) {
+    return api.post('/' + owner + '/' + repo + '/abort', { type })
+  },
+  getGitStatus(owner, repo) {
+    return api.get('/' + owner + '/' + repo + '/git-status')
+  },
   syncIssues(owner, repo) {
     return api.post('/' + owner + '/' + repo + '/sync/issues')
   },
@@ -180,6 +204,9 @@ export const reposAPI = {
   },
   refreshStats(owner, repo) {
     return api.post('/' + owner + '/' + repo + '/refresh-stats')
+  },
+  retryMigrate(owner, repo) {
+    return api.post('/' + owner + '/' + repo + '/retry-migrate')
   },
   getSyncConfig(owner, repo) {
     return api.get('/' + owner + '/' + repo + '/sync/config')

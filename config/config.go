@@ -1,12 +1,13 @@
 package config
 
 import (
+	"github.com/azhai/goent/drivers"
 	"github.com/azhai/goent/utils"
 )
 
 type Config struct {
 	Server     ServerConfig
-	Database   DatabaseConfig
+	Database   drivers.DatabaseConfig
 	Auth       AuthConfig
 	Admin      AdminConfig
 	Repository RepositoryConfig
@@ -22,16 +23,6 @@ type ServerConfig struct {
 	SiteMark string
 }
 
-type DatabaseConfig struct {
-	Type    string
-	DSN     string
-	LogFile string
-}
-
-func (d DatabaseConfig) GetDSN() string {
-	return d.DSN
-}
-
 type AuthConfig struct {
 	JWTSecret     string
 	SessionSecret string
@@ -45,7 +36,8 @@ type AdminConfig struct {
 }
 
 type RepositoryConfig struct {
-	Root string
+	Root      string
+	LocalRoot string
 }
 
 type ProxyConfig struct {
@@ -68,11 +60,7 @@ func Load(env *utils.Environ) *Config {
 			BaseURL:  env.GetStr("BASE_URL", "http://localhost:3000"),
 			SiteMark: env.GetStr("SITE_MARK", ""),
 		},
-		Database: DatabaseConfig{
-			Type:    env.GetStr("DB_TYPE", "sqlite"),
-			DSN:     env.GetStr("DB_DSN", "gitfolio.db"),
-			LogFile: env.GetStr("LOG_FILE", "stdout"),
-		},
+		Database: drivers.LoadConfig(env, "gitfolio.db"),
 		Auth: AuthConfig{
 			JWTSecret:     env.GetStr("JWT_SECRET", "your-secret-key-change-in-production"),
 			SessionSecret: env.GetStr("SESSION_SECRET", "session-secret-key"),
@@ -83,7 +71,8 @@ func Load(env *utils.Environ) *Config {
 			Password: env.GetStr("ADMIN_PASSWORD", ""),
 		},
 		Repository: RepositoryConfig{
-			Root: env.GetStr("REPO_ROOT", "./repos"),
+			Root:      env.GetStr("REPO_ROOT", "./repos"),
+			LocalRoot: env.GetStr("LOCAL_ROOT", "./repos/local"),
 		},
 		Proxy: ProxyConfig{
 			URL: env.GetStr("PROXY_URL", ""),
@@ -108,6 +97,7 @@ func GetServerMode() string { return cfg.Server.Mode }
 func GetTheme() string      { return cfg.Server.Theme }
 func GetSiteMark() string   { return cfg.Server.SiteMark }
 func GetRepoRoot() string   { return cfg.Repository.Root }
+func GetLocalRoot() string  { return cfg.Repository.LocalRoot }
 func GetJWTSecret() string {
 	return cfg.Auth.JWTSecret
 }

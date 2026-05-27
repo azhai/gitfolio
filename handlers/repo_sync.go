@@ -75,6 +75,10 @@ func SyncIssuesData(c fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Not a remote repository"})
 	}
 
+	if services.IsSyncing(result.Repo.ID) {
+		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "Sync is already running for this repository"})
+	}
+
 	syncSvc := services.NewSyncService(db)
 
 	remoteRepo, err := syncSvc.GetRemoteRepoInfo(result.Repo.ID)
@@ -101,58 +105,84 @@ func SyncIssuesData(c fiber.Ctx) error {
 		_, token = config.GetUserToken()
 	}
 
-	ctx := context.Background()
-	startTime := time.Now()
-
 	syncPoints, _ := db.SyncPoint.Select().Where("repository_id = ? AND sync_type = ?", result.Repo.ID, "mirror").All()
 	var syncPointID int64
 	var lastIssueSyncAt *time.Time
 	var lastPRSyncAt *time.Time
+	var lastIssueNumber, lastPRNumber int
 	if len(syncPoints) > 0 {
 		syncPointID = syncPoints[0].ID
 		lastIssueSyncAt = syncPoints[0].LastIssueSyncAt
 		lastPRSyncAt = syncPoints[0].LastPRSyncAt
+		lastIssueNumber = syncPoints[0].LastIssueNumber
+		lastPRNumber = syncPoints[0].LastPRNumber
 	}
 
-	syncResult, err := syncSvc.SyncRepositoryData(ctx, result.Repo.ID, remoteRepo.Platform, remoteRepo.Owner, remoteRepo.RepoName, token, lastIssueSyncAt, lastPRSyncAt)
-	duration := time.Since(startTime).Milliseconds()
+	repoID := result.Repo.ID
+	platform := remoteRepo.Platform
+	remoteOwner := remoteRepo.Owner
+	remoteRepoName := remoteRepo.RepoName
 
-	if err != nil {
-		if syncPointID > 0 {
-			syncSvc.LogSync(syncPointID, "mirror", "failure", err.Error(), duration, 0, 0, "")
+	var runningLogID int64
+	if syncPointID > 0 {
+		runningLog := &models.SyncLog{
+			SyncPointID: syncPointID,
+			SyncType:    "mirror",
+			Status:      "running",
+			CreatedAt:   time.Now().UTC(),
 		}
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error":   fmt.Sprintf("Failed to sync issues: %v", err),
-			"details": err.Error(),
-		})
+		if err := db.SyncLog.Insert().One(runningLog); err == nil {
+			runningLogID = runningLog.ID
+		}
 	}
 
-	if syncPointID > 0 {
-		syncSvc.LogSync(syncPointID, "mirror", "success", "", duration, syncResult.IssuesInserted+syncResult.IssuesUpdated+syncResult.PRsInserted+syncResult.PRsUpdated, 0, "")
+	if !services.TryLockSync(repoID) {
+		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "Sync is already running for this repository"})
 	}
 
-	now := time.Now().UTC()
-	result.Repo.LastSyncAt = &now
-	db.Repository.Save().One(result.Repo)
+	go func() {
+		defer services.UnlockSync(repoID)
 
-	if syncPointID > 0 {
-		sp := syncPoints[0]
-		sp.LastSyncAt = &now
-		sp.LastIssueSyncAt = &now
-		sp.LastPRSyncAt = &now
-		sp.LastIssueNumber = syncResult.IssuesInserted + syncResult.IssuesUpdated
-		sp.LastPRNumber = syncResult.PRsInserted + syncResult.PRsUpdated
-		db.SyncPoint.Save().One(sp)
-	}
+		ctx := context.Background()
+		startTime := time.Now()
+		syncResult, err := syncSvc.SyncRepositoryData(ctx, repoID, platform, remoteOwner, remoteRepoName, token, lastIssueSyncAt, lastPRSyncAt, lastIssueNumber, lastPRNumber)
+		duration := time.Since(startTime).Milliseconds()
 
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"message":         "Issues synced successfully",
-		"last_sync":       helpers.FormatTime(now),
-		"issues_inserted": syncResult.IssuesInserted,
-		"issues_updated":  syncResult.IssuesUpdated,
-		"prs_inserted":    syncResult.PRsInserted,
-		"prs_updated":     syncResult.PRsUpdated,
-		"total_synced":    syncResult.IssuesInserted + syncResult.IssuesUpdated + syncResult.PRsInserted + syncResult.PRsUpdated,
+		if err != nil {
+			if runningLogID > 0 {
+				syncSvc.UpdateSyncLog(runningLogID, "failure", err.Error(), duration, 0, 0)
+			} else if syncPointID > 0 {
+				syncSvc.LogSync(syncPointID, "mirror", "failure", err.Error(), duration, 0, 0, "")
+			}
+			return
+		}
+
+		totalSynced := syncResult.IssuesInserted + syncResult.IssuesUpdated + syncResult.PRsInserted + syncResult.PRsUpdated
+		if runningLogID > 0 {
+			syncSvc.UpdateSyncLog(runningLogID, "success", "", duration, int64(totalSynced), 0)
+		} else if syncPointID > 0 {
+			syncSvc.LogSync(syncPointID, "mirror", "success", "", duration, totalSynced, 0, "")
+		}
+
+		now := time.Now().UTC()
+		if repo, findErr := db.Repository.Select().Where("id = ?", repoID).One(); findErr == nil {
+			repo.LastSyncAt = &now
+			db.Repository.Save().One(repo)
+		}
+
+		if syncPointID > 0 {
+			sp := syncPoints[0]
+			sp.LastSyncAt = &now
+			sp.LastIssueSyncAt = &now
+			sp.LastPRSyncAt = &now
+			sp.LastIssueNumber = syncResult.IssuesInserted + syncResult.IssuesUpdated
+			sp.LastPRNumber = syncResult.PRsInserted + syncResult.PRsUpdated
+			db.SyncPoint.Save().One(sp)
+		}
+	}()
+
+	return c.Status(fiber.StatusAccepted).JSON(fiber.Map{
+		"message": "Sync started",
 	})
 }
 

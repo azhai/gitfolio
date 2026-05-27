@@ -3,10 +3,34 @@ import { Box, Text, Flex, HStack, Badge, Button, Spinner, Textarea, Input, Selec
 import { useParams, useNavigate } from 'react-router-dom'
 import { snippetsAPI } from '../api/index'
 import { t, timeAgo } from '../i18n/index'
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
+import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { getThemeStyle } from '../codeThemes'
 import { LuFileCode as FileCode, LuGlobe as Globe, LuLock as Lock } from 'react-icons/lu'
 import { useAuth } from '../contexts/AuthContext'
+
+// Register only needed languages to reduce bundle size
+import { jsx, javascript, typescript, python, go, ruby, java, rust, php, c, cpp, bash, markup, css, sql, yaml, json, markdown, lua, docker } from 'react-syntax-highlighter/dist/esm/languages/prism'
+SyntaxHighlighter.registerLanguage('jsx', jsx)
+SyntaxHighlighter.registerLanguage('javascript', javascript)
+SyntaxHighlighter.registerLanguage('typescript', typescript)
+SyntaxHighlighter.registerLanguage('python', python)
+SyntaxHighlighter.registerLanguage('go', go)
+SyntaxHighlighter.registerLanguage('ruby', ruby)
+SyntaxHighlighter.registerLanguage('java', java)
+SyntaxHighlighter.registerLanguage('rust', rust)
+SyntaxHighlighter.registerLanguage('php', php)
+SyntaxHighlighter.registerLanguage('c', c)
+SyntaxHighlighter.registerLanguage('cpp', cpp)
+SyntaxHighlighter.registerLanguage('bash', bash)
+SyntaxHighlighter.registerLanguage('shell', bash)
+SyntaxHighlighter.registerLanguage('html', markup)
+SyntaxHighlighter.registerLanguage('css', css)
+SyntaxHighlighter.registerLanguage('sql', sql)
+SyntaxHighlighter.registerLanguage('yaml', yaml)
+SyntaxHighlighter.registerLanguage('json', json)
+SyntaxHighlighter.registerLanguage('markdown', markdown)
+SyntaxHighlighter.registerLanguage('lua', lua)
+SyntaxHighlighter.registerLanguage('dockerfile', docker)
 
 var LANG_COLORS = {
   Go: '#00ADD8', JavaScript: '#F7DF1E', TypeScript: '#3178C6',
@@ -25,6 +49,11 @@ const SnippetDetail = () => {
   const { isGuest } = useAuth()
   const [snippet, setSnippet] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [themeStyle, setThemeStyle] = useState(null)
+
+  useEffect(() => {
+    getThemeStyle().then(setThemeStyle)
+  }, [])
 
   useEffect(() => {
     snippetsAPI.get(id).then(function(data) {
@@ -110,7 +139,7 @@ const SnippetDetail = () => {
         </Flex>
         <SyntaxHighlighter
           language={(lang || '').toLowerCase()}
-          style={getThemeStyle()}
+          style={themeStyle || {}}
           showLineNumbers={true}
           customStyle={{
             margin: 0,

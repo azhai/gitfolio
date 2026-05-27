@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"sync"
@@ -16,10 +17,14 @@ type SchedulerService struct {
 	mu      sync.Mutex
 	running bool
 	cancel  context.CancelFunc
+	sem     chan struct{}
 }
 
 func NewSchedulerService(db *models.Database) *SchedulerService {
-	return &SchedulerService{db: db}
+	return &SchedulerService{
+		db:  db,
+		sem: make(chan struct{}, 2),
+	}
 }
 
 func (s *SchedulerService) getOwnerName(ownerID int64) string {
@@ -58,6 +63,7 @@ func (s *SchedulerService) Start() {
 	s.running = true
 	s.mu.Unlock()
 
+	CleanupStaleSyncState(s.db)
 	s.ensureSyncPoints()
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -112,6 +118,10 @@ func (s *SchedulerService) tick() {
 }
 
 func (s *SchedulerService) checkMirrorSync(repo *models.Repository, now time.Time) {
+	if IsSyncing(repo.ID) {
+		return
+	}
+
 	syncPoints, err := s.db.SyncPoint.Select().Where("repository_id = ? AND sync_type = ?", repo.ID, "mirror").All()
 	if err != nil || len(syncPoints) == 0 {
 		return
@@ -126,13 +136,9 @@ func (s *SchedulerService) checkMirrorSync(repo *models.Repository, now time.Tim
 	}
 
 	ownerName := s.getOwnerName(repo.OwnerID)
-
-	log.Printf("[Scheduler] Syncing mirror repo %s/%s", ownerName, repo.Name)
-
 	syncSvc := NewSyncService(s.db)
 	remoteRepo, _ := syncSvc.GetRemoteRepoInfo(repo.ID)
 	if remoteRepo == nil {
-		log.Printf("[Scheduler] No remote repo for %s/%s, skipping", ownerName, repo.Name)
 		return
 	}
 
@@ -147,33 +153,60 @@ func (s *SchedulerService) checkMirrorSync(repo *models.Repository, now time.Tim
 		_, token = config.GetUserToken()
 	}
 
-	startTime := time.Now()
-	ctx := context.Background()
-	syncResult, err := syncSvc.SyncRepositoryData(ctx, repo.ID, remoteRepo.Platform, remoteRepo.Owner, remoteRepo.RepoName, token, sp.LastIssueSyncAt, sp.LastPRSyncAt)
-	duration := time.Since(startTime).Milliseconds()
-
-	if err != nil {
-		log.Printf("[Scheduler] Sync failed for %s/%s: %v", ownerName, repo.Name, err)
-		syncSvc.UpdateSyncPoint(sp.ID, false, err.Error())
-		syncSvc.LogSync(sp.ID, "mirror", "failure", err.Error(), duration, 0, 0, "")
-	} else {
-		log.Printf("[Scheduler] Sync succeeded for %s/%s", ownerName, repo.Name)
-		syncSvc.UpdateSyncPoint(sp.ID, true, "")
-		syncSvc.LogSync(sp.ID, "mirror", "success", "", duration, syncResult.IssuesInserted+syncResult.IssuesUpdated+syncResult.PRsInserted+syncResult.PRsUpdated, 0, "")
-
-		sp.LastIssueNumber += syncResult.IssuesInserted + syncResult.IssuesUpdated
-		sp.LastPRNumber += syncResult.PRsInserted + syncResult.PRsUpdated
-		now := time.Now().UTC()
-		sp.LastIssueSyncAt = &now
-		sp.LastPRSyncAt = &now
-		s.db.SyncPoint.Save().One(sp)
-
-		if repo.LocalPath != "" {
-			syncSvc.SyncPullRepository(repo.LocalPath)
-		}
-	}
-
 	s.updateNextSyncAt(sp, now)
+
+	if !TryLockSync(repo.ID) {
+		return
+	}
+	select {
+	case s.sem <- struct{}{}:
+		go func() {
+			defer func() { <-s.sem }()
+			defer UnlockSync(repo.ID)
+
+			log.Printf("[Scheduler] Syncing mirror repo %s/%s", ownerName, repo.Name)
+			startTime := time.Now()
+			ctx := context.Background()
+			syncResult, err := syncSvc.SyncRepositoryData(ctx, repo.ID, remoteRepo.Platform, remoteRepo.Owner, remoteRepo.RepoName, token, sp.LastIssueSyncAt, sp.LastPRSyncAt, sp.LastIssueNumber, sp.LastPRNumber)
+			duration := time.Since(startTime).Milliseconds()
+
+			if err != nil {
+				log.Printf("[Scheduler] Sync failed for %s/%s: %v", ownerName, repo.Name, err)
+				syncSvc.UpdateSyncPoint(sp.ID, false, err.Error())
+				syncSvc.LogSync(sp.ID, "mirror", "failure", err.Error(), duration, 0, 0, "")
+
+				var rlErr *RateLimitError
+				if errors.As(err, &rlErr) {
+					resetTime := rlErr.ResetAt.Add(1 * time.Minute)
+					sp.NextSyncAt = &resetTime
+					s.db.SyncPoint.Save().One(sp)
+					log.Printf("[Scheduler] Rate limited for %s/%s, next sync at %v", ownerName, repo.Name, resetTime.Format(time.RFC3339))
+				}
+			} else {
+				log.Printf("[Scheduler] Sync succeeded for %s/%s", ownerName, repo.Name)
+				syncSvc.UpdateSyncPoint(sp.ID, true, "")
+				syncSvc.LogSync(sp.ID, "mirror", "success", "", duration, syncResult.IssuesInserted+syncResult.IssuesUpdated+syncResult.PRsInserted+syncResult.PRsUpdated, 0, "")
+
+				if syncResult.MaxIssueNumber > sp.LastIssueNumber {
+					sp.LastIssueNumber = syncResult.MaxIssueNumber
+				}
+				if syncResult.MaxPRNumber > sp.LastPRNumber {
+					sp.LastPRNumber = syncResult.MaxPRNumber
+				}
+				now := time.Now().UTC()
+				sp.LastIssueSyncAt = &now
+				sp.LastPRSyncAt = &now
+				s.db.SyncPoint.Save().One(sp)
+
+				if repo.LocalPath != "" {
+					syncSvc.SyncPullRepository(repo.LocalPath)
+				}
+			}
+		}()
+	default:
+		UnlockSync(repo.ID)
+		log.Printf("[Scheduler] Sync queue full, skipping %s/%s", ownerName, repo.Name)
+	}
 }
 
 func (s *SchedulerService) checkStatsRefresh(repo *models.Repository, now time.Time) {

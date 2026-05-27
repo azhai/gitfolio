@@ -96,6 +96,9 @@ type Repository struct {
 	LastSyncAt *time.Time
 	LocalPath  string
 
+	MigrateStatus string `goe:"default:'';index"`
+	MigrateError  string `goe:"default:''"`
+
 	DefaultBranch string `goe:"default:'main'"`
 	LastCommitAt  *time.Time
 }
@@ -176,14 +179,21 @@ type Issue struct {
 	Body   string
 	Number int `goe:"index"`
 
-	RepositoryID int64 `goe:"index"`
+	RepositoryID int64 `goe:"index;m2o"`
 
-	AuthorID int64 `goe:"index"`
+	AuthorID int64 `goe:"index;m2o"`
 
-	AssigneeID *int64
+	AssigneeID *int64 `goe:"m2o"`
 
 	IsClosed bool `goe:"default:false;index"`
 	IsLocked bool `goe:"default:false"`
+
+	// With 预加载挂载字段
+	Repository *Repository   `goe:"-"`
+	Author     *Contributor  `goe:"-"`
+	Assignee   *Contributor  `goe:"-"`
+	Comments   []*Comment    `goe:"o2m,fk:issue_id"`
+	Labels     []*IssueLabel `goe:"o2m,fk:issue_id"`
 }
 
 type Label struct {
@@ -205,11 +215,18 @@ type Comment struct {
 
 	Body string
 
-	IssueID       *int64 `goe:"index"`
-	PullRequestID *int64 `goe:"index"`
-	TaskID        *int64 `goe:"index"`
+	GitHubID      *int64 `goe:"index"`
+	IssueID       *int64 `goe:"index;m2o"`
+	PullRequestID *int64 `goe:"index;m2o"`
+	TaskID        *int64 `goe:"index;m2o"`
 
-	AuthorID int64 `goe:"index"`
+	AuthorID int64 `goe:"index;m2o"`
+
+	// With 预加载挂载字段
+	Issue       *Issue       `goe:"-"`
+	PullRequest *PullRequest `goe:"-"`
+	Task        *Task        `goe:"-"`
+	Author      *Contributor `goe:"-"`
 }
 
 type Release struct {
@@ -254,34 +271,48 @@ type PullRequest struct {
 	Body   string
 	Number int `goe:"index"`
 
-	RepositoryID int64 `goe:"index"`
+	RepositoryID int64 `goe:"index;m2o"`
 
-	AuthorID int64 `goe:"index"`
+	AuthorID int64 `goe:"index;m2o"`
 
 	SourceBranch string
 	TargetBranch string `goe:"default:'main'"`
 
-	AssigneeID *int64
+	AssigneeID *int64 `goe:"m2o"`
 
 	Status string `goe:"default:'open';index"`
 
 	IsMerged bool `goe:"default:false"`
 	IsClosed bool `goe:"default:false"`
 	IsLocked bool `goe:"default:false"`
+
+	// With 预加载挂载字段
+	Repository *Repository  `goe:"-"`
+	Author     *Contributor `goe:"-"`
+	Assignee   *Contributor `goe:"-"`
+	Comments   []*Comment   `goe:"o2m,fk:pull_request_id"`
 }
 
 type IssueLabel struct {
 	ID        int64 `goe:"pk"`
-	IssueID   int64 `goe:"index"`
-	LabelID   int64 `goe:"index"`
+	IssueID   int64 `goe:"index;m2o"`
+	LabelID   int64 `goe:"index;m2o"`
 	CreatedAt time.Time
+
+	// With 预加载挂载字段
+	Issue *Issue `goe:"-"`
+	Label *Label `goe:"-"`
 }
 
 type PullRequestLabel struct {
 	ID            int64 `goe:"pk"`
-	PullRequestID int64 `goe:"index"`
-	LabelID       int64 `goe:"index"`
+	PullRequestID int64 `goe:"index;m2o"`
+	LabelID       int64 `goe:"index;m2o"`
 	CreatedAt     time.Time
+
+	// With 预加载挂载字段
+	PullRequest *PullRequest `goe:"-"`
+	Label       *Label       `goe:"-"`
 }
 
 type Webhook struct {
@@ -326,7 +357,11 @@ type PlatformAccount struct {
 	AvatarURL string
 	APIURL    string
 	IsActive  bool  `goe:"default:true"`
-	UserID    int64 `goe:"index"`
+	UserID    int64 `goe:"index;m2o"`
+
+	// With 预加载挂载字段
+	User   *User        `goe:"-"`
+	Tokens []*SyncToken `goe:"o2m,fk:account_id"`
 }
 
 type SyncToken struct {
@@ -371,23 +406,23 @@ type SyncPoint struct {
 	CreatedAt time.Time
 	UpdatedAt time.Time
 
-	RepositoryID      int64  `goe:"index"`
-	RemoteRepoID      int64  `goe:"index"`
-	SyncType          string `goe:"index"`
-	LastSyncAt        *time.Time
-	LastSuccessAt     *time.Time
-	LastFailureAt     *time.Time
-	FailureCount      int `goe:"default:0"`
-	LastCommitHash    string
-	LastIssueNumber   int
-	LastPRNumber      int
-	LastIssueSyncAt   *time.Time
-	LastPRSyncAt      *time.Time
-	LastETag          string
-	LastModified      string
-	NextSyncAt        *time.Time
-	SyncInterval      int `goe:"default:3600"`
-	LastError         string
+	RepositoryID    int64  `goe:"index"`
+	RemoteRepoID    int64  `goe:"index"`
+	SyncType        string `goe:"index"`
+	LastSyncAt      *time.Time
+	LastSuccessAt   *time.Time
+	LastFailureAt   *time.Time
+	FailureCount    int `goe:"default:0"`
+	LastCommitHash  string
+	LastIssueNumber int
+	LastPRNumber    int
+	LastIssueSyncAt *time.Time
+	LastPRSyncAt    *time.Time
+	LastETag        string
+	LastModified    string
+	NextSyncAt      *time.Time
+	SyncInterval    int `goe:"default:3600"`
+	LastError       string
 	IsPaused        bool `goe:"default:false"`
 }
 
@@ -516,13 +551,19 @@ type Task struct {
 	Priority  int    `goe:"default:3;index"`
 	SortOrder int    `goe:"default:0;index"`
 
-	RepositoryID int64 `goe:"index"`
+	RepositoryID int64 `goe:"index;m2o"`
 
-	InitiatorID int64  `goe:"index"`
-	VerifierID  *int64 `goe:"index"`
-	HandlerID   *int64 `goe:"index"`
+	InitiatorID int64  `goe:"index;m2o"`
+	VerifierID  *int64 `goe:"index;m2o"`
+	HandlerID   *int64 `goe:"index;m2o"`
 
 	LastHandledAt *time.Time
+
+	// With 预加载挂载字段
+	Repository *Repository `goe:"-"`
+	Initiator  *User       `goe:"-"`
+	Verifier   *User       `goe:"-"`
+	Handler    *User       `goe:"-"`
 }
 
 type TaskAttachment struct {
@@ -542,7 +583,7 @@ type TaskSchedule struct {
 	CreatedAt time.Time
 	UpdatedAt time.Time
 
-	TaskID int64 `goe:"index"`
+	TaskID int64 `goe:"index;m2o"`
 
 	ScheduleType string `goe:"index"`
 
@@ -556,9 +597,15 @@ type TaskSchedule struct {
 	ActualStartNoon string
 	ActualEndNoon   string
 
-	User1ID *int64 `goe:"index"`
-	User2ID *int64 `goe:"index"`
-	User3ID *int64 `goe:"index"`
+	User1ID *int64 `goe:"index;m2o"`
+	User2ID *int64 `goe:"index;m2o"`
+	User3ID *int64 `goe:"index;m2o"`
+
+	// With 预加载挂载字段
+	Task  *Task `goe:"-"`
+	User1 *User `goe:"-"`
+	User2 *User `goe:"-"`
+	User3 *User `goe:"-"`
 }
 
 type TaskIssue struct {
@@ -582,27 +629,39 @@ type CommitReference struct {
 type TaskTransition struct {
 	ID         int64 `goe:"pk"`
 	CreatedAt  time.Time
-	TaskID     int64 `goe:"index"`
+	TaskID     int64 `goe:"index;m2o"`
 	FromStatus string
 	ToStatus   string
-	UserID     int64 `goe:"index"`
+	UserID     int64 `goe:"index;m2o"`
 	Comment    string
+
+	// With 预加载挂载字段
+	Task *Task `goe:"-"`
+	User *User `goe:"-"`
 }
 
 type TaskPullRequest struct {
 	ID            int64 `goe:"pk"`
 	CreatedAt     time.Time
-	TaskID        int64 `goe:"index"`
-	PullRequestID int64 `goe:"index"`
+	TaskID        int64 `goe:"index;m2o"`
+	PullRequestID int64 `goe:"index;m2o"`
+
+	// With 预加载挂载字段
+	Task        *Task        `goe:"-"`
+	PullRequest *PullRequest `goe:"-"`
 }
 
 type TaskTimeLog struct {
 	ID        int64 `goe:"pk"`
 	CreatedAt time.Time
-	TaskID    int64 `goe:"index"`
-	UserID    int64 `goe:"index"`
+	TaskID    int64 `goe:"index;m2o"`
+	UserID    int64 `goe:"index;m2o"`
 	StartTime time.Time
 	EndTime   *time.Time
 	Duration  int64
 	Note      string
+
+	// With 预加载挂载字段
+	Task *Task `goe:"-"`
+	User *User `goe:"-"`
 }

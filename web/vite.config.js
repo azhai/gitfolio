@@ -15,12 +15,14 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     assetsDir: 'assets',
+    chunkSizeWarningLimit: 550,
     rollupOptions: {
       output: {
         manualChunks: {
-          'chakra-vendor': ['@chakra-ui/react', '@chakra-ui/icons', '@emotion/react', '@emotion/styled', 'framer-motion'],
           'react-vendor': ['react', 'react-dom', 'react-router-dom'],
-          'editor': ['react-syntax-highlighter', 'date-fns', 'react-datepicker'],
+          'chakra-core': ['@chakra-ui/react', '@emotion/react', '@emotion/styled', 'framer-motion'],
+          'editor': ['react-syntax-highlighter'],
+          'datepicker': ['react-datepicker', 'date-fns'],
           'icons': ['react-icons'],
         },
       },
