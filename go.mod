@@ -3,7 +3,7 @@ module github.com/azhai/gitfolio
 go 1.26.0
 
 require (
-	github.com/azhai/goent v0.9.2
+	github.com/azhai/goent v0.9.3-patch.1
 	github.com/gofiber/fiber/v3 v3.3.0
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/go-github/v84 v84.0.0

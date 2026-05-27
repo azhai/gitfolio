@@ -22,9 +22,14 @@ BINFILES = $(SINGLETON) $(COMMANDS)
 .PHONY: one all build dev clean upx upxx $(BINFILES)
 
 one:
-	@echo "Compile $(SINGLETON) ..."
+	@echo "Compile one ($(GOOS)/$(GOARCH)) ..."
 	cd web && npx vite build
-	CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 $(GOBUILD) -o ./bin/$(SINGLETON) ./
+ifneq ($(SINGLETON),)
+		CGO_ENABLED=1 $(GOBUILD) -o ./bin/$(SINGLETON) ./
+endif
+	for one in $(COMMANDS); do \
+		CGO_ENABLED=1 $(GOBUILD) -o ./bin/$$one ./cmd/$$one; \
+	done
 
 all: clean one build
 
