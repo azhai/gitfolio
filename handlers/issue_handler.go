@@ -3,7 +3,6 @@ package handlers
 import (
 	"strconv"
 
-	"github.com/azhai/gitfolio/config"
 	"github.com/azhai/gitfolio/helpers"
 	"github.com/azhai/gitfolio/middleware"
 	"github.com/azhai/gitfolio/models"
@@ -198,7 +197,7 @@ func GetIssue(c fiber.Ctx) error {
 
 func ListIssues(c fiber.Ctx) error {
 	pagination := helpers.GetPagination(c)
-	state := c.Query("state", config.IssueStateOpen)
+	state := c.Query("state", "all")
 	labelFilter := c.Query("label", "")
 
 	result, err := helpers.GetOwnerAndRepoWithPrivateAccessFromParams(c)
@@ -218,6 +217,7 @@ func ListIssues(c fiber.Ctx) error {
 
 	issues, err := db.Issue.Select().Filter(conds...).
 		With("author_id", "assignee_id", "labels").
+		OrderBy("number DESC").
 		Skip(helpers.GetOffset(pagination.Page, pagination.PerPage)).
 		Take(pagination.PerPage).All()
 	if err != nil {

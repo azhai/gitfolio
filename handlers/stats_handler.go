@@ -17,7 +17,7 @@ type StatsResponse struct {
 	OpenIssues   int    `json:"open_issues"`
 	ClosedIssues int    `json:"closed_issues"`
 	OpenPRs      int    `json:"open_prs"`
-	MergedPRs    int    `json:"closed_prs"`
+	ClosedPRs    int    `json:"closed_prs"`
 	TotalStars   int    `json:"total_stars"`
 	TotalForks   int    `json:"total_forks"`
 	Theme        string `json:"theme"`
@@ -53,7 +53,7 @@ func GetStats(c fiber.Ctx) error {
 		OpenIssues:   int(openIssues),
 		ClosedIssues: int(closedIssues),
 		OpenPRs:      int(openPRs),
-		MergedPRs:    int(closedPRs),
+		ClosedPRs:    int(closedPRs),
 		TotalStars:   int(totalStars),
 		TotalForks:   int(totalForks),
 		Theme:        config.GetTheme(),

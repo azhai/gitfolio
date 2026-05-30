@@ -38,6 +38,7 @@ const (
 const (
 	PRStatusOpen   = "open"
 	PRStatusClosed = "closed"
+	PRStatusAll    = "all"
 )
 
 // 同步方向

@@ -48,7 +48,6 @@ func (s *StatsService) UpdateRepositoryStats(repoID int64, owner, name string) e
 	stats.ClosedIssuesCount = int(closedIssues)
 	stats.OpenPRsCount = int(openPRs)
 	stats.ClosedPRsCount = int(closedPRs)
-	stats.MergedPRsCount = int(closedPRs)
 	stats.ContributorsCount = int(contributors)
 	stats.CommitsCount = commitsCount
 	stats.BranchesCount = branchesCount
@@ -78,7 +77,6 @@ func (s *StatsService) getOrCreateStats(repoID int64) (*models.RepositoryStats, 
 		ClosedIssuesCount: 0,
 		OpenPRsCount:      0,
 		ClosedPRsCount:    0,
-		MergedPRsCount:    0,
 	}
 
 	if err := s.db.RepositoryStats.Insert().One(stats); err != nil {

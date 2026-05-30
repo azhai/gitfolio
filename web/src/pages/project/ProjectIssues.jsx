@@ -79,7 +79,7 @@ const ProjectIssues = () => {
   const [issues, setIssues] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState('open')
+  const [statusFilter, setStatusFilter] = useState('all')
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState(0)
   const [openCount, setOpenCount] = useState(0)

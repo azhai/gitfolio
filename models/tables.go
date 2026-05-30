@@ -147,7 +147,6 @@ type RepositoryStats struct {
 	ClosedIssuesCount int `goe:"default:0"`
 	OpenPRsCount      int `goe:"default:0"`
 	ClosedPRsCount    int `goe:"default:0"`
-	MergedPRsCount    int `goe:"default:0"`
 }
 
 type Owner struct {

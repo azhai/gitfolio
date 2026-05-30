@@ -4,7 +4,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/azhai/gitfolio/config"
 	"github.com/azhai/gitfolio/helpers"
 	"github.com/azhai/gitfolio/middleware"
 	"github.com/azhai/gitfolio/models"
@@ -209,7 +208,7 @@ func GetPullRequest(c fiber.Ctx) error {
 
 func ListPullRequests(c fiber.Ctx) error {
 	pagination := helpers.GetPagination(c)
-	state := c.Query("state", config.PRStatusOpen)
+	state := c.Query("state", "all")
 
 	result, err := helpers.GetOwnerAndRepoWithPrivateAccessFromParams(c)
 	if err != nil {
@@ -227,6 +226,7 @@ func ListPullRequests(c fiber.Ctx) error {
 
 	mrs, err := db.PullRequest.Select().Filter(conds...).
 		With("author_id", "assignee_id").
+		OrderBy("number DESC").
 		Skip(helpers.GetOffset(pagination.Page, pagination.PerPage)).
 		Take(pagination.PerPage).All()
 	if err != nil {

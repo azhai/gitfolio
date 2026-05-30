@@ -996,9 +996,8 @@ func (t *RepositoryStats) UpdatePairs() []goent.Pair {
 		{Key: "contributors_count", Value: t.ContributorsCount},
 		{Key: "open_issues_count", Value: t.OpenIssuesCount},
 		{Key: "closed_issues_count", Value: t.ClosedIssuesCount},
-		{Key: "open_p_rs_count", Value: t.OpenPRsCount},
-		{Key: "closed_p_rs_count", Value: t.ClosedPRsCount},
-		{Key: "merged_p_rs_count", Value: t.MergedPRsCount},
+		{Key: "open_prs_count", Value: t.OpenPRsCount},
+		{Key: "closed_prs_count", Value: t.ClosedPRsCount},
 	}
 }
 
@@ -1021,7 +1020,6 @@ func (t *RepositoryStats) ScanDest() []any {
 		&t.ClosedIssuesCount,
 		&t.OpenPRsCount,
 		&t.ClosedPRsCount,
-		&t.MergedPRsCount,
 	}
 }
 

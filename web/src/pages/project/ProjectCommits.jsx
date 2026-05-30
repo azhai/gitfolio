@@ -710,7 +710,7 @@ var ProjectCommits = function() {
 
         {tags.length > 0 && (
           <HStack gap="4px" flexWrap="wrap">
-            {tags.map(function(tag) {
+            {tags.slice(0, 5).map(function(tag) {
               return (
                 <HStack key={tag} spacing="2px" bg="#f5f3ff" px="6px" py="2px" rounded="4px" fontSize="11px">
                   <Text color="#7c3aed" fontWeight="500">{tag}</Text>
@@ -721,6 +721,9 @@ var ProjectCommits = function() {
                 </HStack>
               )
             })}
+            {tags.length > 5 && (
+              <Text fontSize="11px" color="#999">+{tags.length - 5}</Text>
+            )}
           </HStack>
         )}
       </Flex>

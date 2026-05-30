@@ -29,33 +29,24 @@ const ProjectTags = () => {
         🏷️ {t('tag.title')} <Text as="span" color="#888" fontWeight="400">({tags.length})</Text>
       </Text>
 
-      <VStack spacing="0" align="stretch" border="1px solid" borderColor="#e2e2e2" rounded="10px" overflow="hidden">
+      <Box display="grid" gridTemplateColumns="repeat(5, 1fr)" gap="8px">
         {tags.map(function(tag, idx) {
           var name = typeof tag === 'string' ? tag : (tag.name || tag.tag || '')
           return (
-            <Flex
-              key={name || idx}
-              align="center" justify="space-between"
-              px="16px" py="12px"
-              borderBottom={idx < tags.length - 1 ? '1px solid' : 'none'}
-              borderColor="#f0f0f0"
-              _hover={{ bg: '#f9fafb' }}
-              transition="background-color 0.15s"
-            >
-              <HStack gap="10px">
-                <Text fontSize="14px">🏷️</Text>
-                <RouterLink to={'/' + owner + '/' + repo + '/tree/' + name}
-                  style={{ textDecoration: 'none' }}>
-                  <Text fontSize="13.5px" fontWeight="500" color="#7c3aed" fontFamily="monospace"
-                    _hover={{ textDecoration: 'underline' }}>
-                    {name}
-                  </Text>
-                </RouterLink>
-              </HStack>
-            </Flex>
+            <RouterLink key={name || idx} to={'/' + owner + '/' + repo + '/tree/' + name}
+              style={{ textDecoration: 'none' }}>
+              <Flex align="center" gap="6px" px="10px" py="8px" bg="#f5f3ff" rounded="6px"
+                _hover={{ bg: '#ede9fe' }} transition="background-color 0.15s">
+                <Text fontSize="13px">🏷️</Text>
+                <Text fontSize="13px" fontWeight="500" color="#7c3aed" fontFamily="monospace"
+                  overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">
+                  {name}
+                </Text>
+              </Flex>
+            </RouterLink>
           )
         })}
-      </VStack>
+      </Box>
 
       {!loading && tags.length === 0 && (
         <Box textAlign="center" py="50px" color="#aaa">

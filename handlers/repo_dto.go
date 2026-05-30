@@ -54,7 +54,6 @@ type RepositoryResponse struct {
 	ClosedIssuesCount int    `json:"closed_issues_count"`
 	OpenPRsCount      int    `json:"open_prs_count"`
 	ClosedPRsCount    int    `json:"closed_prs_count"`
-	MergedPRsCount    int    `json:"merged_prs_count"`
 	IsStarred         bool   `json:"is_starred"`
 	IsWatched         bool   `json:"is_watched"`
 	MigrateStatus     string `json:"migrate_status"`
@@ -126,7 +125,6 @@ func ToRepositoryResponse(repo *models.Repository, owner *models.User, group *mo
 		response.ClosedIssuesCount = stats.ClosedIssuesCount
 		response.OpenPRsCount = stats.OpenPRsCount
 		response.ClosedPRsCount = stats.ClosedPRsCount
-		response.MergedPRsCount = stats.MergedPRsCount
 		if response.LastCommitAt == "" && stats.LastCommitAt != nil {
 			response.LastCommitAt = stats.LastCommitAt.Format("2006-01-02T15:04:05Z07:00")
 		}

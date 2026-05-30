@@ -18,6 +18,7 @@ vendor/
 
 # Go workspace file
 go.work
+optimized-rules.txt
 
 # Database
 *.db

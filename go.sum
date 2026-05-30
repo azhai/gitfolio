@@ -1,7 +1,7 @@
 github.com/andybalholm/brotli v1.2.1 h1:R+f5xP285VArJDRgowrfb9DqL18yVK0gKAW/F+eTWro=
 github.com/andybalholm/brotli v1.2.1/go.mod h1:rzTDkvFWvIrjDXZHkuS16NPggd91W3kUSvPlQ1pLaKY=
-github.com/azhai/goent v0.9.3 h1:FVRecX3V3EX6OFzu3dLuVxnPW9D3eMkgEyRkmjdHZww=
-github.com/azhai/goent v0.9.3/go.mod h1:buQ4UEuKhX+cW0L+dOGqoe2x8srKtJ1nFtw6uA/hw7o=
+github.com/azhai/goent v0.9.4 h1:Dv9qp/Ktl7IZGbXh4mBhxoIu5JCt6HhCJRxFF8VbOCs=
+github.com/azhai/goent v0.9.4/go.mod h1:Gb2LDKaQP0o0El9wDzpyzLzfTsRO4SOgBvLYOUqJ9wI=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=

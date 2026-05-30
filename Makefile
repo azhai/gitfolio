@@ -61,7 +61,7 @@ dev:
 	@echo "📦 Building frontend..."
 	cd web && npx vite build
 	@echo "🚀 Starting backend..."
-	go run *.go
+	go run ./
 
 clean:
 	rm -rf web/dist $(BINFILES:%=./bin/%)
