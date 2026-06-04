@@ -10,6 +10,31 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+var publicPrefixes = []string{
+	config.APIBaseURL + "/health",
+	config.APIBaseURL + "/auth/login",
+	config.APIBaseURL + "/auth/logout",
+	config.APIBaseURL + "/stats",
+	config.APIBaseURL + "/recent-issues",
+	config.APIBaseURL + "/recent-tasks",
+	config.APIBaseURL + "/repos/github-info",
+}
+
+func RequireAuth() fiber.Handler {
+	return func(c fiber.Ctx) error {
+		path := c.Path()
+		for _, prefix := range publicPrefixes {
+			if strings.HasPrefix(path, prefix) {
+				return c.Next()
+			}
+		}
+		if c.Method() == fiber.MethodGet {
+			return OptionalAuth()(c)
+		}
+		return AuthMiddleware()(c)
+	}
+}
+
 type Claims struct {
 	UserID   int64  `json:"user_id"`
 	Username string `json:"username"`

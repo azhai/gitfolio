@@ -233,6 +233,126 @@ func (s *GitService) getFilePatch(repoPath, filename, targetBranch, sourceBranch
 	return string(output)
 }
 
+// DiffLine 单行差异信息
+type DiffLine struct {
+	Type      string `json:"type"`
+	Content   string `json:"content"`
+	OldLineNo int    `json:"old_line_no"`
+	NewLineNo int    `json:"new_line_no"`
+}
+
+// DiffResult 文件差异结果
+type DiffResult struct {
+	FilePath  string     `json:"file_path"`
+	Lines     []DiffLine `json:"lines"`
+	IsBinary  bool       `json:"is_binary"`
+	Additions int        `json:"additions"`
+	Deletions int        `json:"deletions"`
+}
+
+// GetFileDiff 获取指定文件的差异，staged=true时获取暂存区差异
+func (s *GitService) GetFileDiff(owner, name, filePath string, staged bool) (*DiffResult, error) {
+	repoPath := s.getRepoPath(owner, name)
+
+	binCmd := exec.Command("git", "-C", repoPath, "diff", "--numstat")
+	if staged {
+		binCmd.Args = append(binCmd.Args, "--cached")
+	}
+	binCmd.Args = append(binCmd.Args, "--", filePath)
+	binOut, _ := binCmd.Output()
+	if strings.Contains(string(binOut), "-\t-\t") {
+		return &DiffResult{FilePath: filePath, IsBinary: true}, nil
+	}
+
+	var cmd *exec.Cmd
+	if staged {
+		cmd = exec.Command("git", "-C", repoPath, "diff", "--cached", "-U3", "--", filePath)
+	} else {
+		cmd = exec.Command("git", "-C", repoPath, "diff", "-U3", "--", filePath)
+	}
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get diff: %w", err)
+	}
+
+	result := &DiffResult{
+		FilePath: filePath,
+		Lines:    make([]DiffLine, 0),
+	}
+	result.Lines, result.Additions, result.Deletions = parseUnifiedDiff(string(output))
+	return result, nil
+}
+
+// GetCommitFileDiff 获取指定提交中某文件的差异
+func (s *GitService) GetCommitFileDiff(owner, name, sha, filePath string) (*DiffResult, error) {
+	repoPath := s.getRepoPath(owner, name)
+
+	cmd := exec.Command("git", "-C", repoPath, "diff", sha+"~1", sha, "-U3", "--", filePath)
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get commit diff: %w", err)
+	}
+
+	result := &DiffResult{
+		FilePath: filePath,
+		Lines:    make([]DiffLine, 0),
+	}
+	result.Lines, result.Additions, result.Deletions = parseUnifiedDiff(string(output))
+	return result, nil
+}
+
+// parseUnifiedDiff 解析统一diff格式输出
+func parseUnifiedDiff(diffText string) ([]DiffLine, int, int) {
+	lines := strings.Split(diffText, "\n")
+	result := make([]DiffLine, 0, len(lines))
+	additions := 0
+	deletions := 0
+	oldLine := 0
+	newLine := 0
+
+	for _, line := range lines {
+		if line == "" {
+			continue
+		}
+		if strings.HasPrefix(line, "diff ") || strings.HasPrefix(line, "index ") || strings.HasPrefix(line, "--- ") || strings.HasPrefix(line, "+++ ") {
+			continue
+		}
+		if strings.HasPrefix(line, "@@ ") {
+			parts := strings.Split(line, " ")
+			if len(parts) >= 3 {
+				oldRange := strings.TrimPrefix(parts[1], "-")
+				newRange := strings.TrimPrefix(parts[2], "+")
+				if oParts := strings.Split(oldRange, ","); len(oParts) > 0 {
+					fmt.Sscanf(oParts[0], "%d", &oldLine)
+				}
+				if nParts := strings.Split(newRange, ","); len(nParts) > 0 {
+					fmt.Sscanf(nParts[0], "%d", &newLine)
+				}
+			}
+			result = append(result, DiffLine{Type: "hunk", Content: line, OldLineNo: -1, NewLineNo: -1})
+			continue
+		}
+		if strings.HasPrefix(line, "+") {
+			result = append(result, DiffLine{Type: "added", Content: line[1:], OldLineNo: -1, NewLineNo: newLine})
+			newLine++
+			additions++
+		} else if strings.HasPrefix(line, "-") {
+			result = append(result, DiffLine{Type: "deleted", Content: line[1:], OldLineNo: oldLine, NewLineNo: -1})
+			oldLine++
+			deletions++
+		} else {
+			content := line
+			if strings.HasPrefix(line, " ") {
+				content = line[1:]
+			}
+			result = append(result, DiffLine{Type: "context", Content: content, OldLineNo: oldLine, NewLineNo: newLine})
+			oldLine++
+			newLine++
+		}
+	}
+	return result, additions, deletions
+}
+
 // getLastCommitInfo 获取指定路径下最后一条提交的消息和时间
 func (s *GitService) getLastCommitInfo(repoPath, ref, path string) (string, string) {
 	cmd := exec.Command("git", "-C", repoPath, "log", "-1", ref, "--format=%s|%ci", "--", path)

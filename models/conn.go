@@ -11,7 +11,7 @@ import (
 
 var (
 	db     *Database
-	initDb = false
+	initDb = true
 )
 
 type Database struct {

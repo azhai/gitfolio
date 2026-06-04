@@ -26,6 +26,9 @@ async function request(url, opts = {}) {
   })
   if (res.status === 401) {
     setToken(null)
+    var current = window.location.pathname + window.location.search + window.location.hash
+    if (current === '/login' || current === '/') current = '/home'
+    window.location.href = '/login?redirect=' + encodeURIComponent(current)
     throw new Error('Unauthorized')
   }
   if (!res.ok) {
@@ -195,6 +198,48 @@ export const reposAPI = {
   },
   getGitStatus(owner, repo) {
     return api.get('/' + owner + '/' + repo + '/git-status')
+  },
+  stageFiles(owner, repo, files) {
+    return api.post('/' + owner + '/' + repo + '/stage', { files: files })
+  },
+  unstageFiles(owner, repo, files) {
+    return api.post('/' + owner + '/' + repo + '/unstage', { files: files })
+  },
+  commitChanges(owner, repo, message) {
+    return api.post('/' + owner + '/' + repo + '/commit', { message: message })
+  },
+  diff(owner, repo, filePath, staged) {
+    return api.get('/' + owner + '/' + repo + '/diff', { path: filePath, staged: staged ? 'true' : 'false' })
+  },
+  commitFileDiff(owner, repo, sha, filePath) {
+    return api.get('/' + owner + '/' + repo + '/commit-diff', { sha: sha, path: filePath })
+  },
+  stagePatch(owner, repo, filePath, lineIndices) {
+    return api.post('/' + owner + '/' + repo + '/stage-patch', { path: filePath, line_indices: lineIndices })
+  },
+  discard(owner, repo, filePath, isUntracked) {
+    return api.post('/' + owner + '/' + repo + '/discard', { path: filePath, is_untracked: isUntracked })
+  },
+  checkout(owner, repo, branch) {
+    return api.post('/' + owner + '/' + repo + '/checkout', { branch: branch })
+  },
+  rebaseInteractive(owner, repo, base, todos) {
+    return api.post('/' + owner + '/' + repo + '/rebase-interactive', { base: base, todos: todos })
+  },
+  stashList(owner, repo) {
+    return api.get('/' + owner + '/' + repo + '/stash-list')
+  },
+  stashSave(owner, repo, message) {
+    return api.post('/' + owner + '/' + repo + '/stash', { message: message || '' })
+  },
+  stashPop(owner, repo, index) {
+    return api.post('/' + owner + '/' + repo + '/stash-pop', { index: index || 0 })
+  },
+  stashApply(owner, repo, index) {
+    return api.post('/' + owner + '/' + repo + '/stash-apply', { index: index || 0 })
+  },
+  stashDrop(owner, repo, index) {
+    return api.post('/' + owner + '/' + repo + '/stash-drop', { index: index || 0 })
   },
   syncIssues(owner, repo) {
     return api.post('/' + owner + '/' + repo + '/sync/issues')
@@ -449,13 +494,13 @@ export const usersAPI = {
 
 export const adminAPI = {
   listSyncPoints() {
-    return api.get('/admin/sync-points')
+    return api.get('/system/admin/sync-points')
   },
   updateSyncPoint(id, data) {
-    return api.put('/admin/sync-points/' + id, data)
+    return api.put('/system/admin/sync-points/' + id, data)
   },
   listSyncLogs(limit) {
-    return api.get('/admin/sync-logs', { limit: limit || 50 })
+    return api.get('/system/admin/sync-logs', { limit: limit || 50 })
   },
 }
 

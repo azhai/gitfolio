@@ -9,7 +9,7 @@ import LanguageSwitcher from './LanguageSwitcher'
 import { t } from '../i18n'
 
 var NAV_ITEMS = [
-  { label: 'nav.dashboard', path: '/', icon: 'home' },
+  { label: 'nav.dashboard', path: '/home', icon: 'home' },
   { label: 'nav.projects', path: '/projects', icon: 'project' },
   { label: 'nav.groups', path: '/groups', icon: 'group' },
   { label: 'nav.activity', path: '/activity', icon: 'activity' },
@@ -44,7 +44,7 @@ const TopNavbar = () => {
   return (
     <Box as="nav" position="fixed" top={0} left={0} right={0} h="52px" bg="white" borderBottom="1px solid" borderColor="#e2e2e2" zIndex={1000}>
       <Flex h="full" alignItems="center" px={5} maxW="1400px" mx="auto">
-        <RouterLink to="/">
+        <RouterLink to="/home">
           <Flex align="center" gap="8px" mr={8}>
             <Rocket size={22} color="#16a34a" />
             <Text fontSize="18px" fontWeight="bold" color="#16a34a">GitFolio</Text>

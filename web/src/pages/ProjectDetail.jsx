@@ -33,6 +33,7 @@ const ProjectDetail = () => {
   const [starCount, setStarCount] = useState(0)
   const [watchCount, setWatchCount] = useState(0)
   const [actionLoading, setActionLoading] = useState(false)
+  const [refreshKey, setRefreshKey] = useState(0)
 
   var fetchRepo = useCallback(function() {
     reposAPI.get(owner, repo)
@@ -100,8 +101,12 @@ const ProjectDetail = () => {
 
   function onTabChange(idx) {
     var tab = TABS[idx]
-    if (tab.key === 'tree') navigate(basePath)
-    else navigate(basePath + '/' + tab.key)
+    var targetPath = tab.key === 'tree' ? basePath : basePath + '/' + tab.key
+    if (location.pathname === targetPath) {
+      setRefreshKey(function(k) { return k + 1 })
+    } else {
+      navigate(targetPath)
+    }
   }
 
   var StarIcon = IconMap.star
@@ -206,12 +211,13 @@ const ProjectDetail = () => {
       </HStack>
 
       <Flex align="center" justify="space-between" borderBottom="1px solid" borderColor="#e5e7eb" mb="20px">
-        <Tabs index={getActiveTab()} onChange={onTabChange} colorScheme="green">
+        <Tabs index={getActiveTab()} onChange={onTabChange} isManual colorScheme="green">
           <TabList borderColor="transparent" pb={0}>
-            {TABS.map(function(tab) {
+            {TABS.map(function(tab, idx) {
               return (
                 <Tab key={tab.key} fontSize="13.5px" fontWeight="500" px="18px" pb="10px"
-                  _selected={{ color: '#16a34a', borderColor: '#16a34a' }}>
+                  _selected={{ color: '#16a34a', borderColor: '#16a34a' }}
+                  onClick={function() { onTabChange(idx) }}>
                   <HStack gap="5px"><TabIcon name={tab.icon} /><Text>{t(tab.labelKey)}</Text></HStack>
                 </Tab>
               )
@@ -220,7 +226,7 @@ const ProjectDetail = () => {
         </Tabs>
       </Flex>
 
-      <Outlet key={location.pathname} />
+      <Outlet key={location.pathname + '-' + refreshKey} />
     </Box>
   )
 }

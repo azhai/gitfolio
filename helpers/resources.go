@@ -144,7 +144,11 @@ func GetOwnerAndRepoWithPrivateAccess(c fiber.Ctx, ownerName, repoName string) (
 	}
 
 	if result.Repo.ProjectType == "local" {
+		userID := middleware.GetCurrentUserID(c)
 		role := middleware.GetCurrentUserRole(c)
+		if userID == 0 {
+			return nil, JSONError(c, HTTPStatusForbidden, "Login required to access this project")
+		}
 		if role == "guest" {
 			return nil, JSONError(c, HTTPStatusForbidden, "Guest users cannot access this project")
 		}

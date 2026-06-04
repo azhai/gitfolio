@@ -19,11 +19,10 @@ GOBUILD  = $(GOARGS) $(GOBIN) build -ldflags=$(RELEASE)
 BINFILES = $(SINGLETON) $(COMMANDS)
 
 
-.PHONY: one all build dev clean upx upxx $(BINFILES)
+.PHONY: one all front build dev clean upx upxx $(BINFILES)
 
-one:
+one: front
 	@echo "Compile one ($(GOOS)/$(GOARCH)) ..."
-	cd web && npx vite build
 ifneq ($(SINGLETON),)
 		CGO_ENABLED=1 $(GOBUILD) -o ./bin/$(SINGLETON) ./
 endif
@@ -33,13 +32,18 @@ endif
 
 all: clean one build
 
+front:
+	@echo "Compile frontend ..."
+	cd web && npx vite build --minify --mode production
+	cp web/landing.html web/dist/landing.html
+	cp web/screenshot-1.png web/dist/screenshot-1.png
+
 build: $(BINFILES)
 	@echo "✅ Build success."
 
-$(SINGLETON):
+$(SINGLETON): front
 	@echo "Compile $@ ..."
-	cd web && npx vite build --minify --mode production
-	CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 $(GOBUILD) -o ./bin/$@.darwin-arm64 ./
+	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 $(GOBUILD) -o ./bin/$@.darwin-arm64 ./
 	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 $(GOBUILD) -o ./bin/$@.darwin-amd64 ./
 	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(GOBUILD) -o ./bin/$@.linux-arm64 ./
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GOBUILD) -o ./bin/$@.linux-amd64 ./
@@ -47,7 +51,7 @@ $(SINGLETON):
 
 $(COMMANDS):
 	@echo "Compile $@ ..."
-	CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 $(GOBUILD) -o ./bin/$@.darwin-arm64 ./cmd/$@
+	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 $(GOBUILD) -o ./bin/$@.darwin-arm64 ./cmd/$@
 	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 $(GOBUILD) -o ./bin/$@.darwin-amd64 ./cmd/$@
 	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(GOBUILD) -o ./bin/$@.linux-arm64 ./cmd/$@
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GOBUILD) -o ./bin/$@.linux-amd64 ./cmd/$@
@@ -60,6 +64,8 @@ dev:
 	@echo "   - HMR:    Disabled"
 	@echo "📦 Building frontend..."
 	cd web && npx vite build
+	cp web/landing.html web/dist/landing.html
+	cp web/screenshot-1.png web/dist/screenshot-1.png
 	@echo "🚀 Starting backend..."
 	go run ./
 

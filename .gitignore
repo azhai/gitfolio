@@ -35,6 +35,7 @@ repos/
 uploads/
 
 # IDE
+.arts/
 .idea/
 .vscode/
 *.swp

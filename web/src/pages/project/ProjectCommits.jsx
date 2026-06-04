@@ -2,6 +2,13 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { Box, Text, Flex, HStack, Spinner, Button, Input, Select, Modal, ModalOverlay, ModalContent, ModalHeader, ModalBody, ModalCloseButton, Menu, MenuButton, MenuList, MenuItem, useDisclosure, useToast } from '@chakra-ui/react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { reposAPI } from '../../api/index'
+import { useAuth } from '../../contexts/AuthContext'
+import { GitWorkflowProvider } from '../../contexts/GitWorkflowContext'
+import ConflictBanner from '../../components/gitworkflow/conflict_banner'
+
+import StashPanel from '../../components/gitworkflow/stash_panel'
+import CommitActionMenu from '../../components/gitworkflow/commit_action_menu'
+import RebaseEditor from '../../components/gitworkflow/rebase_editor'
 import { t, timeAgo } from '../../i18n/index'
 
 function shortHash(hash) {
@@ -296,6 +303,7 @@ var ProjectCommits = function() {
   var repo = params.repo
   var navigate = useNavigate()
   var toast = useToast()
+  var isGuest = useAuth().isGuest
 
   var _useState = useState([])
   var commits = _useState[0]
@@ -383,6 +391,18 @@ var ProjectCommits = function() {
   var _useState19 = useState(false)
   var settingBranch = _useState19[0]
   var setSettingBranch = _useState19[1]
+
+  var rebaseEditor = useDisclosure()
+  var createBranchModal = useDisclosure()
+  var mergeBranchModal = useDisclosure()
+
+  var _useState22 = useState('')
+  var newBranchName = _useState22[0]
+  var setNewBranchName = _useState22[1]
+
+  var _useState23 = useState('')
+  var mergeSource = _useState23[0]
+  var setMergeSource = _useState23[1]
 
   var hasLocalPath = repoInfo && repoInfo.local_path
 
@@ -616,41 +636,15 @@ var ProjectCommits = function() {
   }
 
   return (
-    <Box>
+    <GitWorkflowProvider owner={owner} repo={repo}>
+      <Box>
+        {hasLocalPath && <ConflictBanner />}
       {/* Toolbar */}
       <Flex justify="space-between" align="center" mb="12px" flexWrap="wrap" gap="8px">
         <HStack gap="12px" fontSize="14px" fontWeight="600">
           <Text color="#333">{t('projectCommits.title')}</Text>
-          <Text color="#888" fontSize="13px">{t('projectCommits.total', { count: total })}</Text>
         </HStack>
         <HStack gap="8px" flexWrap="wrap">
-          {hasLocalPath && selectedBranch !== '__all__' && !conflictInfo && (
-            <Menu>
-              <MenuButton h="28px" px="12px" fontSize="12px" rounded="6px"
-                as={Button} variant="outline" borderColor="#ef4444" color="#ef4444"
-                _hover={{ bg: '#fef2f2' }}
-                isActive={!!opMode}>
-                {opMode ? t('projectCommits.cancelOp') : t('projectCommits.commitOps')}
-              </MenuButton>
-              <MenuList minW="140px" fontSize="12px">
-                <MenuItem onClick={function() { setOpMode(opMode === 'revert' ? null : 'revert'); setSelectFrom(null); setSelectTo(null) }}
-                  bg={opMode === 'revert' ? '#fef2f2' : undefined}
-                  fontWeight={opMode === 'revert' ? '600' : '400'}>
-                  {opMode === 'revert' ? '✓ ' : ''}{t('projectCommits.revert')}
-                </MenuItem>
-                <MenuItem onClick={function() { setOpMode(opMode === 'reset' ? null : 'reset'); setSelectFrom(null); setSelectTo(null) }}
-                  bg={opMode === 'reset' ? '#fef2f2' : undefined}
-                  fontWeight={opMode === 'reset' ? '600' : '400'}>
-                  {opMode === 'reset' ? '✓ ' : ''}{t('projectCommits.reset')}
-                </MenuItem>
-                <MenuItem onClick={function() { setOpMode(opMode === 'rebase' ? null : 'rebase'); setSelectFrom(null); setSelectTo(null) }}
-                  bg={opMode === 'rebase' ? '#fef2f2' : undefined}
-                  fontWeight={opMode === 'rebase' ? '600' : '400'}>
-                  {opMode === 'rebase' ? '✓ ' : ''}{t('projectCommits.rebase')}
-                </MenuItem>
-              </MenuList>
-            </Menu>
-          )}
           {hasLocalPath && opMode && (
             <Button h="28px" px="10px" fontSize="11px" rounded="6px"
               variant="outline" borderColor="#aaa" color="#666"
@@ -662,7 +656,7 @@ var ProjectCommits = function() {
         </HStack>
       </Flex>
 
-      {/* Branch selector + Tag management + Default branch */}
+      {/* Branch selector + Commit ops + Branch ops + Total count */}
       <Flex mb="12px" gap="8px" align="center" flexWrap="wrap">
         <Select h="30px" fontSize="12px" w="180px" borderRadius="6px"
           value={selectedBranch}
@@ -674,28 +668,69 @@ var ProjectCommits = function() {
           })}
         </Select>
 
-        {hasLocalPath && (
-          <Button h="28px" px="12px" fontSize="12px" rounded="6px"
-            variant="outline" borderColor="#22c55e" color="#16a34a"
-            _hover={{ bg: '#f0fdf4' }}
-            onClick={handlePull} isLoading={pulling}>
-            {t('projectSettings.pullCode')}
-          </Button>
+        {hasLocalPath && selectedBranch !== '__all__' && !conflictInfo && !isGuest && (
+          <Menu>
+            <MenuButton h="28px" px="12px" fontSize="12px" rounded="6px"
+              as={Button} variant="outline" borderColor="#ef4444" color="#ef4444"
+              _hover={{ bg: '#fef2f2' }}
+              isActive={!!opMode}>
+              {opMode ? t('projectCommits.cancelOp') : t('projectCommits.commitOps')}
+            </MenuButton>
+            <MenuList minW="140px" fontSize="12px">
+              <MenuItem onClick={function() { setOpMode(opMode === 'revert' ? null : 'revert'); setSelectFrom(null); setSelectTo(null) }}
+                bg={opMode === 'revert' ? '#fef2f2' : undefined}
+                fontWeight={opMode === 'revert' ? '600' : '400'}>
+                {opMode === 'revert' ? '✓ ' : ''}{t('projectCommits.revert')}
+              </MenuItem>
+              <MenuItem onClick={function() { setOpMode(opMode === 'reset' ? null : 'reset'); setSelectFrom(null); setSelectTo(null) }}
+                bg={opMode === 'reset' ? '#fef2f2' : undefined}
+                fontWeight={opMode === 'reset' ? '600' : '400'}>
+                {opMode === 'reset' ? '✓ ' : ''}{t('projectCommits.reset')}
+              </MenuItem>
+              <MenuItem onClick={function() { setOpMode(opMode === 'rebase' ? null : 'rebase'); setSelectFrom(null); setSelectTo(null) }}
+                bg={opMode === 'rebase' ? '#fef2f2' : undefined}
+                fontWeight={opMode === 'rebase' ? '600' : '400'}>
+                {opMode === 'rebase' ? '✓ ' : ''}{t('projectCommits.rebase')}
+              </MenuItem>
+            </MenuList>
+          </Menu>
         )}
 
-        {hasLocalPath && (
-          <Button h="28px" px="12px" fontSize="12px" rounded="6px"
-            variant="outline" borderColor="#d1d5db" color="#555"
-            _hover={{ bg: '#f9fafb' }}
-            onClick={function() {
-              setDefaultBranchInput((repoInfo && repoInfo.default_branch) || 'main')
-              branchModal.onOpen()
-            }}>
-            {t('projectCommits.setDefaultBranch')}
-          </Button>
+        {hasLocalPath && !isGuest && (
+          <Menu>
+            <MenuButton h="28px" px="12px" fontSize="12px" rounded="6px"
+              as={Button} variant="outline" borderColor="#8b5cf6" color="#7c3aed"
+              _hover={{ bg: '#f5f3ff' }}>
+              {t('gitWorkflow.branchOps')}
+            </MenuButton>
+            <MenuList minW="160px" fontSize="12px">
+              <MenuItem onClick={function() {
+                setDefaultBranchInput((repoInfo && repoInfo.default_branch) || 'main')
+                branchModal.onOpen()
+              }}>
+                📌 {t('projectCommits.setDefaultBranch')}
+              </MenuItem>
+              <MenuItem onClick={function() {
+                reposAPI.checkout(owner, repo, selectedBranch !== '__all__' ? selectedBranch : (repoInfo && repoInfo.default_branch) || 'main').then(function() {
+                  toast({ title: t('gitWorkflow.switchSuccess', { branch: selectedBranch }), status: 'success', duration: 3000 })
+                }).catch(function(err) { toast({ title: err.message || t('gitWorkflow.switchFailed'), status: 'error', duration: 5000 }) })
+              }} isDisabled={selectedBranch === '__all__'}>
+                🔀 {t('gitWorkflow.checkoutCurrent')}
+              </MenuItem>
+              <MenuItem onClick={function() { setNewBranchName(''); createBranchModal.onOpen() }}>
+                + {t('gitWorkflow.createBranch')}
+              </MenuItem>
+              <MenuItem onClick={function() { setMergeSource(''); mergeBranchModal.onOpen() }}>
+                ⊕ {t('gitWorkflow.mergeBranch')}
+              </MenuItem>
+              <MenuItem onClick={handlePull}>
+                ⬇ {t('projectSettings.pullCode')}
+              </MenuItem>
+            </MenuList>
+          </Menu>
         )}
 
-        {hasLocalPath && (
+        {hasLocalPath && !isGuest && (
           <Button h="28px" px="12px" fontSize="12px" rounded="6px"
             variant="outline" borderColor="#8b5cf6" color="#7c3aed"
             _hover={{ bg: '#f5f3ff' }}
@@ -714,7 +749,7 @@ var ProjectCommits = function() {
               return (
                 <HStack key={tag} spacing="2px" bg="#f5f3ff" px="6px" py="2px" rounded="4px" fontSize="11px">
                   <Text color="#7c3aed" fontWeight="500">{tag}</Text>
-                  {hasLocalPath && (
+                  {hasLocalPath && !isGuest && (
                     <Text color="#aaa" cursor="pointer" _hover={{ color: '#ef4444' }}
                       onClick={function() { handleDeleteTag(tag) }}>x</Text>
                   )}
@@ -726,6 +761,8 @@ var ProjectCommits = function() {
             )}
           </HStack>
         )}
+
+        <Text color="#888" fontSize="12px" ml="auto">{t('projectCommits.total', { count: total })}</Text>
       </Flex>
 
       {/* Conflict warning bar */}
@@ -768,17 +805,23 @@ var ProjectCommits = function() {
       )}
 
       {opMode === 'rebase' && selectFrom && (
-        <Flex mb="8px" p="8px 12px" bg="#fef2f2" rounded="6px" align="center" gap="8px">
-          <Text fontSize="12px" color="#991b1b">
+        <Flex mb="8px" p="8px 12px" bg="#fef2f2" rounded="6px" align="center" gap="8px" borderLeft="3px solid #ef4444">
+          <Text fontSize="12px" color="#991b1b" flex={1}>
             {selectTo
-              ? t('projectCommits.selectedRange', { from: shortHash(selectFrom), to: shortHash(selectTo) })
-              : t('projectCommits.selectTo', { from: shortHash(selectFrom) })}
+              ? t('gitWorkflow.deleteRangeHint', { from: shortHash(selectFrom), to: shortHash(selectTo) })
+              : t('gitWorkflow.deleteSelectToHint', { from: shortHash(selectFrom) })}
           </Text>
+          <Button h="26px" px="10px" fontSize="11px" rounded="4px"
+            variant="outline" borderColor="#aaa" color="#666"
+            _hover={{ bg: '#f5f5f5' }}
+            onClick={function() { setOpMode(null); setSelectFrom(null); setSelectTo(null) }}>
+            {t('common.cancel')}
+          </Button>
           {selectFrom && selectTo && (
             <Button h="26px" px="10px" fontSize="11px" rounded="4px"
               bg="#ef4444" color="white" _hover={{ bg: '#dc2626' }}
               onClick={handleDeleteCommits} isLoading={operating}>
-              {t('projectCommits.confirmDelete')}
+              {t('gitWorkflow.confirmDeleteCommits')}
             </Button>
           )}
         </Flex>
@@ -836,6 +879,35 @@ var ProjectCommits = function() {
                   bg="#f0fdf4" px="6px" py="1px" rounded="4px" _hover={{ bg: '#dcfce7' }}>
                   {commit.short_hash || shortHash(hash)}
                 </Text>
+                {hasLocalPath && !isGuest && selectedBranch !== '__all__' && !conflictInfo && (
+                  <CommitActionMenu commitHash={hash}
+                    onCherryPick={function(sha) { reposAPI.cherryPick(owner, repo, [sha]).then(function() { toast({ title: t('gitWorkflow.cherryPickSuccess'), status: 'success', duration: 3000 }); setPage(1) }).catch(function(err) { toast({ title: err.message || t('gitWorkflow.cherryPickFailed'), status: 'error', duration: 5000 }) }) }}
+                    onRevert={handleRevertCommit}
+                    onReset={function() { setOpMode('reset') }}
+                    onRebase={function() { rebaseEditor.onOpen() }}
+                    onDeleteCommit={function(sha) {
+                      setOpMode('rebase')
+                      setSelectFrom(sha)
+                      setSelectTo(sha)
+                    }}
+                    onSelectRange={function(sha) {
+                      setOpMode('rebase')
+                      if (!selectFrom) {
+                        setSelectFrom(sha)
+                        setSelectTo(null)
+                      } else if (!selectTo) {
+                        if (sha === selectFrom) {
+                          setSelectTo(sha)
+                        } else {
+                          setSelectTo(sha)
+                        }
+                      } else {
+                        setSelectFrom(sha)
+                        setSelectTo(null)
+                      }
+                    }}
+                    isGuest={isGuest} />
+                )}
               </Flex>
             )
           })}
@@ -843,6 +915,17 @@ var ProjectCommits = function() {
       </Box>
 
       <PaginationBar page={page} totalPages={totalPages} onPageChange={setPage} />
+
+      {hasLocalPath && !isGuest && (
+        <Box mt="16px">
+          <Text fontSize="11px" color="#6b7280" mb="4px" fontWeight="500">{t('gitWorkflow.stashManagement')}</Text>
+          <StashPanel owner={owner} repo={repo} />
+        </Box>
+      )}
+
+      <RebaseEditor isOpen={rebaseEditor.isOpen} onClose={rebaseEditor.onClose}
+        owner={owner} repo={repo} commits={commits}
+        onSuccess={function() { setPage(1) }} />
 
       {!loading && commits.length === 0 && (
         <Box textAlign="center" py="50px" color="#aaa">
@@ -908,7 +991,76 @@ var ProjectCommits = function() {
           </ModalBody>
         </ModalContent>
       </Modal>
-    </Box>
+
+      {/* Create Branch Modal */}
+      <Modal isOpen={createBranchModal.isOpen} onClose={createBranchModal.onClose} isCentered>
+        <ModalOverlay />
+        <ModalContent mx="16px">
+          <ModalHeader fontSize="15px">{t('gitWorkflow.createBranch')}</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody pb="20px">
+            <Box mb="12px">
+              <Text fontSize="12px" color="#666" mb="4px">{t('gitWorkflow.branchNamePlaceholder')}</Text>
+              <Input value={newBranchName} onChange={function(e) { setNewBranchName(e.target.value) }}
+                placeholder="feature/new-feature" h="36px" fontSize="14px" borderRadius="6px" />
+            </Box>
+            <Text fontSize="11px" color="#888" mb="12px">
+              {t('gitWorkflow.createBranchFrom', { branch: selectedBranch !== '__all__' ? selectedBranch : (repoInfo && repoInfo.default_branch) || 'HEAD' })}
+            </Text>
+            <Button w="100%" h="36px" fontSize="13px" rounded="6px"
+              bg="#22c55e" color="white" _hover={{ bg: '#16a34a' }}
+              onClick={function() {
+                if (!newBranchName.trim()) return
+                reposAPI.createBranch(owner, repo, newBranchName.trim(), selectedBranch !== '__all__' ? selectedBranch : 'HEAD').then(function() {
+                  toast({ title: t('gitWorkflow.createBranchSuccess'), status: 'success', duration: 3000 })
+                  setNewBranchName('')
+                  createBranchModal.onClose()
+                  setSelectedBranch(newBranchName.trim())
+                  setPage(1)
+                }).catch(function(err) { toast({ title: err.message || t('gitWorkflow.createBranchFailed'), status: 'error', duration: 3000 }) })
+              }} isDisabled={!newBranchName.trim()}>
+              {t('common.create')}
+            </Button>
+          </ModalBody>
+        </ModalContent>
+      </Modal>
+
+      {/* Merge Branch Modal */}
+      <Modal isOpen={mergeBranchModal.isOpen} onClose={mergeBranchModal.onClose} isCentered>
+        <ModalOverlay />
+        <ModalContent mx="16px">
+          <ModalHeader fontSize="15px">{t('gitWorkflow.mergeBranch')}</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody pb="20px">
+            <Box mb="12px">
+              <Text fontSize="12px" color="#666" mb="4px">{t('gitWorkflow.selectSourceBranch')}</Text>
+              <Select value={mergeSource} onChange={function(e) { setMergeSource(e.target.value) }}
+                h="36px" fontSize="14px" borderRadius="6px">
+                <option value="">{t('gitWorkflow.selectSourceBranch')}</option>
+                {branches.filter(function(b) { var n = b.replace(/^remotes\/origin\//, ''); return n !== selectedBranch }).map(function(b) { var n = b.replace(/^remotes\/origin\//, ''); return <option key={b} value={n}>{n}</option> })}
+              </Select>
+            </Box>
+            <Text fontSize="11px" color="#888" mb="12px">
+              {t('gitWorkflow.mergeIntoHint', { source: mergeSource || '...', target: selectedBranch !== '__all__' ? selectedBranch : (repoInfo && repoInfo.default_branch) || '?' })}
+            </Text>
+            <Button w="100%" h="36px" fontSize="13px" rounded="6px"
+              bg="#8b5cf6" color="white" _hover={{ bg: '#7c3aed' }}
+              onClick={function() {
+                if (!mergeSource) return
+                var target = selectedBranch !== '__all__' ? selectedBranch : (repoInfo && repoInfo.default_branch) || 'main'
+                reposAPI.mergeBranch(owner, repo, mergeSource, target).then(function() {
+                  toast({ title: t('gitWorkflow.mergeSuccess'), status: 'success', duration: 3000 })
+                  mergeBranchModal.onClose()
+                  setPage(1)
+                }).catch(function(err) { toast({ title: err.message || t('gitWorkflow.mergeFailed'), status: 'error', duration: 5000 }) })
+              }} isDisabled={!mergeSource}>
+              {t('gitWorkflow.mergeBranch')}
+            </Button>
+          </ModalBody>
+        </ModalContent>
+      </Modal>
+      </Box>
+    </GitWorkflowProvider>
   )
 }
 

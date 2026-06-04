@@ -1,6 +1,25 @@
 import { extendTheme } from '@chakra-ui/react'
 
 const colors = {
+  git: {
+    staged: '#f0fdf4',
+    staged_border: '#86efac',
+    unstaged: '#fef3c7',
+    unstaged_border: '#fcd34d',
+    untracked: '#f3f4f6',
+    untracked_border: '#d1d5db',
+    added: '#16a34a',
+    deleted: '#dc2626',
+    conflict: '#ea580c',
+    conflict_bg: '#fff7ed',
+  },
+  diff: {
+    added_bg: '#f0fdf4',
+    added_line: '#bbf7d0',
+    deleted_bg: '#fef2f2',
+    deleted_line: '#fecaca',
+    hunk_bg: '#f8fafc',
+  },
   brand: {
     50: '#E6F7FF',
     100: '#BAE7FF',

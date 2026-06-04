@@ -4,6 +4,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { reposAPI } from '../../api/index'
 import { t, timeAgo } from '../../i18n/index'
 import { LuFileDiff as FileDiff, LuUser as User } from 'react-icons/lu'
+import CommitDiffList from '../../components/gitworkflow/commit_diff_list'
 
 const CommitDetail = () => {
   const { owner, repo, sha } = useParams()
@@ -82,33 +83,7 @@ const CommitDetail = () => {
       </Box>
 
       {files.length > 0 && (
-        <Box>
-          <Text fontSize="13px" fontWeight="600" color="#333" mb="10px">
-            {t('commitDetail.changedFiles')} ({files.length})
-          </Text>
-          <VStack spacing="0" align="stretch" border="1px solid" borderColor="#e2e2e2" rounded="8px" overflow="hidden">
-            {files.map(function(f, idx) {
-              var name = f.filename || f.name || f.path || ''
-              var additions = f.additions || f.added || 0
-              var deletions = f.deletions || f.deleted || 0
-              var status = f.status || f.type || ''
-              return (
-                <Flex key={name || idx} align="center" px="14px" py="8px"
-                  borderBottom={idx < files.length - 1 ? '1px solid' : 'none'} borderColor="#f0f0f0"
-                  _hover={{ bg: '#f9fafb' }}>
-                  <Text fontSize="12px" color="#888" w="50px">
-                    {status === 'added' ? t('commitDetail.added') : status === 'deleted' ? t('commitDetail.deleted') : status === 'renamed' ? t('commitDetail.renamed') : t('commitDetail.modified')}
-                  </Text>
-                  <Text fontSize="13px" color="#333" flex={1} fontFamily="monospace" noOfLines={1}>{name}</Text>
-                  <HStack gap="8px" fontSize="12px">
-                    {additions > 0 && <Text color="#16a34a">+{additions}</Text>}
-                    {deletions > 0 && <Text color="#dc2626">-{deletions}</Text>}
-                  </HStack>
-                </Flex>
-              )
-            })}
-          </VStack>
-        </Box>
+        <CommitDiffList owner={owner} repo={repo} sha={hash} files={files} />
       )}
     </Box>
   )

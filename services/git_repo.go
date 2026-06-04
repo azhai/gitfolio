@@ -540,12 +540,14 @@ func (s *GitService) AbortOperation(owner, name, opType string) error {
 func (s *GitService) GetRepoStatus(owner, name string) map[string]interface{} {
 	repoPath := s.getRepoPath(owner, name)
 	status := map[string]interface{}{
-		"rebasing":  false,
-		"reverting": false,
-		"merging":   false,
+		"rebasing":       false,
+		"reverting":      false,
+		"merging":        false,
+		"cherry_picking": false,
+		"conflict_files": []string{},
+		"current_branch": "",
 	}
 
-	// 检查 .git/rebase-merge 或 .git/rebase-apply
 	gitDir := filepath.Join(repoPath, ".git")
 	if _, err := os.Stat(filepath.Join(gitDir, "rebase-merge")); err == nil {
 		status["rebasing"] = true
@@ -559,6 +561,33 @@ func (s *GitService) GetRepoStatus(owner, name string) map[string]interface{} {
 	if _, err := os.Stat(filepath.Join(gitDir, "MERGE_HEAD")); err == nil {
 		status["merging"] = true
 	}
+	if _, err := os.Stat(filepath.Join(gitDir, "CHERRY_PICK_HEAD")); err == nil {
+		status["cherry_picking"] = true
+	}
+
+	conflictCmd := exec.Command("git", "-C", repoPath, "diff", "--name-only", "--diff-filter=U")
+	if conflictOutput, err := conflictCmd.Output(); err == nil {
+		conflictFiles := strings.Split(strings.TrimSpace(string(conflictOutput)), "\n")
+		filtered := make([]string, 0, len(conflictFiles))
+		for _, f := range conflictFiles {
+			if f != "" {
+				filtered = append(filtered, f)
+			}
+		}
+		status["conflict_files"] = filtered
+	}
+
+	branchCmd := exec.Command("git", "-C", repoPath, "rev-parse", "--abbrev-ref", "HEAD")
+	if branchOutput, err := branchCmd.Output(); err == nil {
+		status["current_branch"] = strings.TrimSpace(string(branchOutput))
+	}
+
+	stagedFiles, _ := s.GetStagedFiles(owner, name)
+	workingFiles, _ := s.GetWorkingTreeFiles(owner, name)
+	untrackedFiles, _ := s.GetUntrackedFiles(owner, name)
+	status["staged"] = stagedFiles
+	status["unstaged"] = workingFiles
+	status["untracked"] = untrackedFiles
 
 	return status
 }
@@ -917,6 +946,266 @@ func (s *GitService) RemoveRemotePushURL(owner, name, remoteName, pushURL string
 	cmd := exec.Command("git", "-C", repoPath, "remote", "set-url", "--delete", "--push", remoteName, pushURL)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("failed to remove push URL for %s: %s: %w", remoteName, strings.TrimSpace(string(output)), err)
+	}
+	return nil
+}
+
+// DiscardFileChanges 丢弃指定文件的变更
+func (s *GitService) DiscardFileChanges(owner, name, filePath string, isUntracked bool) error {
+	repoPath := s.getRepoPath(owner, name)
+	if _, err := os.Stat(repoPath); os.IsNotExist(err) {
+		return fmt.Errorf("repository not found")
+	}
+
+	if isUntracked {
+		fullPath := filepath.Join(repoPath, filePath)
+		return os.Remove(fullPath)
+	}
+
+	cmd := exec.Command("git", "-C", repoPath, "checkout", "--", filePath)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("failed to discard changes: %s: %w", strings.TrimSpace(string(output)), err)
+	}
+	return nil
+}
+
+// CheckoutBranch 切换分支
+func (s *GitService) CheckoutBranch(owner, name, branch string) error {
+	repoPath := s.getRepoPath(owner, name)
+	if _, err := os.Stat(repoPath); os.IsNotExist(err) {
+		return fmt.Errorf("repository not found")
+	}
+
+	cmd := exec.Command("git", "-C", repoPath, "checkout", branch)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		errMsg := strings.TrimSpace(string(output))
+		if strings.Contains(errMsg, "CONFLICT") || strings.Contains(errMsg, "would be overwritten") {
+			return fmt.Errorf("CONFLICT: %s", errMsg)
+		}
+		return fmt.Errorf("failed to checkout branch: %s: %w", errMsg, err)
+	}
+	return nil
+}
+
+// RebaseTodoItem 交互式rebase的待办项
+type RebaseTodoItem struct {
+	Action  string `json:"action"`
+	Hash    string `json:"hash"`
+	Message string `json:"message"`
+}
+
+// RebaseInteractive 执行交互式rebase
+func (s *GitService) RebaseInteractive(owner, name, base string, todos []RebaseTodoItem) error {
+	repoPath := s.getRepoPath(owner, name)
+	if _, err := os.Stat(repoPath); os.IsNotExist(err) {
+		return fmt.Errorf("repository not found")
+	}
+
+	script := ""
+	for _, todo := range todos {
+		script += fmt.Sprintf("%s %s %s\n", todo.Action, todo.Hash, todo.Message)
+	}
+
+	scriptPath := filepath.Join(os.TempDir(), fmt.Sprintf("gitfolio-rebase-todo-%d", time.Now().UnixNano()))
+	if err := os.WriteFile(scriptPath, []byte(script), 0644); err != nil {
+		return fmt.Errorf("failed to write rebase script: %w", err)
+	}
+	defer os.Remove(scriptPath)
+
+	seqEditor := fmt.Sprintf("cp %s $1", scriptPath)
+	env := os.Environ()
+	env = append(env, "GIT_SEQUENCE_EDITOR="+seqEditor)
+
+	cmd := exec.Command("git", "-C", repoPath, "rebase", "-i", base)
+	cmd.Env = env
+	if output, err := cmd.CombinedOutput(); err != nil {
+		errMsg := strings.TrimSpace(string(output))
+		if strings.Contains(errMsg, "CONFLICT") {
+			return fmt.Errorf("CONFLICT: %s", errMsg)
+		}
+		return fmt.Errorf("rebase failed: %s: %w", errMsg, err)
+	}
+	return nil
+}
+
+// StagePatch 行级暂存：将指定行添加到暂存区
+func (s *GitService) StagePatch(owner, name, filePath string, lineIndices []int) error {
+	repoPath := s.getRepoPath(owner, name)
+	if _, err := os.Stat(repoPath); os.IsNotExist(err) {
+		return fmt.Errorf("repository not found")
+	}
+
+	diffCmd := exec.Command("git", "-C", repoPath, "diff", "-U0", "--", filePath)
+	diffOutput, err := diffCmd.Output()
+	if err != nil {
+		return fmt.Errorf("failed to get diff for patch: %w", err)
+	}
+
+	patchLines := s.extractPatchLines(string(diffOutput), lineIndices)
+	if len(patchLines) == 0 {
+		return nil
+	}
+
+	patchPath := filepath.Join(os.TempDir(), fmt.Sprintf("gitfolio-patch-%d", time.Now().UnixNano()))
+	if err := os.WriteFile(patchPath, []byte(strings.Join(patchLines, "\n")+"\n"), 0644); err != nil {
+		return fmt.Errorf("failed to write patch: %w", err)
+	}
+	defer os.Remove(patchPath)
+
+	applyCmd := exec.Command("git", "-C", repoPath, "apply", "--cached", patchPath)
+	if output, err := applyCmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("failed to apply patch: %s: %w", strings.TrimSpace(string(output)), err)
+	}
+	return nil
+}
+
+// extractPatchLines 从diff输出中提取指定行对应的hunk
+func (s *GitService) extractPatchLines(diffText string, lineIndices []int) []string {
+	lines := strings.Split(diffText, "\n")
+	result := []string{}
+	lineSet := make(map[int]bool)
+	for _, idx := range lineIndices {
+		lineSet[idx] = true
+	}
+
+	currentHunk := []string{}
+	hunkHasSelection := false
+	contentLineIdx := 0
+
+	for _, line := range lines {
+		if line == "" {
+			continue
+		}
+		if strings.HasPrefix(line, "diff ") || strings.HasPrefix(line, "index ") || strings.HasPrefix(line, "--- ") || strings.HasPrefix(line, "+++ ") {
+			if hunkHasSelection && len(currentHunk) > 0 {
+				result = append(result, currentHunk...)
+			}
+			currentHunk = []string{line}
+			hunkHasSelection = false
+			contentLineIdx = 0
+			continue
+		}
+		if strings.HasPrefix(line, "@@ ") {
+			if hunkHasSelection && len(currentHunk) > 0 {
+				result = append(result, currentHunk...)
+			}
+			currentHunk = []string{line}
+			hunkHasSelection = false
+			contentLineIdx = 0
+			continue
+		}
+		if strings.HasPrefix(line, "+") || strings.HasPrefix(line, "-") {
+			if lineSet[contentLineIdx] {
+				hunkHasSelection = true
+			}
+			currentHunk = append(currentHunk, line)
+			contentLineIdx++
+		} else {
+			currentHunk = append(currentHunk, line)
+			contentLineIdx++
+		}
+	}
+	if hunkHasSelection && len(currentHunk) > 0 {
+		result = append(result, currentHunk...)
+	}
+	return result
+}
+
+// StashEntry stash条目
+type StashEntry struct {
+	Index   int    `json:"index"`
+	Message string `json:"message"`
+	Date    string `json:"date"`
+}
+
+// GetStashList 获取stash列表
+func (s *GitService) GetStashList(owner, name string) ([]StashEntry, error) {
+	repoPath := s.getRepoPath(owner, name)
+	if _, err := os.Stat(repoPath); os.IsNotExist(err) {
+		return nil, fmt.Errorf("repository not found")
+	}
+
+	cmd := exec.Command("git", "-C", repoPath, "stash", "list", "--format=%gd|%gs|%ci")
+	output, err := cmd.Output()
+	if err != nil {
+		return []StashEntry{}, nil
+	}
+
+	entries := make([]StashEntry, 0)
+	for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
+		if line == "" {
+			continue
+		}
+		parts := strings.SplitN(line, "|", 3)
+		if len(parts) >= 2 {
+			idx := 0
+			refPart := parts[0]
+			if strings.HasPrefix(refPart, "stash@{") {
+				fmt.Sscanf(refPart, "stash@{%d}", &idx)
+			}
+			msg := parts[1]
+			date := ""
+			if len(parts) >= 3 {
+				date = parts[2]
+			}
+			entries = append(entries, StashEntry{Index: idx, Message: msg, Date: date})
+		}
+	}
+	return entries, nil
+}
+
+// StashSave 保存当前变更到stash
+func (s *GitService) StashSave(owner, name, message string) error {
+	repoPath := s.getRepoPath(owner, name)
+	var cmd *exec.Cmd
+	if message != "" {
+		cmd = exec.Command("git", "-C", repoPath, "stash", "push", "-m", message)
+	} else {
+		cmd = exec.Command("git", "-C", repoPath, "stash", "push")
+	}
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("stash save failed: %s: %w", strings.TrimSpace(string(output)), err)
+	}
+	return nil
+}
+
+// StashPop 恢复并删除最近的stash
+func (s *GitService) StashPop(owner, name string, index int) error {
+	repoPath := s.getRepoPath(owner, name)
+	ref := fmt.Sprintf("stash@{%d}", index)
+	cmd := exec.Command("git", "-C", repoPath, "stash", "pop", ref)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		errMsg := strings.TrimSpace(string(output))
+		if strings.Contains(errMsg, "CONFLICT") {
+			return fmt.Errorf("CONFLICT: %s", errMsg)
+		}
+		return fmt.Errorf("stash pop failed: %s: %w", errMsg, err)
+	}
+	return nil
+}
+
+// StashApply 恢复但保留stash
+func (s *GitService) StashApply(owner, name string, index int) error {
+	repoPath := s.getRepoPath(owner, name)
+	ref := fmt.Sprintf("stash@{%d}", index)
+	cmd := exec.Command("git", "-C", repoPath, "stash", "apply", ref)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		errMsg := strings.TrimSpace(string(output))
+		if strings.Contains(errMsg, "CONFLICT") {
+			return fmt.Errorf("CONFLICT: %s", errMsg)
+		}
+		return fmt.Errorf("stash apply failed: %s: %w", errMsg, err)
+	}
+	return nil
+}
+
+// StashDrop 删除指定stash
+func (s *GitService) StashDrop(owner, name string, index int) error {
+	repoPath := s.getRepoPath(owner, name)
+	ref := fmt.Sprintf("stash@{%d}", index)
+	cmd := exec.Command("git", "-C", repoPath, "stash", "drop", ref)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("stash drop failed: %s: %w", strings.TrimSpace(string(output)), err)
 	}
 	return nil
 }

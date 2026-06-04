@@ -16,12 +16,12 @@ import (
 	"github.com/azhai/goent/utils"
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/compress"
-	cors "github.com/gofiber/fiber/v3/middleware/cors"
+	"github.com/gofiber/fiber/v3/middleware/cors"
 	"github.com/gofiber/fiber/v3/middleware/logger"
 	"github.com/gofiber/fiber/v3/middleware/static"
 )
 
-//go:embed web/dist web/landing.html web/screenshot-1.png
+//go:embed web/dist
 var efs embed.FS
 
 func subFS(prefix string) fs.FS {
@@ -32,11 +32,7 @@ func subFS(prefix string) fs.FS {
 	return fsys
 }
 
-var (
-	distFS    = subFS("web/dist")
-	assetsFS  = subFS("web/dist/assets")
-	landingFS = subFS("web")
-)
+var distFS = subFS("web/dist")
 
 func main() {
 	cfg := config.Load(utils.NewEnv())
@@ -73,40 +69,21 @@ func CreateApp() *fiber.App {
 	app := fiber.New(fiber.Config{
 		AppName:      "GitFolio",
 		ErrorHandler: ErrorHandler,
-		// ReadTimeout:   300 * time.Second,
-		// WriteTimeout:  300 * time.Second,
-		// StrictRouting: false,
 	})
 	app.Use(compress.New(), cors.New(), logger.New())
 
 	spaIndex, _ := fs.ReadFile(distFS, "index.html")
-	faviconSVG, _ := fs.ReadFile(distFS, "favicon.svg")
-	faviconPNG, _ := fs.ReadFile(distFS, "favicon.png")
+	landingHTML, _ := fs.ReadFile(distFS, "landing.html")
 
-	landingHTML, _ := fs.ReadFile(landingFS, "landing.html")
-	screenshotPNG, _ := fs.ReadFile(landingFS, "screenshot-1.png")
-
-	assetsHandler := static.New("", static.Config{FS: assetsFS})
+	distHandler := static.New("", static.Config{FS: distFS})
 	uploadsHandler := static.New("./uploads")
 
 	app.Get("/", func(c fiber.Ctx) error {
 		c.Set("Content-Type", "text/html; charset=utf-8")
 		return c.Send(landingHTML)
 	})
-	app.Get("/assets/*", assetsHandler)
-	app.Get("/uploads/*", uploadsHandler)
-	app.Get("/favicon.svg", func(c fiber.Ctx) error {
-		c.Set("Content-Type", "image/svg+xml")
-		return c.Send(faviconSVG)
-	})
-	app.Get("/favicon.png", func(c fiber.Ctx) error {
-		c.Set("Content-Type", "image/png")
-		return c.Send(faviconPNG)
-	})
-	app.Get("/screenshot-1.png", func(c fiber.Ctx) error {
-		c.Set("Content-Type", "image/png")
-		return c.Send(screenshotPNG)
-	})
+	app.Use("/uploads", uploadsHandler)
+	app.Use("/", distHandler)
 
 	routes.SetupAPIRoutes(app)
 

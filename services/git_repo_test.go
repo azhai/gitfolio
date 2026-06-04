@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/azhai/gitfolio/models"
@@ -747,6 +748,255 @@ func TestGitService_RepoNotFound(t *testing.T) {
 		_, err := svc.EditFile("owner", "repo", "test.txt", "content", "msg", "Test", "test@test.com")
 		if err == nil {
 			t.Error("EditFile() should return error for nonexistent repo")
+		}
+	})
+}
+
+func TestGitService_GetFileDiff(t *testing.T) {
+	tmpDir, cleanup := setupTestRepo(t)
+	defer cleanup()
+
+	svc := newTestGitService().WithLocalPath(tmpDir)
+
+	newFile := filepath.Join(tmpDir, "feature.txt")
+	os.WriteFile(newFile, []byte("line1\nline2\nline3\n"), 0644)
+
+	t.Run("unstaged diff", func(t *testing.T) {
+		exec.Command("git", "-C", tmpDir, "add", "feature.txt").Run()
+		exec.Command("git", "-C", tmpDir, "commit", "-m", "add feature.txt").Run()
+		os.WriteFile(newFile, []byte("line1\nline2\nline3\nmodified\n"), 0644)
+
+		result, err := svc.GetFileDiff("owner", "repo", "feature.txt", false)
+		if err != nil {
+			t.Fatalf("GetFileDiff() error = %v", err)
+		}
+		if result.IsBinary {
+			t.Error("GetFileDiff() should not report binary for text file")
+		}
+		if result.FilePath != "feature.txt" {
+			t.Errorf("FilePath = %q, want 'feature.txt'", result.FilePath)
+		}
+		if result.Additions == 0 && result.Deletions == 0 {
+			t.Error("GetFileDiff() should report changes for modified file")
+		}
+	})
+
+	t.Run("staged diff", func(t *testing.T) {
+		exec.Command("git", "-C", tmpDir, "add", "feature.txt").Run()
+		result, err := svc.GetFileDiff("owner", "repo", "feature.txt", true)
+		if err != nil {
+			t.Fatalf("GetFileDiff() staged error = %v", err)
+		}
+		if result.Additions == 0 {
+			t.Error("GetFileDiff() staged should report additions")
+		}
+	})
+}
+
+func TestGitService_GetCommitFileDiff(t *testing.T) {
+	tmpDir, cleanup := setupTestRepo(t)
+	defer cleanup()
+
+	svc := newTestGitService().WithLocalPath(tmpDir)
+
+	newFile := filepath.Join(tmpDir, "new.txt")
+	os.WriteFile(newFile, []byte("content\n"), 0644)
+	exec.Command("git", "-C", tmpDir, "add", "-A").Run()
+	exec.Command("git", "-C", tmpDir, "commit", "-m", "add new.txt").Run()
+
+	hashOutput, _ := exec.Command("git", "-C", tmpDir, "rev-parse", "HEAD").Output()
+	sha := strings.TrimSpace(string(hashOutput))
+
+	result, err := svc.GetCommitFileDiff("owner", "repo", sha, "new.txt")
+	if err != nil {
+		t.Fatalf("GetCommitFileDiff() error = %v", err)
+	}
+	if result.Additions == 0 {
+		t.Error("GetCommitFileDiff() should report additions for new file in commit")
+	}
+}
+
+func TestGitService_DiscardFileChanges(t *testing.T) {
+	tmpDir, cleanup := setupTestRepo(t)
+	defer cleanup()
+
+	svc := newTestGitService().WithLocalPath(tmpDir)
+
+	t.Run("discard tracked file changes", func(t *testing.T) {
+		readmePath := filepath.Join(tmpDir, "README.md")
+		os.WriteFile(readmePath, []byte("# Modified\n"), 0644)
+
+		err := svc.DiscardFileChanges("owner", "repo", "README.md", false)
+		if err != nil {
+			t.Fatalf("DiscardFileChanges() error = %v", err)
+		}
+
+		content, _ := os.ReadFile(readmePath)
+		if string(content) == "# Modified\n" {
+			t.Error("DiscardFileChanges() should restore original content")
+		}
+	})
+
+	t.Run("discard untracked file", func(t *testing.T) {
+		newFile := filepath.Join(tmpDir, "untracked.txt")
+		os.WriteFile(newFile, []byte("new content"), 0644)
+
+		err := svc.DiscardFileChanges("owner", "repo", "untracked.txt", true)
+		if err != nil {
+			t.Fatalf("DiscardFileChanges() untracked error = %v", err)
+		}
+
+		if _, err := os.Stat(newFile); !os.IsNotExist(err) {
+			t.Error("DiscardFileChanges() should remove untracked file")
+		}
+	})
+}
+
+func TestGitService_CheckoutBranch(t *testing.T) {
+	tmpDir, cleanup := setupTestRepo(t)
+	defer cleanup()
+
+	svc := newTestGitService().WithLocalPath(tmpDir)
+
+	exec.Command("git", "-C", tmpDir, "branch", "develop").Run()
+
+	err := svc.CheckoutBranch("owner", "repo", "develop")
+	if err != nil {
+		t.Fatalf("CheckoutBranch() error = %v", err)
+	}
+
+	output, _ := exec.Command("git", "-C", tmpDir, "rev-parse", "--abbrev-ref", "HEAD").Output()
+	if strings.TrimSpace(string(output)) != "develop" {
+		t.Errorf("current branch = %q, want 'develop'", strings.TrimSpace(string(output)))
+	}
+}
+
+func TestGitService_StashOperations(t *testing.T) {
+	tmpDir, cleanup := setupTestRepo(t)
+	defer cleanup()
+
+	svc := newTestGitService().WithLocalPath(tmpDir)
+
+	t.Run("stash list initially empty", func(t *testing.T) {
+		entries, err := svc.GetStashList("owner", "repo")
+		if err != nil {
+			t.Fatalf("GetStashList() error = %v", err)
+		}
+		if len(entries) != 0 {
+			t.Errorf("GetStashList() = %d entries, want 0", len(entries))
+		}
+	})
+
+	t.Run("stash save", func(t *testing.T) {
+		newFile := filepath.Join(tmpDir, "stash-test.txt")
+		os.WriteFile(newFile, []byte("stash content"), 0644)
+		exec.Command("git", "-C", tmpDir, "add", "-A").Run()
+
+		err := svc.StashSave("owner", "repo", "test stash")
+		if err != nil {
+			t.Fatalf("StashSave() error = %v", err)
+		}
+
+		entries, _ := svc.GetStashList("owner", "repo")
+		if len(entries) == 0 {
+			t.Error("StashSave() should create a stash entry")
+		}
+
+		if _, err := os.Stat(newFile); !os.IsNotExist(err) {
+			t.Error("StashSave() should clean working tree of staged files")
+		}
+	})
+
+	t.Run("stash pop", func(t *testing.T) {
+		err := svc.StashPop("owner", "repo", 0)
+		if err != nil {
+			t.Fatalf("StashPop() error = %v", err)
+		}
+
+		entries, _ := svc.GetStashList("owner", "repo")
+		if len(entries) != 0 {
+			t.Error("StashPop() should remove the stash entry")
+		}
+
+		newFile := filepath.Join(tmpDir, "stash-test.txt")
+		if _, err := os.Stat(newFile); os.IsNotExist(err) {
+			t.Error("StashPop() should restore the stashed file")
+		}
+	})
+
+	t.Run("stash save and apply", func(t *testing.T) {
+		exec.Command("git", "-C", tmpDir, "add", "-A").Run()
+		svc.StashSave("owner", "repo", "apply test")
+
+		err := svc.StashApply("owner", "repo", 0)
+		if err != nil {
+			t.Fatalf("StashApply() error = %v", err)
+		}
+
+		entries, _ := svc.GetStashList("owner", "repo")
+		if len(entries) == 0 {
+			t.Error("StashApply() should keep the stash entry")
+		}
+	})
+
+	t.Run("stash drop", func(t *testing.T) {
+		entries, _ := svc.GetStashList("owner", "repo")
+		if len(entries) == 0 {
+			return
+		}
+		err := svc.StashDrop("owner", "repo", 0)
+		if err != nil {
+			t.Fatalf("StashDrop() error = %v", err)
+		}
+
+		entries, _ = svc.GetStashList("owner", "repo")
+		if len(entries) != 0 {
+			t.Error("StashDrop() should remove the stash entry")
+		}
+	})
+}
+
+func TestGitService_GetRepoStatus_Enhanced(t *testing.T) {
+	tmpDir, cleanup := setupTestRepo(t)
+	defer cleanup()
+
+	svc := newTestGitService().WithLocalPath(tmpDir)
+
+	t.Run("clean repo status", func(t *testing.T) {
+		status := svc.GetRepoStatus("owner", "repo")
+		if status["cherry_picking"] != false {
+			t.Error("GetRepoStatus() cherry_picking should be false")
+		}
+		conflictFiles, ok := status["conflict_files"].([]string)
+		if !ok || len(conflictFiles) != 0 {
+			t.Error("GetRepoStatus() conflict_files should be empty")
+		}
+		if status["current_branch"] == "" {
+			t.Error("GetRepoStatus() current_branch should not be empty")
+		}
+	})
+
+	t.Run("status with untracked file", func(t *testing.T) {
+		newFile := filepath.Join(tmpDir, "untracked.txt")
+		os.WriteFile(newFile, []byte("hello"), 0644)
+
+		status := svc.GetRepoStatus("owner", "repo")
+		untracked, ok := status["untracked"].([]string)
+		if !ok || len(untracked) == 0 {
+			t.Error("GetRepoStatus() should report untracked files")
+		}
+		os.Remove(newFile)
+	})
+
+	t.Run("status with staged file", func(t *testing.T) {
+		newFile := filepath.Join(tmpDir, "staged.txt")
+		os.WriteFile(newFile, []byte("staged content"), 0644)
+		exec.Command("git", "-C", tmpDir, "add", "staged.txt").Run()
+
+		status := svc.GetRepoStatus("owner", "repo")
+		staged, ok := status["staged"].([]string)
+		if !ok || len(staged) == 0 {
+			t.Error("GetRepoStatus() should report staged files")
 		}
 	})
 }

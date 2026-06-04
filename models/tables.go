@@ -388,9 +388,9 @@ type RemoteRepository struct {
 	Platform     string `goe:"index"`
 	Owner        string `goe:"index"`
 	RepoName     string `goe:"index"`
-	CloneURL     string
-	SSHURL       string
-	APIURL       string
+	CloneURL     string `db:"clone_url"`
+	SSHURL       string `db:"sshurl"`
+	APIURL       string `db:"apiurl"`
 	WebURL       string
 	RepositoryID int64  `goe:"index"`
 	AccountID    *int64 `goe:"index"`

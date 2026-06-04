@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { Box, Text, Input, Button, Flex, Link, Alert, AlertIcon, Spinner, HStack } from '@chakra-ui/react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { statsAPI } from '../api/index'
 import { LuRocket as Rocket } from 'react-icons/lu'
@@ -9,6 +9,8 @@ import LanguageSwitcher from '../components/LanguageSwitcher'
 
 const LoginPage = () => {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const redirect = searchParams.get('redirect') || '/home'
   const { login, isAuthenticated } = useAuth()
   const [form, setForm] = useState({ username: '', password: '' })
   const [error, setError] = useState('')
@@ -22,7 +24,7 @@ const LoginPage = () => {
   }, [])
 
   if (isAuthenticated) {
-    navigate('/')
+    navigate(redirect)
     return null
   }
 
@@ -43,7 +45,7 @@ const LoginPage = () => {
     setLoading(true)
     try {
       await login(form.username.trim(), form.password)
-      navigate('/')
+      navigate(redirect)
     } catch (err) {
       setError(err.message || t('auth.invalidCredentials'))
     } finally {
@@ -64,7 +66,9 @@ const LoginPage = () => {
       <Box w="100%" maxW="420px">
         <Box textAlign="center" mb="36px">
           <Flex justify="space-between" align="flex-end" mb={2}>
-            <Box />
+            <Link href="/" fontSize="13px" color="#888" _hover={{ color: '#16a34a' }}>
+              ← {t('nav.home')}
+            </Link>
             <LanguageSwitcher width="110px" height="34px" />
           </Flex>
           <HStack gap="8px" justifyContent="center">

@@ -1255,3 +1255,311 @@ func RemoveRemotePushURL(c fiber.Ctx) error {
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Push URL removed", "name": remoteName})
 }
+
+// GetFileDiff 获取文件差异
+func GetFileDiff(c fiber.Ctx) error {
+	result, err := helpers.GetOwnerAndRepoWithPrivateAccessFromParams(c)
+	if err != nil {
+		return err
+	}
+
+	if result.Repo.LocalPath == "" {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Repository not initialized"})
+	}
+
+	filePath := c.Query("path", "")
+	staged := c.Query("staged", "false") == "true"
+
+	if filePath == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "File path is required"})
+	}
+
+	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
+	diffResult, err := gitSvc.GetFileDiff(result.OwnerName(), result.Repo.Name, filePath, staged)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(diffResult)
+}
+
+// GetCommitFileDiff 获取提交中指定文件的差异
+func GetCommitFileDiff(c fiber.Ctx) error {
+	result, err := helpers.GetOwnerAndRepoWithPrivateAccessFromParams(c)
+	if err != nil {
+		return err
+	}
+
+	if result.Repo.LocalPath == "" {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Repository not initialized"})
+	}
+
+	sha := c.Query("sha", "")
+	filePath := c.Query("path", "")
+	if sha == "" || filePath == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "sha and path are required"})
+	}
+
+	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
+	diffResult, err := gitSvc.GetCommitFileDiff(result.OwnerName(), result.Repo.Name, sha, filePath)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(diffResult)
+}
+
+// StagePatch 行级暂存
+func StagePatch(c fiber.Ctx) error {
+	result, err := helpers.RequireOwnerAndRepoFromParams(c)
+	if err != nil {
+		return err
+	}
+
+	if result.Repo.LocalPath == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Repository not initialized"})
+	}
+
+	var req struct {
+		Path        string `json:"path"`
+		LineIndices []int  `json:"line_indices"`
+	}
+	if err := c.Bind().JSON(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+	if req.Path == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "File path is required"})
+	}
+
+	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
+	if err := gitSvc.StagePatch(result.OwnerName(), result.Repo.Name, req.Path, req.LineIndices); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Lines staged successfully"})
+}
+
+// DiscardFileChanges 丢弃文件变更
+func DiscardFileChanges(c fiber.Ctx) error {
+	result, err := helpers.RequireOwnerAndRepoFromParams(c)
+	if err != nil {
+		return err
+	}
+
+	if result.Repo.LocalPath == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Repository not initialized"})
+	}
+
+	var req struct {
+		Path        string `json:"path"`
+		IsUntracked bool   `json:"is_untracked"`
+	}
+	if err := c.Bind().JSON(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+	if req.Path == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "File path is required"})
+	}
+
+	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
+	if err := gitSvc.DiscardFileChanges(result.OwnerName(), result.Repo.Name, req.Path, req.IsUntracked); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Changes discarded", "path": req.Path})
+}
+
+// CheckoutBranch 切换分支
+func CheckoutBranch(c fiber.Ctx) error {
+	result, err := helpers.RequireOwnerAndRepoFromParams(c)
+	if err != nil {
+		return err
+	}
+
+	if result.Repo.LocalPath == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Repository not initialized"})
+	}
+
+	var req struct {
+		Branch string `json:"branch"`
+	}
+	if err := c.Bind().JSON(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+	if req.Branch == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Branch name is required"})
+	}
+
+	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
+	if err := gitSvc.CheckoutBranch(result.OwnerName(), result.Repo.Name, req.Branch); err != nil {
+		if strings.HasPrefix(err.Error(), "CONFLICT:") {
+			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": err.Error(), "conflict": true})
+		}
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Branch switched", "branch": req.Branch})
+}
+
+// RebaseInteractive 交互式rebase
+func RebaseInteractive(c fiber.Ctx) error {
+	result, err := helpers.RequireOwnerAndRepoFromParams(c)
+	if err != nil {
+		return err
+	}
+
+	if result.Repo.LocalPath == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Repository not initialized"})
+	}
+
+	var req struct {
+		Base  string                    `json:"base"`
+		Todos []services.RebaseTodoItem `json:"todos"`
+	}
+	if err := c.Bind().JSON(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+	if req.Base == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Base is required"})
+	}
+
+	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
+	if err := gitSvc.RebaseInteractive(result.OwnerName(), result.Repo.Name, req.Base, req.Todos); err != nil {
+		if strings.HasPrefix(err.Error(), "CONFLICT:") {
+			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": err.Error(), "conflict": true})
+		}
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Interactive rebase completed"})
+}
+
+// GetStashList 获取stash列表
+func GetStashList(c fiber.Ctx) error {
+	result, err := helpers.GetOwnerAndRepoWithPrivateAccessFromParams(c)
+	if err != nil {
+		return err
+	}
+
+	if result.Repo.LocalPath == "" {
+		return c.Status(fiber.StatusOK).JSON(fiber.Map{"stashes": []interface{}{}})
+	}
+
+	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
+	entries, err := gitSvc.GetStashList(result.OwnerName(), result.Repo.Name)
+	if err != nil {
+		return c.Status(fiber.StatusOK).JSON(fiber.Map{"stashes": []interface{}{}})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{"stashes": entries})
+}
+
+// StashSave 保存变更到stash
+func StashSave(c fiber.Ctx) error {
+	result, err := helpers.RequireOwnerAndRepoFromParams(c)
+	if err != nil {
+		return err
+	}
+
+	if result.Repo.LocalPath == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Repository not initialized"})
+	}
+
+	var req struct {
+		Message string `json:"message"`
+	}
+	if err := c.Bind().JSON(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
+	if err := gitSvc.StashSave(result.OwnerName(), result.Repo.Name, req.Message); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Stash saved"})
+}
+
+// StashPop 恢复并删除stash
+func StashPop(c fiber.Ctx) error {
+	result, err := helpers.RequireOwnerAndRepoFromParams(c)
+	if err != nil {
+		return err
+	}
+
+	if result.Repo.LocalPath == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Repository not initialized"})
+	}
+
+	var req struct {
+		Index int `json:"index"`
+	}
+	if err := c.Bind().JSON(&req); err != nil {
+		req.Index = 0
+	}
+
+	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
+	if err := gitSvc.StashPop(result.OwnerName(), result.Repo.Name, req.Index); err != nil {
+		if strings.HasPrefix(err.Error(), "CONFLICT:") {
+			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": err.Error(), "conflict": true})
+		}
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Stash popped"})
+}
+
+// StashApply 恢复但保留stash
+func StashApply(c fiber.Ctx) error {
+	result, err := helpers.RequireOwnerAndRepoFromParams(c)
+	if err != nil {
+		return err
+	}
+
+	if result.Repo.LocalPath == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Repository not initialized"})
+	}
+
+	var req struct {
+		Index int `json:"index"`
+	}
+	if err := c.Bind().JSON(&req); err != nil {
+		req.Index = 0
+	}
+
+	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
+	if err := gitSvc.StashApply(result.OwnerName(), result.Repo.Name, req.Index); err != nil {
+		if strings.HasPrefix(err.Error(), "CONFLICT:") {
+			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": err.Error(), "conflict": true})
+		}
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Stash applied"})
+}
+
+// StashDrop 删除stash
+func StashDrop(c fiber.Ctx) error {
+	result, err := helpers.RequireOwnerAndRepoFromParams(c)
+	if err != nil {
+		return err
+	}
+
+	if result.Repo.LocalPath == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Repository not initialized"})
+	}
+
+	var req struct {
+		Index int `json:"index"`
+	}
+	if err := c.Bind().JSON(&req); err != nil {
+		req.Index = 0
+	}
+
+	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
+	if err := gitSvc.StashDrop(result.OwnerName(), result.Repo.Name, req.Index); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Stash dropped"})
+}

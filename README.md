@@ -198,6 +198,40 @@ gitfolio/
 | admin | 所有项目 |
 | user | local + public + mirror + 自己/团队的 private |
 | guest | public + mirror |
+| 未登录 | public + mirror（仅列表，详情需登录） |
+
+### 项目访问权限
+
+| 项目类型 | 未登录 | guest | user / admin |
+|----------|--------|-------|-------------|
+| `public` | ❌ 需登录 | ✅ 只读 | ✅ 读写 |
+| `mirror` | ❌ 需登录 | ✅ 只读 | ✅ 读写（owner/组成员） |
+| `private` | ❌ 403 | ❌ 403 | ✅ 仅 owner/组成员（admin 可访问所有） |
+| `local` | ❌ 403 | ❌ 403 | ✅ 仅 owner（admin 可访问所有） |
+
+### API 请求权限
+
+| 请求类型 | 未登录 | guest | user / admin |
+|----------|--------|-------|-------------|
+| GET（读取） | ✅ 白名单接口 | ✅ 允许 | ✅ 允许 |
+| POST/PUT/DELETE（写入） | ❌ 401 跳转登录 | ❌ 403 | ✅ 允许 |
+
+白名单 GET 接口：`/health`、`/auth/login`、`/auth/logout`、`/stats`、`/recent-issues`、`/recent-tasks`、`/repos/github-info`
+
+### Guest 用户界面限制
+
+guest 用户在前端界面中以下操作按钮被禁用：
+
+- 创建项目、迁移项目
+- 创建团队、管理团队成员
+- 创建代码片段、编辑/删除代码片段
+- 仓库设置、同步操作
+- 创建 Issue、添加评论
+- 创建 PR、合并/关闭 PR
+- 创建任务、状态流转、添加评论
+- Star/Watch 仓库
+- 提交页面：拉取代码、设置默认分支、新建/删除标签
+- 个人设置：修改资料、上传头像、修改密码
 
 ## 同步系统
 
