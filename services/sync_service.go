@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -2176,11 +2177,23 @@ func (s *SyncService) CreateRemoteRepoFromMirrorURL(repoID int64, mirrorURL stri
 	}
 
 	now := time.Now()
+	apiURL := fmt.Sprintf("%s/api/v3/repos/%s/%s", baseURL, owner, repoName)
+	if platform == "gitlab" {
+		apiURL = fmt.Sprintf("%s/api/v4/projects/%s%%2F%s", baseURL, owner, repoName)
+	}
+	sshURL := fmt.Sprintf("git@github.com:%s/%s.git", owner, repoName)
+	if platform == "gitlab" {
+		sshURL = fmt.Sprintf("git@gitlab.com:%s/%s.git", owner, repoName)
+	} else if platform == "gitea" {
+		sshURL = fmt.Sprintf("git@gitea.com:%s/%s.git", owner, repoName)
+	}
 	remoteRepo := &models.RemoteRepository{
 		Platform:     platform,
 		Owner:        owner,
 		RepoName:     repoName,
 		CloneURL:     mirrorURL,
+		SSHURL:       sshURL,
+		APIURL:       apiURL,
 		WebURL:       fmt.Sprintf("%s/%s/%s", baseURL, owner, repoName),
 		RepositoryID: repoID,
 		AccountID:    accountID,
@@ -2191,6 +2204,7 @@ func (s *SyncService) CreateRemoteRepoFromMirrorURL(repoID int64, mirrorURL stri
 	}
 
 	if err := s.db.RemoteRepository.Insert().One(remoteRepo); err != nil {
+		log.Printf("Failed to create remote repo from mirror URL %s: %v", mirrorURL, err)
 		return nil
 	}
 

@@ -118,7 +118,7 @@ func setupRepoGitRoutes(repo fiber.Router) {
 	repo.Get("/tree/*", handlers.GetRepositoryTree)
 	repo.Get("/file", handlers.GetRepositoryFile)
 	repo.Get("/file/*", handlers.GetRepositoryFile)
-	repo.Get("/raw/*", handlers.GetRepositoryRawFile)
+	repo.Get("/raw/*", middleware.OptionalAuth(), handlers.GetRepositoryRawFile)
 	repo.Get("/branches", handlers.GetRepositoryBranches)
 	repo.Get("/tags", handlers.GetRepositoryTags)
 	repo.Get("/commits", handlers.GetRepositoryCommits)

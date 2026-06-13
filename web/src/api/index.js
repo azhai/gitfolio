@@ -123,10 +123,12 @@ export const reposAPI = {
     var p = path ? '/' + path.split('/').map(function(s) { return encodeURIComponent(s) }).join('/') : ''
     return api.get('/' + owner + '/' + repo + '/tree' + p, { ref: ref })
   },
-  file(owner, repo, path, ref) {
+  file(owner, repo, path, ref, hex) {
     ref = ref || 'HEAD'
     var encodedPath = path.split('/').map(function(s) { return encodeURIComponent(s) }).join('/')
-    return api.get('/' + owner + '/' + repo + '/file/' + encodedPath, { ref: ref })
+    var params = { ref: ref }
+    if (hex) params.hex = 'true'
+    return api.get('/' + owner + '/' + repo + '/file/' + encodedPath, params)
   },
   rawFile(owner, repo, path, ref) {
     ref = ref || 'HEAD'

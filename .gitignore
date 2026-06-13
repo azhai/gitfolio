@@ -30,6 +30,7 @@ optimized-rules.txt
 
 # Repository storage
 dist/
+docs/superpowers/
 projs/
 repos/
 uploads/

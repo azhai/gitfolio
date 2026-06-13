@@ -981,7 +981,7 @@ func TestGitService_GetRepoStatus_Enhanced(t *testing.T) {
 		os.WriteFile(newFile, []byte("hello"), 0644)
 
 		status := svc.GetRepoStatus("owner", "repo")
-		untracked, ok := status["untracked"].([]string)
+		untracked, ok := status["untracked"].([]FileStatus)
 		if !ok || len(untracked) == 0 {
 			t.Error("GetRepoStatus() should report untracked files")
 		}
@@ -994,7 +994,7 @@ func TestGitService_GetRepoStatus_Enhanced(t *testing.T) {
 		exec.Command("git", "-C", tmpDir, "add", "staged.txt").Run()
 
 		status := svc.GetRepoStatus("owner", "repo")
-		staged, ok := status["staged"].([]string)
+		staged, ok := status["staged"].([]FileStatus)
 		if !ok || len(staged) == 0 {
 			t.Error("GetRepoStatus() should report staged files")
 		}

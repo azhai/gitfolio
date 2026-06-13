@@ -5,7 +5,7 @@ import { useNavigate, useLocation, Link as RouterLink } from 'react-router-dom'
 import { reposAPI } from '../api/index'
 import { t, timeAgo } from '../i18n/index'
 import { ProjectTabIcons, IconMap } from '../components/Icons'
-import MigrateProgress from './MigrateProgress'
+import { MigrateProgress } from './HomePages'
 
 const TABS = [
   { key: 'tree', labelKey: 'project.files', icon: 'code' },
@@ -178,39 +178,33 @@ const ProjectDetail = () => {
             <CommitIcon size={13} /><Text>{t('project.commitsCount', { count: info.commits_count || 0 })}</Text>
           </HStack>
         </RouterLink>
-        <HStack gap="3px" ml="8px">
-          <Button size="xs" h="24px" px="8px" fontSize="12px" rounded="4px"
-            bg={isStarred ? '#fff7ed' : '#f6f8fa'} border="1px solid" borderColor={isStarred ? '#fdba74' : '#d1d5db'}
-            color={isStarred ? '#ea580c' : '#555'}
-            _hover={{ bg: isStarred ? '#ffedd5' : '#eff2f5' }}
-            _active={{ bg: isStarred ? '#ffedd5' : '#eff2f5' }}
-            leftIcon={<StarIcon size={12} color={isStarred ? '#ea580c' : '#888'} />}
-            onClick={handleStar} isLoading={actionLoading}>
-            {isStarred ? t('project.starred') : t('project.star')} {starCount}
-          </Button>
-        </HStack>
-        <HStack gap="3px">
-          <Button size="xs" h="24px" px="8px" fontSize="12px" rounded="4px"
-            bg="#f6f8fa" border="1px solid" borderColor="#d1d5db" color="#555"
-            _hover={{ bg: '#eff2f5' }} _active={{ bg: '#eff2f5' }}
-            leftIcon={<ForkIcon size={12} color="#888" />}>
-            {t('project.fork')} {info.forks_count || 0}
-          </Button>
-        </HStack>
-        <HStack gap="3px">
-          <Button size="xs" h="24px" px="8px" fontSize="12px" rounded="4px"
-            bg={isWatched ? '#f0fdf4' : '#f6f8fa'} border="1px solid" borderColor={isWatched ? '#86efac' : '#d1d5db'}
-            color={isWatched ? '#16a34a' : '#555'}
-            _hover={{ bg: isWatched ? '#dcfce7' : '#eff2f5' }}
-            _active={{ bg: isWatched ? '#dcfce7' : '#eff2f5' }}
-            leftIcon={<EyeIcon size={12} color={isWatched ? '#16a34a' : '#888'} />}
-            onClick={handleWatch} isLoading={actionLoading}>
-            {isWatched ? t('project.watched') : t('project.watch')} {watchCount}
-          </Button>
-        </HStack>
+        <Button size="xs" h="24px" px="8px" fontSize="12px" rounded="4px" ml="8px"
+          bg={isStarred ? '#fff7ed' : '#f6f8fa'} border="1px solid" borderColor={isStarred ? '#fdba74' : '#d1d5db'}
+          color={isStarred ? '#ea580c' : '#555'}
+          _hover={{ bg: isStarred ? '#ffedd5' : '#eff2f5' }}
+          _active={{ bg: isStarred ? '#ffedd5' : '#eff2f5' }}
+          leftIcon={<StarIcon size={12} color={isStarred ? '#ea580c' : '#888'} />}
+          onClick={handleStar} isLoading={actionLoading}>
+          {isStarred ? t('project.starred') : t('project.star')} {starCount}
+        </Button>
+        <Button size="xs" h="24px" px="8px" fontSize="12px" rounded="4px"
+          bg="#f6f8fa" border="1px solid" borderColor="#d1d5db" color="#555"
+          _hover={{ bg: '#eff2f5' }} _active={{ bg: '#eff2f5' }}
+          leftIcon={<ForkIcon size={12} color="#888" />}>
+          {t('project.fork')} {info.forks_count || 0}
+        </Button>
+        <Button size="xs" h="24px" px="8px" fontSize="12px" rounded="4px"
+          bg={isWatched ? '#f0fdf4' : '#f6f8fa'} border="1px solid" borderColor={isWatched ? '#86efac' : '#d1d5db'}
+          color={isWatched ? '#16a34a' : '#555'}
+          _hover={{ bg: isWatched ? '#dcfce7' : '#eff2f5' }}
+          _active={{ bg: isWatched ? '#dcfce7' : '#eff2f5' }}
+          leftIcon={<EyeIcon size={12} color={isWatched ? '#16a34a' : '#888'} />}
+          onClick={handleWatch} isLoading={actionLoading}>
+          {isWatched ? t('project.watched') : t('project.watch')} {watchCount}
+        </Button>
       </HStack>
 
-      <Flex align="center" justify="space-between" borderBottom="1px solid" borderColor="#e5e7eb" mb="20px">
+      <Box borderBottom="1px solid" borderColor="#e5e7eb" mb="20px">
         <Tabs index={getActiveTab()} onChange={onTabChange} isManual colorScheme="green">
           <TabList borderColor="transparent" pb={0}>
             {TABS.map(function(tab, idx) {
@@ -224,7 +218,7 @@ const ProjectDetail = () => {
             })}
           </TabList>
         </Tabs>
-      </Flex>
+      </Box>
 
       <Outlet key={location.pathname + '-' + refreshKey} />
     </Box>

@@ -2,6 +2,9 @@ package handlers
 
 import (
 	"fmt"
+	"net/url"
+	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -35,7 +38,8 @@ func GetRepositoryTree(c fiber.Ctx) error {
 	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
 	entries, err := gitSvc.GetTreeWithSize(result.OwnerName(), result.Repo.Name, ref, path)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+		// 仓库无提交时返回空列表而非错误
+		return c.Status(fiber.StatusOK).JSON(fiber.Map{"path": path, "ref": ref, "entries": []interface{}{}})
 	}
 
 	sort.Slice(entries, func(i, j int) bool {
@@ -55,6 +59,7 @@ func GetRepositoryFile(c fiber.Ctx) error {
 		path = c.Query("path", "")
 	}
 	ref := c.Query("ref", "HEAD")
+	hexDump := c.Query("hex", "")
 
 	result, err := helpers.GetOwnerAndRepoWithPrivateAccessFromParams(c)
 	if err != nil {
@@ -66,6 +71,15 @@ func GetRepositoryFile(c fiber.Ctx) error {
 	}
 
 	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
+
+	if hexDump == "true" || hexDump == "1" {
+		hexContent, totalSize, err := gitSvc.GetFileHexDump(result.OwnerName(), result.Repo.Name, ref, path, 8192)
+		if err != nil {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "File not found"})
+		}
+		return c.Status(fiber.StatusOK).JSON(fiber.Map{"path": path, "ref": ref, "hex_content": hexContent, "total_size": totalSize})
+	}
+
 	content, err := gitSvc.GetFileContentByRef(result.OwnerName(), result.Repo.Name, ref, path)
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "File not found"})
@@ -78,9 +92,18 @@ func GetRepositoryRawFile(c fiber.Ctx) error {
 	path := c.Params("*", "")
 	ref := c.Query("ref", "HEAD")
 
-	result, err := helpers.GetOwnerAndRepoWithPrivateAccessFromParams(c)
+	decodedPath, err := url.PathUnescape(path)
+	if err != nil {
+		decodedPath = path
+	}
+
+	result, err := helpers.GetOwnerAndRepo(c, c.Params("owner"), c.Params("repo"))
 	if err != nil {
 		return err
+	}
+
+	if result == nil || result.Repo == nil {
+		return c.Status(fiber.StatusNotFound).SendString("Repository not found")
 	}
 
 	if result.Repo.LocalPath == "" {
@@ -88,13 +111,46 @@ func GetRepositoryRawFile(c fiber.Ctx) error {
 	}
 
 	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
-	content, err := gitSvc.GetFileContentByRef(result.OwnerName(), result.Repo.Name, ref, path)
+	content, err := gitSvc.GetFileContentByRef(result.OwnerName(), result.Repo.Name, ref, decodedPath)
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).SendString("File not found")
 	}
 
-	c.Set("Content-Type", getContentType(path))
+	contentType := getContentType(decodedPath)
+	if isBinaryContentType(contentType) {
+		var binaryData []byte
+		if ref == "__working__" || ref == "__staged__" {
+			fullPath := filepath.Join(result.Repo.LocalPath, decodedPath)
+			var readErr error
+			binaryData, readErr = os.ReadFile(fullPath) //nolint:gosec
+			if readErr != nil {
+				return c.Status(fiber.StatusNotFound).SendString("File not found")
+			}
+		} else {
+			repoPath := result.Repo.LocalPath
+			cmd := exec.Command("git", "-C", repoPath, "show", ref+":"+decodedPath)
+			output, cmdErr := cmd.Output()
+			if cmdErr != nil {
+				return c.Status(fiber.StatusNotFound).SendString("File not found")
+			}
+			binaryData = output
+		}
+		c.Set("Content-Type", contentType)
+		return c.Status(fiber.StatusOK).Send(binaryData)
+	}
+
+	c.Set("Content-Type", contentType)
 	return c.Status(fiber.StatusOK).SendString(content)
+}
+
+func isBinaryContentType(ct string) bool {
+	return strings.HasPrefix(ct, "image/") ||
+		strings.HasPrefix(ct, "video/") ||
+		strings.HasPrefix(ct, "audio/") ||
+		strings.HasPrefix(ct, "application/octet-stream") ||
+		strings.HasPrefix(ct, "application/pdf") ||
+		strings.HasPrefix(ct, "application/zip") ||
+		strings.HasPrefix(ct, "font/")
 }
 
 // GetRepositoryBranches 获取仓库所有分支列表，非镜像项目额外返回暂存区和工作区状态
@@ -811,6 +867,26 @@ func GetRepoStatus(c fiber.Ctx) error {
 	}
 
 	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
+
+	if gitSvc.IsBareRepository(result.OwnerName(), result.Repo.Name) {
+		branchCmd := exec.Command("git", "-C", result.Repo.LocalPath, "rev-parse", "--abbrev-ref", "HEAD")
+		currentBranch := ""
+		if output, err := branchCmd.Output(); err == nil {
+			currentBranch = strings.TrimSpace(string(output))
+		}
+		return c.Status(fiber.StatusOK).JSON(fiber.Map{
+			"rebasing":       false,
+			"reverting":      false,
+			"merging":        false,
+			"cherry_picking": false,
+			"conflict_files": []string{},
+			"current_branch": currentBranch,
+			"staged":         []string{},
+			"unstaged":       []string{},
+			"untracked":      []string{},
+		})
+	}
+
 	status := gitSvc.GetRepoStatus(result.OwnerName(), result.Repo.Name)
 	return c.Status(fiber.StatusOK).JSON(status)
 }

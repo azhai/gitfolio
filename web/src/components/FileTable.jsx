@@ -47,7 +47,7 @@ function FileIconComp({ name, size = 15, color: iconColor }) {
 var LOCAL_STAGED = '__staged__'
 var LOCAL_WORKING = '__working__'
 
-const FileTable = ({ owner: propOwner, repo: propRepo }) => {
+const FileTable = ({ owner: propOwner, repo: propRepo, workingPanelToggle }) => {
   var BranchIcon = IconMap.branch
   var TagIcon = IconMap.tag
   var PlusIcon = IconMap.plus
@@ -168,6 +168,7 @@ const FileTable = ({ owner: propOwner, repo: propRepo }) => {
     if (useRef === LOCAL_STAGED) {
       var entries = stagedFiles.map(function(f) {
         var name = typeof f === 'string' ? f : (f.path || f.name || '')
+        var status = typeof f === 'string' ? '' : (f.status || '')
         return {
           name: name.split('/').pop(),
           isDir: false,
@@ -175,6 +176,7 @@ const FileTable = ({ owner: propOwner, repo: propRepo }) => {
           commitMsg: t('fileTable.staged'),
           time: '',
           path: name,
+          status: status,
         }
       })
       setFiles(entries)
@@ -186,11 +188,13 @@ const FileTable = ({ owner: propOwner, repo: propRepo }) => {
       var allFiles = [].concat(
         workingFiles.map(function(f) {
           var name = typeof f === 'string' ? f : (f.path || f.name || '')
-          return { name: name.split('/').pop(), isDir: false, size: '', commitMsg: t('fileTable.modified'), time: '', path: name }
+          var status = typeof f === 'string' ? '' : (f.status || '')
+          return { name: name.split('/').pop(), isDir: false, size: '', commitMsg: t('fileTable.modified'), time: '', path: name, status: status }
         }),
         untrackedFiles.map(function(f) {
           var name = typeof f === 'string' ? f : (f.path || f.name || '')
-          return { name: name.split('/').pop(), isDir: false, size: '', commitMsg: t('fileTable.untracked'), time: '', path: name }
+          var status = typeof f === 'string' ? 'A' : (f.status || 'A')
+          return { name: name.split('/').pop(), isDir: false, size: '', commitMsg: t('fileTable.untracked'), time: '', path: name, status: status }
         })
       )
       setFiles(allFiles)
@@ -233,13 +237,10 @@ const FileTable = ({ owner: propOwner, repo: propRepo }) => {
   }, [currentRef, currentPath, loadTree])
 
   function handleRowClick(file) {
-    if (isLocalRef) return
+    if (file.isDir) return
+    if (file.status === 'D') return
     var refPrefix = currentRef ? currentRef + '/' : ''
-    if (file.isDir) {
-      navigate('/' + owner + '/' + repo + '/tree/' + refPrefix + file.path)
-    } else {
-      navigate('/' + owner + '/' + repo + '/tree/' + refPrefix + file.path)
-    }
+    navigate('/' + owner + '/' + repo + '/tree/' + refPrefix + file.path)
   }
 
   var breadcrumbs = currentPath.split('/').filter(Boolean)
@@ -352,25 +353,12 @@ const FileTable = ({ owner: propOwner, repo: propRepo }) => {
                 {lastCommit.author}
               </Text>
             )}
-            <Text ref={commitTextRef} fontSize="13px" color="#888" noOfLines={commitExpanded ? undefined : 1}
-              flex="1" minW={0}
-              overflow={commitExpanded ? 'visible' : 'hidden'} textOverflow="ellipsis" whiteSpace={commitExpanded ? 'normal' : 'nowrap'}>
+            <Text ref={commitTextRef} fontSize="13px" color="#888"
+              flex="1" minW="0" maxW="400px"
+              overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">
               {lastCommit.message || ''}
             </Text>
-            {commitOverflow && !commitExpanded && (
-              <Text fontSize="12px" color="#16a34a" cursor="pointer" flexShrink={0}
-                onClick={function(e) { e.stopPropagation(); setCommitExpanded(true) }}
-                _hover={{ textDecoration: 'underline' }}>
-                {t('fileTable.expand')}
-              </Text>
-            )}
-            {commitExpanded && (
-              <Text fontSize="12px" color="#16a34a" cursor="pointer" flexShrink={0}
-                onClick={function(e) { e.stopPropagation(); setCommitExpanded(false) }}
-                _hover={{ textDecoration: 'underline' }}>
-                {t('fileTable.collapse')}
-              </Text>
-            )}
+
             {lastCommit.time && (
               <Text fontSize="12px" color="#aaa" whiteSpace="nowrap" flexShrink={0}>
                 {timeAgo(lastCommit.time)}
@@ -425,6 +413,15 @@ const FileTable = ({ owner: propOwner, repo: propRepo }) => {
               </MenuItem>
             </MenuList>
           </Menu>
+          {workingPanelToggle && (
+            <Button h="28px" px="10px" fontSize="12px" rounded="6px"
+              variant="outline" borderColor={workingPanelToggle.collapsed ? '#22c55e' : '#9ca3af'}
+              color={workingPanelToggle.collapsed ? '#16a34a' : '#6b7280'}
+              _hover={{ bg: workingPanelToggle.collapsed ? '#f0fdf4' : '#f3f4f6' }}
+              onClick={workingPanelToggle.onToggle}>
+              {workingPanelToggle.collapsed ? '☰ ' + t('gitWorkflow.workingPanel') : '✕ ' + t('gitWorkflow.workingPanel')}
+            </Button>
+          )}
         </HStack>
       </Flex>
 
@@ -455,28 +452,41 @@ const FileTable = ({ owner: propOwner, repo: propRepo }) => {
       <Box>
         {files.map(function(file) {
           var fi = getFileIcon(file.name, file.isDir)
+          var isDeleted = file.status === 'D'
+          var statusColors = { A: '#16a34a', M: '#d97706', D: '#dc2626' }
+          var statusLabels = { A: 'A', M: 'M', D: 'D' }
           return (
             <Flex key={file.path || file.name}
               align="center" px="16px" py="7px"
-              cursor="pointer" transition="background-color 0.15s"
-              _hover={{ bg: '#f9fafb' }}
+              cursor={isDeleted ? 'default' : 'pointer'} transition="background-color 0.15s"
+              _hover={isDeleted ? {} : { bg: '#f9fafb' }}
               borderBottom="1px solid #f5f5f5"
               onClick={function() { handleRowClick(file) }}>
               <Box w="20px" flexShrink={0} textAlign="center" lineHeight="1">
-                <FileIconComp name={fi} size={14} color={fi.color} />
+                <FileIconComp name={fi} size={14} color={isDeleted ? '#ccc' : fi.color} />
               </Box>
-              <Text fontSize="13.5px" fontWeight="500" w="220px" flexShrink={0} ml="8px"
-                color={file.isDir ? '#16a34a' : '#333'}
-                _hover={{ textDecoration: 'underline' }}>
+              <Text fontSize="13.5px" fontWeight="500" w="180px" maxW="180px" flexShrink={1} ml="8px"
+                color={isDeleted ? '#aaa' : (file.isDir ? '#16a34a' : '#333')}
+                overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap"
+                textDecoration={isDeleted ? 'line-through' : 'none'}
+                _hover={isDeleted ? {} : { textDecoration: 'underline' }}>
                 {file.name}
               </Text>
-              <Text fontSize="13px" color="#888" flex="1" truncate
+              {file.status && (
+                <Text fontSize="10px" fontWeight="700" fontFamily="monospace" ml="6px"
+                  color={statusColors[file.status] || '#888'}
+                  bg={statusColors[file.status] ? statusColors[file.status] + '15' : '#f3f4f6'}
+                  px="4px" py="0" rounded="3px" lineHeight="16px" flexShrink={0}>
+                  {statusLabels[file.status] || file.status}
+                </Text>
+              )}
+              <Text fontSize="13px" color="#888" flex="1" minW="0" maxW="300px"
                 overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap"
                 mx="16px" textAlign="left">
-                {file.commitMsg}
+                {file.commitMsg.length > 60 ? file.commitMsg.substring(0, 60) + '...' : file.commitMsg}
               </Text>
               {file.time && (
-                <Text fontSize="12px" color="#aaa" w="120px" flexShrink={0} textAlign="left">{file.time}</Text>
+                <Text fontSize="12px" color="#aaa" w="100px" flexShrink={0} textAlign="left">{file.time}</Text>
               )}
             </Flex>
           )

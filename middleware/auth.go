@@ -29,6 +29,7 @@ func RequireAuth() fiber.Handler {
 			}
 		}
 		if c.Method() == fiber.MethodGet {
+
 			return OptionalAuth()(c)
 		}
 		return AuthMiddleware()(c)

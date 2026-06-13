@@ -179,37 +179,76 @@ func (s *GitService) IsBareRepository(owner, name string) bool {
 	return strings.TrimSpace(string(output)) == "true"
 }
 
-// GetStagedFiles 获取暂存区中已暂存的文件列表
-func (s *GitService) GetStagedFiles(owner, name string) ([]string, error) {
-	repoPath := s.getRepoPath(owner, name)
-	cmd := exec.Command("git", "-C", repoPath, "diff", "--cached", "--name-only")
-	output, err := cmd.Output()
-	if err != nil {
-		return nil, err
-	}
-	return parseLines(output), nil
+// FileStatus 文件变更状态
+type FileStatus struct {
+	Path   string `json:"path"`
+	Status string `json:"status"` // A=新增, M=修改, D=删除
 }
 
-// GetWorkingTreeFiles 获取工作区中已修改但未暂存的文件列表
-func (s *GitService) GetWorkingTreeFiles(owner, name string) ([]string, error) {
+// GetStagedFiles 获取暂存区中已暂存的文件列表（含状态）
+func (s *GitService) GetStagedFiles(owner, name string) ([]FileStatus, error) {
 	repoPath := s.getRepoPath(owner, name)
-	cmd := exec.Command("git", "-C", repoPath, "diff", "--name-only")
+	cmd := exec.Command("git", "-C", repoPath, "diff", "--cached", "--name-status")
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, err
 	}
-	return parseLines(output), nil
+	return parseFileStatuses(output), nil
+}
+
+// GetWorkingTreeFiles 获取工作区中已修改但未暂存的文件列表（含状态）
+func (s *GitService) GetWorkingTreeFiles(owner, name string) ([]FileStatus, error) {
+	repoPath := s.getRepoPath(owner, name)
+	cmd := exec.Command("git", "-C", repoPath, "diff", "--name-status")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, err
+	}
+	return parseFileStatuses(output), nil
 }
 
 // GetUntrackedFiles 获取工作区中未被跟踪的文件列表
-func (s *GitService) GetUntrackedFiles(owner, name string) ([]string, error) {
+func (s *GitService) GetUntrackedFiles(owner, name string) ([]FileStatus, error) {
 	repoPath := s.getRepoPath(owner, name)
 	cmd := exec.Command("git", "-C", repoPath, "ls-files", "--others", "--exclude-standard")
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, err
 	}
-	return parseLines(output), nil
+	lines := parseLines(output)
+	result := make([]FileStatus, len(lines))
+	for i, line := range lines {
+		result[i] = FileStatus{Path: line, Status: "A"}
+	}
+	return result, nil
+}
+
+// parseFileStatuses 解析 git diff --name-status 的输出
+// 格式: "M\tfile.txt" 或 "A\tfile.txt" 或 "D\tfile.txt"
+func parseFileStatuses(output []byte) []FileStatus {
+	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+	var result []FileStatus
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		parts := strings.SplitN(line, "\t", 2)
+		if len(parts) == 2 {
+			status := strings.TrimSpace(parts[0])
+			// 取状态码首字母（如 R100 -> R, 但我们统一用 A/M/D）
+			if len(status) > 1 {
+				switch status[0] {
+				case 'R', 'C':
+					status = "A" // 重命名/复制视为新增
+				default:
+					status = string(status[0])
+				}
+			}
+			result = append(result, FileStatus{Path: parts[1], Status: status})
+		}
+	}
+	return result
 }
 
 // StageFiles 将指定文件添加到暂存区，若 files 为空则添加所有变更

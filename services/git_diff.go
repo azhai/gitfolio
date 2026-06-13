@@ -2,7 +2,9 @@ package services
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
@@ -157,6 +159,11 @@ func (s *GitService) GetTreeWithSize(owner, name, ref, path string) ([]TreeEntry
 func (s *GitService) GetFileContentByRef(owner, name, ref, path string) (string, error) {
 	repoPath := s.getRepoPath(owner, name)
 
+	// __working__ 和 __staged__ 特殊引用：直接从工作区读取文件
+	if ref == "__working__" || ref == "__staged__" {
+		return s.readFileFromWorktree(repoPath, path)
+	}
+
 	cmd := exec.Command("git", "-C", repoPath, "show", ref+":"+path)
 	output, err := cmd.Output()
 	if err != nil {
@@ -164,6 +171,69 @@ func (s *GitService) GetFileContentByRef(owner, name, ref, path string) (string,
 	}
 
 	return string(output), nil
+}
+
+// readFileFromWorktree 从工作区直接读取文件内容
+func (s *GitService) readFileFromWorktree(repoPath, path string) (string, error) {
+	fullPath := filepath.Join(repoPath, path)
+	data, err := os.ReadFile(fullPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read file from worktree: %w", err)
+	}
+	return string(data), nil
+}
+
+// GetFileHexDump 获取二进制文件的十六进制转储，最多显示 maxBytes 字节
+func (s *GitService) GetFileHexDump(owner, name, ref, path string, maxBytes int) (string, int, error) {
+	repoPath := s.getRepoPath(owner, name)
+
+	var data []byte
+	var err error
+
+	if ref == "__working__" || ref == "__staged__" {
+		fullPath := filepath.Join(repoPath, path)
+		data, err = os.ReadFile(fullPath)
+	} else {
+		cmd := exec.Command("git", "-C", repoPath, "show", ref+":"+path)
+		data, err = cmd.Output()
+	}
+	if err != nil {
+		return "", 0, fmt.Errorf("failed to read file: %w", err)
+	}
+
+	totalSize := len(data)
+	if maxBytes > 0 && len(data) > maxBytes {
+		data = data[:maxBytes]
+	}
+
+	var sb strings.Builder
+	for i := 0; i < len(data); i += 16 {
+		sb.WriteString(fmt.Sprintf("%08x  ", i))
+		for j := 0; j < 16; j++ {
+			if i+j < len(data) {
+				sb.WriteString(fmt.Sprintf("%02x ", data[i+j]))
+			} else {
+				sb.WriteString("   ")
+			}
+			if j == 7 {
+				sb.WriteString(" ")
+			}
+		}
+		sb.WriteString(" |")
+		for j := 0; j < 16; j++ {
+			if i+j < len(data) {
+				b := data[i+j]
+				if b >= 32 && b <= 126 {
+					sb.WriteByte(b)
+				} else {
+					sb.WriteByte('.')
+				}
+			}
+		}
+		sb.WriteString("|\n")
+	}
+
+	return sb.String(), totalSize, nil
 }
 
 // GetPRFiles 获取 PR 的文件变更列表，含增删行数和补丁

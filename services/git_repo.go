@@ -86,6 +86,17 @@ func (s *GitService) InitRepository(owner string, repo *models.Repository) error
 		return fmt.Errorf("failed to create README: %w", err)
 	}
 
+	addCmd := exec.Command("git", "-C", repoPath, "add", "README.md")
+	if err := addCmd.Run(); err != nil {
+		return fmt.Errorf("failed to stage README: %w", err)
+	}
+
+	commitCmd := exec.Command("git", "-C", repoPath, "commit", "-m", "Initial commit")
+	commitCmd.Env = append(os.Environ(), "GIT_AUTHOR_NAME=gitfolio", "GIT_AUTHOR_EMAIL=gitfolio@localhost", "GIT_COMMITTER_NAME=gitfolio", "GIT_COMMITTER_EMAIL=gitfolio@localhost")
+	if err := commitCmd.Run(); err != nil {
+		return fmt.Errorf("failed to create initial commit: %w", err)
+	}
+
 	return nil
 }
 
