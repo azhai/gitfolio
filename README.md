@@ -1,3 +1,5 @@
+
+
 # GitFolio
 
 一个轻量级的 Git 仓库管理系统，采用 Go + React 开发，支持从 GitHub 镜像同步仓库数据。
@@ -66,7 +68,7 @@ make dev
 go run main.go
 ```
 
-服务器将在 `http://localhost:9000` 启动（默认端口）。
+服务器将在 `http://localhost:3000` 启动（默认端口）。
 
 ### 默认账号
 
@@ -80,8 +82,8 @@ go run main.go
 | 变量名 | 默认值 | 说明 |
 |--------|--------|------|
 | `APP_MODE` | `debug` | 运行模式（debug/release） |
-| `SERVER_PORT` | `9000` | 服务端口 |
-| `BASE_URL` | `http://127.0.0.1:9000` | 站点 URL |
+| `SERVER_PORT` | `3000` | 服务端口 |
+| `BASE_URL` | `http://localhost:3000` | 站点 URL |
 | `DB_TYPE` | `sqlite` | 数据库类型（sqlite/pgsql） |
 | `DB_DSN` | `gitfolio.db` | 数据库连接串 |
 | `JWT_SECRET` | - | JWT 签名密钥（**生产环境必须修改**） |
@@ -146,7 +148,7 @@ GitFolio 支持从 GitHub 镜像同步仓库数据，包括：
 ```bash
 make dev
 # 前端通过 Vite 构建，后端通过 go run 热启动
-# 访问: http://localhost:9000
+# 访问: http://localhost:3000
 ```
 
 ### 构建
