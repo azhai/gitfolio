@@ -55,6 +55,7 @@ func OpenDB(cfg drivers.DatabaseConfig) (*Database, error) {
 		if err != nil {
 			return nil, fmt.Errorf("Failed to migrate database: %v", err)
 		}
+		// 清理历史重复的议题/PR：同步逻辑已经不写重复行，这里只修旧数据。
 		if err := CleanupDuplicateRepositoryNumbers(db); err != nil {
 			return nil, fmt.Errorf("Failed to clean up duplicate issues/PRs: %v", err)
 		}
@@ -81,9 +82,6 @@ func OpenDB(cfg drivers.DatabaseConfig) (*Database, error) {
 		}
 		if err := BackfillTimestamps(db); err != nil {
 			return nil, fmt.Errorf("Failed to backfill timestamps: %v", err)
-		}
-		if err := EnsureUniqueRepositoryNumbers(db); err != nil {
-			return nil, fmt.Errorf("Failed to ensure unique issue/PR numbers: %v", err)
 		}
 	}
 	return db, nil

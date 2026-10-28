@@ -537,45 +537,6 @@ func BackfillTimestamps(db *Database) error {
 	return nil
 }
 
-// EnsureUniqueRepositoryNumbers 给 issue / pull_request 加上
-// (repository_id, number) 唯一索引。
-//
-// 同步逻辑已经不插入重复编号，但唯一索引是最后一道防线：
-// 少了它，一旦某次同步漏判，重复行会悄悄堆积，之后每个依赖
-// "一个编号一行" 的查询都会出错。调用前 CleanupDuplicateRepositoryNumbers
-// 已经把历史重复清干净。
-func EnsureUniqueRepositoryNumbers(db *Database) error {
-	if db == nil || db.DB == nil {
-		return fmt.Errorf("database not initialized")
-	}
-	ctx := context.Background()
-	driverName := strings.ToLower(db.Driver().Name())
-	isPG := driverName == "postgres" || driverName == "postgresql"
-
-	for _, table := range []string{"issue", "pull_request"} {
-		exists, err := tableExists(db, table)
-		if err != nil {
-			return err
-		}
-		if !exists {
-			continue
-		}
-		qualified := quoteIdent(table)
-		if isPG {
-			if schema := pgSchemaFor(db, table); schema != "" {
-				qualified = quoteIdent(schema) + "." + quoteIdent(table)
-			}
-		}
-		sql := fmt.Sprintf("CREATE UNIQUE INDEX IF NOT EXISTS %s ON %s (%s, %s)",
-			quoteIdent("uk_"+table+"_repo_number"), qualified,
-			quoteIdent("repository_id"), quoteIdent("number"))
-		if err := db.RawExecContext(ctx, sql); err != nil {
-			return fmt.Errorf("failed to add unique index on %s(repository_id, number): %w", table, err)
-		}
-	}
-	return nil
-}
-
 func tableExists(db *Database, name string) (bool, error) {
 	ctx := context.Background()
 	driverName := strings.ToLower(db.Driver().Name())
