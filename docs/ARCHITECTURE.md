@@ -56,7 +56,7 @@ gitfolio/
 │   ├── assets/
 │   │   ├── css/            # 设计令牌与组件样式
 │   │   ├── js/             # Alpine 组件、API 客户端、i18n、图标
-│   │   └── lib/            # Alpine/marked/Prism/Sortable 运行时产物
+│   │   └── lib/            # Alpine/marked/microlight/Sortable 运行时产物
 │   └── public/             # favicon 等静态资源
 ├── main.go                 # 程序入口
 └── Makefile                # 构建命令

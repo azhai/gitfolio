@@ -75,8 +75,7 @@ Alpine.data('snippets', function () {
       } finally {
         this.loading = false
         this.$nextTick(function () {
-          var el = document.querySelector('.code-block code')
-          if (el && window.Prism) window.Prism.highlightElement(el)
+          if (window.microlight) window.microlight.reset()
         })
       }
     },
@@ -95,11 +94,6 @@ Alpine.data('snippets', function () {
       if (!this.snippet) return false
       var me = this.$store.auth.username
       return this.$store.auth.isAdmin || this.snippet.username === me || this.snippet.owner === me
-    },
-
-    get codeClass() {
-      var lang = (this.snippet && this.snippet.language) || ''
-      return lang ? 'language-' + lang.toLowerCase() : ''
     },
 
     save: async function () {

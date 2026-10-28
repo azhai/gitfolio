@@ -24,7 +24,7 @@ web/
     js/icons.js     lucide 图标集（新图标按原有格式手工补）
     js/model.js     项目类型、任务状态等展示元数据
     js/pages/*.js   每个页面一个 Alpine 组件模块
-    lib/            alpine / marked / prism / sortable 预构建产物
+    lib/            alpine / marked / microlight / sortable 预构建产物
   public/           favicon 等静态资源
 ```
 
@@ -69,7 +69,7 @@ web/
 
 ## 依赖与升级
 
-运行时库只有四个：Alpine 3.17、marked（Markdown）、Prism（代码高亮）、
+运行时库只有四个：Alpine 3.17、marked（Markdown）、microlight（代码高亮，2KB）、
 SortableJS（拖拽排序）。它们的产物已放在 `web/assets/lib/`，图标集
 `web/assets/js/icons.js` 也已生成，全部随仓库提交。项目没有 `package.json`
 或包管理器，构建、部署都不需要 Node。

@@ -13,16 +13,6 @@ import { toast, copyText, sanitizeHtml, confirmBox } from '../ui.js'
 
 var PER_PAGE = 30
 
-var EXT_LANG = {
-  go: 'go', js: 'javascript', jsx: 'jsx', ts: 'typescript', tsx: 'tsx',
-  py: 'python', rb: 'ruby', rs: 'rust', java: 'java', c: 'c', h: 'c',
-  cpp: 'cpp', cs: 'csharp', php: 'php', css: 'css', html: 'markup',
-  xml: 'markup', json: 'json', yaml: 'yaml', yml: 'yaml', toml: 'toml',
-  md: 'markdown', sql: 'sql', sh: 'bash', bash: 'bash', ini: 'ini',
-  diff: 'diff', lua: 'lua', kt: 'kotlin', swift: 'swift', scala: 'scala',
-  r: 'r', ps1: 'powershell', vim: 'vim', nginx: 'nginx',
-}
-
 var TAB_GROUPS = {
   issues: ['issues', 'issue', 'issue-new'],
   prs: ['prs', 'pr', 'pr-new'],
@@ -109,7 +99,6 @@ Alpine.data('project', function () {
     filePath: '',
     fileContent: '',
     fileSize: '',
-    fileLangClass: '',
     readmeHtml: '',
     canEditFile: false,
     editing: false,
@@ -282,9 +271,6 @@ Alpine.data('project', function () {
 
     openFile: async function (path) {
       this.filePath = path || ''
-      var name = this.filePath.split('/').pop() || ''
-      var ext = name.indexOf('.') >= 0 ? name.split('.').pop().toLowerCase() : ''
-      this.fileLangClass = EXT_LANG[ext] ? 'language-' + EXT_LANG[ext] : ''
       var data = await reposAPI.file(this.owner, this.repoName, path)
       this.file = data || {}
       this.fileContent = (data && (data.content || data.raw)) || ''
@@ -1070,10 +1056,11 @@ Alpine.data('project', function () {
 
     // ---------- misc ----------
 
+    // microlight 直接读取 textContent 再重写元素，所以可以反复调用；
+    // 它按 class 扫描整页的 .microlight 块，一次调用就够。
     highlight: function () {
-      if (!window.Prism || !this.fileContent) return
-      var el = this.$refs.fileCode
-      if (el) window.Prism.highlightElement(el)
+      if (!window.microlight || !this.fileContent) return
+      window.microlight.reset()
     },
 
     markdownHtml: function (text) {

@@ -14,7 +14,7 @@ case "${1:-build}" in
     echo "✅ Nothing to build: web/{pages,assets,public} are embedded at compile time."
     ;;
   install)
-    echo "ℹ️  Nothing to install: web/assets/lib/ (alpine/marked/prism/sortable) is vendored."
+    echo "ℹ️  Nothing to install: web/assets/lib/ (alpine/marked/microlight/sortable) is vendored."
     ;;
   serve)
     # Pages reference /assets/*, so the preview has to serve web/ as the root

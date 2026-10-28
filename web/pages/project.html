@@ -234,7 +234,7 @@
                 </div>
               </div>
               <div class="code-block" style="border: 0; border-radius: 0" x-show="!editing">
-                <pre><code :class="fileLangClass" x-ref="fileCode" x-text="fileContent"></code></pre>
+                <pre><code class="microlight" x-ref="fileCode" x-text="fileContent"></code></pre>
               </div>
               <div class="card__body" x-show="editing" x-cloak>
                 <textarea class="textarea mono" rows="18" x-model="editContent"></textarea>
@@ -1208,7 +1208,7 @@
     </div>
 
     <div id="app-footer"></div>
-    <script src="/assets/lib/prism.js" defer></script>
+    <script src="/assets/lib/microlight.js" defer></script>
     <script type="module" src="/assets/js/app.js"></script>
   </body>
 </html>
