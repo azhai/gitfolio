@@ -50,7 +50,8 @@ export function formatDuration(ms) {
 export function timeAgo(dateStr) {
   if (!dateStr) return ''
   var d = new Date(dateStr)
-  if (isNaN(d.getTime())) return ''
+  // Zero-value timestamps (0001-01-01) reach us as "1/1" and only add noise.
+  if (isNaN(d.getTime()) || d.getFullYear() < 1970) return '-'
   var diff = (Date.now() - d.getTime()) / 1000
   var time = packs[currentLang].time || {}
   if (diff < 10) return time.justNow || 'just now'

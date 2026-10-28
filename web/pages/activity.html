@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>GitFolio · 动态</title>
+    <link rel="stylesheet" href="/assets/css/app.css" />
+  </head>
+  <body class="app-body" data-page="activity">
+    <div id="app-shell"></div>
+
+    <main class="app-main" x-data="activity">
+      <div class="loading-box" x-show="loading">
+        <span class="spinner"></span><span x-text="t('common.loading')"></span>
+      </div>
+
+      <div x-show="!loading" x-cloak>
+        <div class="page-head">
+          <div class="row gap-8">
+            <span x-icon="{ name: 'activity', size: 22 }"></span>
+            <h1 class="page-title" x-text="t('activity.title')"></h1>
+          </div>
+        </div>
+
+        <div class="col gap-12">
+          <template x-for="(item, idx) in activities" :key="item.id || idx">
+            <div class="card" style="border-radius: 10px">
+              <div class="row gap-14" style="padding: 16px 20px; gap: 14px">
+                <span class="act-icon" :style="'background:' + meta(item.type).bg">
+                  <span x-icon="{ name: meta(item.type).icon, size: 18, color: meta(item.type).color }"></span>
+                </span>
+                <div class="grow">
+                  <div style="font-size: 13.5px; line-height: 1.7">
+                    <span class="strong" x-text="item.user || item.username || ''"></span>
+                    <span class="muted" x-text="' ' + (item.action || '')"></span>
+                    <span class="strong" :style="'color:' + meta(item.type).color"
+                      x-text="' ' + (item.target || '')"></span>
+                    <span class="badge badge--gray" style="margin-left: 4px"
+                      x-show="item.ref_name || item.ref"
+                      x-text="item.ref_name || item.ref"></span>
+                  </div>
+                  <div class="text-xs muted-2 mt-4" x-text="timeAgo(item.created_at)"></div>
+                </div>
+              </div>
+            </div>
+          </template>
+        </div>
+
+        <div class="empty" x-show="!activities.length" x-cloak>
+          <div class="empty__icon" x-icon="{ name: 'activity', size: 40 }"></div>
+          <div class="empty__title" x-text="t('activity.notFound')"></div>
+        </div>
+      </div>
+    </main>
+
+    <div id="app-footer"></div>
+    <script type="module" src="/assets/js/app.js"></script>
+  </body>
+</html>

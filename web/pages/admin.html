@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>GitFolio · 管理后台</title>
+    <link rel="stylesheet" href="/assets/css/app.css" />
+  </head>
+  <body class="app-body" data-page="admin">
+    <div id="app-shell"></div>
+
+    <main class="app-main" x-data="admin">
+      <div class="loading-box" x-show="loading">
+        <span class="spinner"></span><span x-text="t('common.loading')"></span>
+      </div>
+
+      <div x-show="!loading" x-cloak>
+        <div class="page-head">
+          <div class="row gap-8">
+            <span x-icon="{ name: 'shield', size: 22 }"></span>
+            <h1 class="page-title" x-text="t('admin.title')"></h1>
+          </div>
+        </div>
+
+        <div class="tabs mb-20">
+          <button class="tab" :class="tab === 'users' ? 'is-active' : ''" @click="tab = 'users'">
+            <span x-icon="{ name: 'users', size: 15 }"></span>
+            <span x-text="t('admin.userManagement')"></span>
+          </button>
+          <button class="tab" :class="tab === 'tasks' ? 'is-active' : ''" @click="switchTab('tasks')">
+            <span x-icon="{ name: 'clock', size: 15 }"></span>
+            <span x-text="t('admin.scheduledTasks')"></span>
+          </button>
+          <button class="tab" :class="tab === 'backup' ? 'is-active' : ''" @click="switchTab('backup')">
+            <span x-icon="{ name: 'database', size: 15 }"></span>
+            <span x-text="t('admin.dataBackup')"></span>
+          </button>
+        </div>
+
+        <!-- users -->
+        <section x-show="tab === 'users'">
+          <div class="row between gap-12 mb-16 wrap">
+            <input class="input" style="max-width: 280px; height: 34px" type="search"
+              x-model="search" :placeholder="t('admin.searchUser')" />
+            <button class="btn btn--primary btn--sm" @click="showCreate = true">
+              <span x-icon="{ name: 'plus', size: 14 }"></span>
+              <span x-text="t('userMgmt.newUser')"></span>
+            </button>
+          </div>
+
+          <div class="card">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th x-text="t('admin.userCol')"></th>
+                  <th x-text="t('admin.emailCol')"></th>
+                  <th style="width: 140px" x-text="t('admin.roleCol')"></th>
+                  <th style="width: 130px" x-text="t('admin.registeredAt')"></th>
+                  <th style="width: 110px"></th>
+                </tr>
+              </thead>
+              <tbody>
+                <template x-for="u in filteredUsers" :key="u.id || u.username">
+                  <tr>
+                    <td>
+                      <div class="row gap-8">
+                        <span class="avatar avatar--sm" x-text="(u.username || '?').slice(0, 2)"></span>
+                        <a class="strong" :href="'/users/' + u.username" x-text="u.username"></a>
+                      </div>
+                    </td>
+                    <td class="muted" x-text="u.email || t('userMgmt.noEmail')"></td>
+                    <td>
+                      <select class="select" style="height: 30px; font-size: 12.5px"
+                        :value="u.role" @change="changeRole(u, $event.target.value)">
+                        <option value="user" x-text="t('group.member')"></option>
+                        <option value="guest" x-text="t('common.guest')"></option>
+                        <option value="admin" x-text="t('userMgmt.admin')"></option>
+                      </select>
+                    </td>
+                    <td class="muted text-xs" x-text="timeAgo(u.created_at)"></td>
+                    <td class="text-right">
+                      <button class="btn btn--sm btn--ghost" @click="resetPassword(u)"
+                        x-text="t('admin.changePassword')"></button>
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+            <div class="empty" x-show="!filteredUsers.length" x-cloak>
+              <div class="empty__desc" x-text="t('admin.noUsers')"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- scheduled tasks -->
+        <section x-show="tab === 'tasks'" x-cloak>
+          <div class="card mb-20">
+            <div class="card__head">
+              <span class="card__title" x-text="t('admin.scheduledTasks')"></span>
+              <span class="text-xs muted" x-text="t('admin.totalScheduledTasks', { count: syncPoints.length })"></span>
+            </div>
+            <table class="table">
+              <thead>
+                <tr>
+                  <th x-text="t('admin.projectCol')"></th>
+                  <th x-text="t('admin.typeCol')"></th>
+                  <th x-text="t('admin.intervalCol')"></th>
+                  <th x-text="t('admin.statusCol')"></th>
+                  <th x-text="t('admin.lastSyncCol')"></th>
+                  <th x-text="t('admin.nextSyncCol')"></th>
+                </tr>
+              </thead>
+              <tbody>
+                <template x-for="sp in syncPoints" :key="sp.id">
+                  <tr>
+                    <td class="mono" x-text="sp.owner + '/' + sp.repo"></td>
+                    <td>
+                      <span class="badge badge--gray"
+                        x-text="sp.sync_type === 'mirror' ? t('admin.mirrorSync') : t('admin.statsRefresh')"></span>
+                    </td>
+                    <td class="muted" x-text="intervalLabel(sp.sync_interval)"></td>
+                    <td>
+                      <span class="badge" :class="sp.is_paused ? 'badge--amber' : 'badge--green'"
+                        x-text="sp.is_paused ? t('common.paused') : t('common.running')"></span>
+                    </td>
+                    <td class="muted text-xs" x-text="sp.last_sync_at ? timeAgo(sp.last_sync_at) : '-'"></td>
+                    <td class="muted text-xs" x-text="sp.next_sync_at ? timeAgo(sp.next_sync_at) : '-'"></td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+            <div class="empty" x-show="!syncPoints.length" x-cloak>
+              <div class="empty__desc" x-text="t('admin.noScheduledTasks')"></div>
+              <div class="text-xs muted-2 mt-4" x-text="t('admin.noScheduledTasksHint')"></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card__head">
+              <span class="card__title" x-text="t('admin.executionLogs')"></span>
+            </div>
+            <table class="table">
+              <thead>
+                <tr>
+                  <th style="width: 150px" x-text="t('admin.timeCol')"></th>
+                  <th x-text="t('admin.projectCol')"></th>
+                  <th style="width: 110px" x-text="t('admin.typeCol')"></th>
+                  <th style="width: 90px" x-text="t('admin.statusCol')"></th>
+                  <th style="width: 80px" x-text="t('admin.durationCol')"></th>
+                  <th x-text="t('admin.messageCol')"></th>
+                </tr>
+              </thead>
+              <tbody>
+                <template x-for="log in syncLogs" :key="log.id">
+                  <tr>
+                    <td class="muted text-xs" x-text="fmt.formatDateTime(log.created_at)"></td>
+                    <td class="mono" x-text="log.repo || '-'"></td>
+                    <td class="muted text-xs" x-text="log.sync_type || '-'"></td>
+                    <td>
+                      <span class="badge"
+                        :class="log.status === 'success' ? 'badge--green' : (log.status === 'failed' ? 'badge--red' : 'badge--gray')"
+                        x-text="log.status"></span>
+                    </td>
+                    <td class="muted text-xs" x-text="fmt.formatDuration(log.duration)"></td>
+                    <td class="muted text-xs truncate" style="max-width: 360px"
+                      x-text="log.message || log.error || ''"></td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+            <div class="empty" x-show="!syncLogs.length" x-cloak>
+              <div class="empty__desc" x-text="t('common.noData')"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- backups -->
+        <section x-show="tab === 'backup'" x-cloak>
+          <div class="row gap-8 mb-16">
+            <button class="btn btn--primary btn--sm" :disabled="backingUp" @click="createBackup('full')">
+              <span x-icon="{ name: 'database', size: 14 }"></span>
+              <span x-text="t('admin.fullBackup')"></span>
+            </button>
+            <button class="btn btn--sm" :disabled="backingUp" @click="createBackup('incremental')">
+              <span x-icon="{ name: 'download', size: 14 }"></span>
+              <span x-text="t('admin.incrementalBackup')"></span>
+            </button>
+            <button class="btn btn--sm btn--ghost" @click="loadBackups">
+              <span x-icon="{ name: 'refresh-cw', size: 14 }"></span>
+              <span x-text="t('common.refresh')"></span>
+            </button>
+          </div>
+
+          <div class="card">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th x-text="t('admin.backupName')"></th>
+                  <th style="width: 110px" x-text="t('admin.backupType')"></th>
+                  <th style="width: 110px" x-text="t('admin.backupStatus')"></th>
+                  <th style="width: 90px" x-text="t('admin.backupSize')"></th>
+                  <th style="width: 160px" x-text="t('admin.backupTime')"></th>
+                  <th style="width: 90px"></th>
+                </tr>
+              </thead>
+              <tbody>
+                <template x-for="b in backups" :key="b.id">
+                  <tr>
+                    <td class="mono truncate" x-text="b.name || ('#' + b.id)"></td>
+                    <td>
+                      <span class="badge" :class="b.backup_type === 'full' ? 'badge--blue' : 'badge--gray'"
+                        x-text="b.backup_type"></span>
+                    </td>
+                    <td>
+                      <span class="badge"
+                        :class="b.status === 'completed' ? 'badge--green' : (b.status === 'failed' ? 'badge--red' : 'badge--amber')"
+                        x-text="b.status"></span>
+                    </td>
+                    <td class="muted text-xs" x-text="fmt.formatBytes(b.size_bytes)"></td>
+                    <td class="muted text-xs" x-text="b.finished_at ? fmt.formatDateTime(b.finished_at) : '-'"></td>
+                    <td class="text-right">
+                      <button class="btn btn--sm btn--danger-ghost" @click="restoreBackup(b)"
+                        x-text="t('admin.restore')"></button>
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+            <div class="empty" x-show="!backups.length" x-cloak>
+              <div class="empty__desc" x-text="t('admin.noBackups')"></div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- create user modal -->
+      <div class="modal-backdrop" x-show="showCreate" x-cloak
+        @keydown.escape.window="showCreate = false">
+        <div class="modal" @click.outside="showCreate = false">
+          <div class="modal__head" x-text="t('userMgmt.newUser')"></div>
+          <div class="modal__body">
+            <div class="field">
+              <label class="label" x-text="t('userMgmt.username') + ' *'"></label>
+              <input class="input" x-model="newUser.username" autocomplete="off" />
+            </div>
+            <div class="field">
+              <label class="label" x-text="t('userMgmt.email') + ' *'"></label>
+              <input class="input" x-model="newUser.email" type="email" autocomplete="off" />
+            </div>
+            <div class="field">
+              <label class="label" x-text="t('userMgmt.password') + ' *'"></label>
+              <input class="input" x-model="newUser.password" type="password" autocomplete="new-password" />
+            </div>
+            <div class="field mb-0">
+              <label class="label" x-text="t('userMgmt.fullName')"></label>
+              <input class="input" x-model="newUser.full_name" />
+            </div>
+          </div>
+          <div class="modal__foot">
+            <button class="btn" @click="showCreate = false" x-text="t('common.cancel')"></button>
+            <button class="btn btn--primary" :disabled="creatingUser" @click="createUser"
+              x-text="t('userMgmt.createUser')"></button>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <div id="app-footer"></div>
+    <script type="module" src="/assets/js/app.js"></script>
+  </body>
+</html>

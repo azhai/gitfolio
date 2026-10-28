@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>GitFolio · 项目</title>
+    <link rel="stylesheet" href="/assets/css/app.css" />
+  </head>
+  <body class="app-body" data-page="projects">
+    <div id="app-shell"></div>
+
+    <main class="app-main" x-data="projects">
+      <div class="loading-box" x-show="loading">
+        <span class="spinner"></span><span x-text="t('common.loading')"></span>
+      </div>
+
+      <!-- list -->
+      <section x-show="view === 'list' && !loading" x-cloak>
+        <div class="page-head">
+          <div class="row gap-8">
+            <span x-icon="{ name: 'folder-open', size: 22 }"></span>
+            <h1 class="page-title" x-text="t('projects.title')"></h1>
+          </div>
+          <div class="btn-group">
+            <a class="btn btn--sm" href="/projects/migrate" x-bind:class="isGuest ? 'is-disabled' : ''"
+              x-text="t('projects.migrateProject')"></a>
+            <a class="btn btn--primary btn--sm" href="/projects/new" x-bind:class="isGuest ? 'is-disabled' : ''"
+              x-text="t('projects.newProject')"></a>
+          </div>
+        </div>
+
+        <div class="row gap-8 mb-16 wrap">
+          <template x-for="item in tabs" :key="item.key">
+            <button class="pill-tab" :class="tab === item.key ? 'is-active' : ''"
+              @click="tab = item.key" x-text="t(item.label)"></button>
+          </template>
+        </div>
+
+        <div class="card mb-24">
+          <div class="card__body" style="padding: 14px 18px">
+            <input class="input" type="search" x-model="search"
+              :placeholder="t('projects.searchPlaceholder')" />
+          </div>
+        </div>
+
+        <div class="grid grid--2">
+          <template x-for="repo in paged" :key="repo.id || repo.name">
+            <a class="card card--link" :href="repoUrl(repo)">
+              <div class="card__body">
+                <div class="row gap-10 mb-6 wrap">
+                  <span class="strong" style="font-size: 15px">
+                    <span class="muted" x-text="repo.owner + '/'"></span>
+                    <span class="green" x-text="repo.name"></span>
+                  </span>
+                  <span class="badge" :class="projectTypeClass(repo.project_type)"
+                    x-text="projectTypeLabel(repo.project_type)"></span>
+                  <span class="badge badge--gray" x-show="repo.storage_kind === 'bare'"
+                    x-text="t('storage.bare')"></span>
+                </div>
+                <p class="text-sm muted" style="margin-bottom: 12px"
+                  x-text="repo.description || t('dashboard.noDescription')"></p>
+                <div class="text-xs blue truncate" style="margin-bottom: 10px" x-show="repo.mirror_url"
+                  x-text="repo.mirror_url ? repo.mirror_url.replace(/\.git$/, '') : ''"></div>
+                <div class="row gap-16 text-sm muted-2">
+                  <span class="row gap-4"><span x-icon="{ name: 'star', size: 13 }"></span>
+                    <span x-text="repo.stars_count || 0"></span></span>
+                  <span class="row gap-4"><span x-icon="{ name: 'git-fork', size: 13 }"></span>
+                    <span x-text="repo.forks_count || 0"></span></span>
+                  <span class="row gap-4" x-show="repo.language">
+                    <span class="dot" :style="'background:' + langColor(repo.language)"></span>
+                    <span x-text="repo.language"></span>
+                  </span>
+                </div>
+                <div class="text-xs muted-2 mt-8">
+                  <span x-text="t('projects.updatedAt') + ' ' + timeAgo(repo.updated_at || repo.last_commit_at)"></span>
+                </div>
+              </div>
+            </a>
+          </template>
+        </div>
+
+        <div class="empty" x-show="!filtered.length" x-cloak>
+          <div class="empty__icon" x-icon="{ name: 'search', size: 40 }"></div>
+          <div class="empty__title" x-text="t('projects.notFound')"></div>
+        </div>
+
+        <div class="row center gap-8 mt-20" x-show="totalPages > 1" x-cloak>
+          <button class="btn btn--sm" :disabled="page <= 1" @click="page--"
+            x-text="t('projects.prevPage')"></button>
+          <template x-for="n in totalPages" :key="n">
+            <button class="btn btn--sm" style="min-width: 34px"
+              :class="page === n ? 'btn--primary' : ''" @click="page = n" x-text="n"></button>
+          </template>
+          <button class="btn btn--sm" :disabled="page >= totalPages" @click="page++"
+            x-text="t('projects.nextPage')"></button>
+        </div>
+      </section>
+
+      <!-- create -->
+      <section x-show="view === 'create'" x-cloak style="max-width: 720px; margin: 0 auto">
+        <h1 class="page-title mb-24" x-text="t('createProject.title')"></h1>
+
+        <div class="card">
+          <div class="card__body" style="padding: 28px">
+            <div class="field">
+              <label class="label" x-text="t('createProject.projectName') + ' *'"></label>
+              <input class="input" x-model="createForm.name" placeholder="my-project" />
+              <div class="hint" x-text="t('createProject.nameHint')"></div>
+            </div>
+
+            <div class="field">
+              <label class="label" x-text="t('createProject.description')"></label>
+              <textarea class="textarea" rows="3" x-model="createForm.description"
+                :placeholder="t('createProject.descriptionOptional')"></textarea>
+            </div>
+
+            <div class="field">
+              <label class="label" x-text="t('createProject.homepage')"></label>
+              <input class="input" x-model="createForm.homepage" placeholder="https://example.com" />
+            </div>
+
+            <div class="field">
+              <label class="label" x-text="t('createProject.defaultBranch')"></label>
+              <input class="input" x-model="createForm.default_branch" placeholder="main" />
+            </div>
+
+            <div class="field">
+              <label class="label" x-text="t('createProject.projectType')"></label>
+              <div class="type-card is-selected">
+                <span x-icon="{ name: 'server', size: 22, color: '#16a34a' }"></span>
+                <span class="type-card__label" x-text="t('createProject.localProject')"></span>
+                <span class="type-card__desc" x-text="t('createProject.localProjectDesc')"></span>
+              </div>
+            </div>
+
+            <label class="checkbox mb-24" style="justify-content: space-between; width: 100%">
+              <span>
+                <span class="strong" style="display: block" x-text="t('createProject.initReadme')"></span>
+                <span class="text-sm muted" x-text="t('createProject.initReadmeDesc')"></span>
+              </span>
+              <input type="checkbox" x-model="createForm.init_readme" />
+            </label>
+
+            <div class="row" style="justify-content: flex-end; gap: 10px">
+              <a class="btn" href="/projects" x-text="t('common.cancel')"></a>
+              <button class="btn btn--primary" :disabled="submitting" @click="createProject">
+                <span class="spinner spinner--sm" x-show="submitting" x-cloak></span>
+                <span x-text="t('createProject.createProject')"></span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- migrate -->
+      <section x-show="view === 'migrate'" x-cloak style="max-width: 720px; margin: 0 auto">
+        <h1 class="page-title mb-24" x-text="t('migrateProject.title')"></h1>
+
+        <div class="card">
+          <div class="card__body" style="padding: 28px">
+            <div class="field">
+              <label class="label" x-text="t('migrateProject.remoteUrl') + ' *'"></label>
+              <div class="row gap-10">
+                <input class="input grow" x-model="migrateForm.clone_url"
+                  placeholder="https://github.com/user/repo.git" />
+                <button class="btn" style="height: 40px" :disabled="detecting" @click="detect">
+                  <span x-icon="{ name: 'zap', size: 15 }"></span>
+                  <span x-text="detecting ? t('migrateProject.detecting') : t('migrateProject.autoFill')"></span>
+                </button>
+              </div>
+              <div class="hint" x-text="t('migrateProject.urlHint')"></div>
+            </div>
+
+            <div class="field">
+              <label class="label" x-text="t('migrateProject.projectName') + ' *'"></label>
+              <input class="input" x-model="migrateForm.name" placeholder="my-project" />
+            </div>
+
+            <div class="field">
+              <label class="label" x-text="t('migrateProject.description')"></label>
+              <textarea class="textarea" rows="3" x-model="migrateForm.description"
+                :placeholder="t('migrateProject.descriptionOptional')"></textarea>
+            </div>
+
+            <div class="field">
+              <label class="label" x-text="t('migrateProject.homepage')"></label>
+              <input class="input" x-model="migrateForm.homepage" placeholder="https://example.com" />
+              <div class="hint" x-text="t('migrateProject.homepageHint')"></div>
+            </div>
+
+            <div class="field">
+              <label class="label" x-text="t('migrateProject.projectType')"></label>
+              <div class="row gap-10 wrap">
+                <template x-for="pt in migrateTypes" :key="pt.key">
+                  <button type="button" class="type-card"
+                    :class="migrateForm.project_type === pt.key ? 'is-selected' : ''"
+                    @click="migrateForm.project_type = pt.key">
+                    <span x-icon="{ name: pt.icon, size: 22, color: pt.color }"></span>
+                    <span class="type-card__label" :style="'color:' + pt.color" x-text="pt.label"></span>
+                    <span class="type-card__desc" x-text="pt.desc"></span>
+                  </button>
+                </template>
+              </div>
+            </div>
+
+            <div class="row" style="justify-content: flex-end; gap: 10px">
+              <a class="btn" href="/projects" x-text="t('common.cancel')"></a>
+              <button class="btn btn--primary" :disabled="submitting" @click="migrate">
+                <span class="spinner spinner--sm" x-show="submitting" x-cloak></span>
+                <span x-text="t('migrateProject.migrateProject')"></span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <div id="app-footer"></div>
+    <script type="module" src="/assets/js/app.js"></script>
+  </body>
+</html>

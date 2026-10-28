@@ -736,6 +736,48 @@ hr {
   accent-color: var(--green-500);
 }
 
+/* selectable project-type card */
+.type-card {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 150px;
+  padding: 14px 16px;
+  text-align: center;
+  background: var(--panel);
+  border: 2px solid var(--border);
+  border-radius: 10px;
+  transition: border-color 0.15s var(--ease), background 0.15s var(--ease);
+}
+
+.type-card:hover {
+  border-color: var(--border-3);
+}
+
+.type-card.is-selected {
+  border-color: var(--green-500);
+  background: var(--green-50);
+}
+
+.type-card__label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.type-card__desc {
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-4);
+}
+
+.is-disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
 /* ---------- cards ---------- */
 .card {
   background: var(--panel);
@@ -991,6 +1033,23 @@ hr {
   width: 96px;
   height: 96px;
   font-size: 34px;
+}
+
+.group-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  flex-shrink: 0;
+  background: var(--green-50);
+  border-radius: 12px;
+}
+
+.group-avatar--lg {
+  width: 64px;
+  height: 64px;
+  border-radius: 14px;
 }
 
 /* ---------- modal ---------- */

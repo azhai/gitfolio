@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>GitFolio · 个人设置</title>
+    <link rel="stylesheet" href="/assets/css/app.css" />
+  </head>
+  <body class="app-body" data-page="settings">
+    <div id="app-shell"></div>
+
+    <main class="app-main" x-data="settings" style="max-width: 860px">
+      <div class="loading-box" x-show="loading">
+        <span class="spinner"></span><span x-text="t('common.loading')"></span>
+      </div>
+
+      <div x-show="!loading" x-cloak>
+        <h1 class="page-title mb-20" x-text="t('userSettings.title')"></h1>
+
+        <div class="card mb-20">
+          <div class="card__head">
+            <span class="card__title" x-text="t('userSettings.profile')"></span>
+          </div>
+          <div class="card__body" style="padding: 24px">
+            <div class="row gap-16 mb-20 wrap" style="gap: 16px">
+              <span class="avatar avatar--xl"
+                x-text="(profile.username || '?').slice(0, 2).toUpperCase()"></span>
+              <div class="col gap-8">
+                <button class="btn btn--sm" :disabled="uploading" @click="$refs.avatarInput.click()">
+                  <span x-icon="{ name: 'camera', size: 14 }"></span>
+                  <span x-text="t('userSettings.changeAvatar')"></span>
+                </button>
+                <input type="file" x-ref="avatarInput" accept="image/*" class="hidden"
+                  @change="uploadAvatar" />
+                <div class="text-xs muted-2" x-text="t('userSettings.avatarTooLarge')"></div>
+              </div>
+            </div>
+
+            <div class="grid grid--2" style="gap: 0 18px">
+              <div class="field">
+                <label class="label" x-text="t('userSettings.username')"></label>
+                <input class="input" :value="profile.username" disabled />
+              </div>
+              <div class="field">
+                <label class="label" x-text="t('userSettings.email')"></label>
+                <input class="input" :value="profile.email" disabled />
+              </div>
+            </div>
+
+            <div class="field">
+              <label class="label" x-text="t('userSettings.name')"></label>
+              <input class="input" x-model="profile.full_name"
+                :placeholder="t('userSettings.namePlaceholder')" />
+            </div>
+
+            <div class="field">
+              <label class="label" x-text="t('userSettings.bio')"></label>
+              <textarea class="textarea" rows="3" x-model="profile.bio"
+                :placeholder="t('userSettings.bioPlaceholder')"></textarea>
+            </div>
+
+            <div class="grid grid--2" style="gap: 0 18px">
+              <div class="field">
+                <label class="label" x-text="t('userSettings.website')"></label>
+                <input class="input" x-model="profile.website" placeholder="https://example.com" />
+              </div>
+              <div class="field">
+                <label class="label" x-text="t('userSettings.location')"></label>
+                <input class="input" x-model="profile.location"
+                  :placeholder="t('userSettings.locationPlaceholder')" />
+              </div>
+            </div>
+
+            <div class="field mb-20">
+              <label class="label" x-text="t('userSettings.repoRoot')"></label>
+              <input class="input mono" x-model="profile.repo_root"
+                :placeholder="t('userSettings.repoRootPlaceholder')" />
+              <div class="hint" x-text="t('userSettings.repoRootHint')"></div>
+            </div>
+
+            <div class="row" style="justify-content: flex-end">
+              <button class="btn btn--primary" :disabled="saving" @click="saveProfile">
+                <span class="spinner spinner--sm" x-show="saving" x-cloak></span>
+                <span x-text="t('userSettings.saveChanges')"></span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card__head">
+            <span class="card__title" x-text="t('userSettings.changePassword')"></span>
+          </div>
+          <div class="card__body" style="padding: 24px">
+            <div class="field">
+              <label class="label" x-text="t('userSettings.currentPassword')"></label>
+              <input class="input" type="password" x-model="password.current"
+                :placeholder="t('userSettings.currentPasswordPlaceholder')"
+                autocomplete="current-password" />
+            </div>
+            <div class="grid grid--2" style="gap: 0 18px">
+              <div class="field">
+                <label class="label" x-text="t('userSettings.newPassword')"></label>
+                <input class="input" type="password" x-model="password.next"
+                  :placeholder="t('userSettings.newPasswordPlaceholder')"
+                  autocomplete="new-password" />
+              </div>
+              <div class="field">
+                <label class="label" x-text="t('userSettings.confirmPassword')"></label>
+                <input class="input" type="password" x-model="password.confirm"
+                  :placeholder="t('userSettings.confirmPasswordPlaceholder')"
+                  autocomplete="new-password" />
+              </div>
+            </div>
+            <div class="row" style="justify-content: flex-end">
+              <button class="btn" :disabled="changingPassword" @click="changePassword">
+                <span class="spinner spinner--sm" x-show="changingPassword" x-cloak></span>
+                <span x-text="t('userSettings.changePassword')"></span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <div id="app-footer"></div>
+    <script type="module" src="/assets/js/app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>GitFolio · 团队</title>
+    <link rel="stylesheet" href="/assets/css/app.css" />
+  </head>
+  <body class="app-body" data-page="groups">
+    <div id="app-shell"></div>
+
+    <main class="app-main" x-data="groups">
+      <div class="loading-box" x-show="loading">
+        <span class="spinner"></span><span x-text="t('common.loading')"></span>
+      </div>
+
+      <!-- list -->
+      <section x-show="view === 'list' && !loading" x-cloak>
+        <div class="page-head">
+          <div class="row gap-8">
+            <span x-icon="{ name: 'users', size: 22 }"></span>
+            <h1 class="page-title" x-text="t('groups.title')"></h1>
+          </div>
+          <a class="btn btn--primary btn--sm" href="/groups/new" x-text="t('groups.newGroup')"></a>
+        </div>
+
+        <div class="grid grid--3">
+          <template x-for="g in groups" :key="g.id || g.name">
+            <a class="card card--link" :href="'/groups/' + g.name">
+              <div class="card__body" style="padding: 24px">
+                <div class="row gap-14 mb-16" style="gap: 14px">
+                  <span class="group-avatar"><span x-icon="{ name: 'users', size: 26, color: '#16a34a' }"></span></span>
+                  <div class="grow">
+                    <div class="strong truncate" style="font-size: 17px"
+                      x-text="g.display_name || g.name"></div>
+                    <div class="text-sm muted-2">
+                      <span x-text="t('groups.createdAt') + ' ' + timeAgo(g.created_at)"></span>
+                    </div>
+                  </div>
+                </div>
+                <p class="text-sm muted" style="min-height: 42px; margin-bottom: 16px"
+                  x-text="g.description || t('dashboard.noDescription')"></p>
+                <div class="row between text-sm muted-2" style="padding-top: 14px; border-top: 1px solid #f0f0f0">
+                  <span class="row gap-4">
+                    <span x-icon="{ name: 'user', size: 14 }"></span>
+                    <span x-text="t('groups.membersCount', { count: g.members_count || 0 })"></span>
+                  </span>
+                  <span x-text="'@' + g.name"></span>
+                </div>
+              </div>
+            </a>
+          </template>
+        </div>
+
+        <div class="empty" x-show="!groups.length" x-cloak>
+          <div class="empty__icon" x-icon="{ name: 'users', size: 40 }"></div>
+          <div class="empty__title" x-text="t('groups.notFound')"></div>
+        </div>
+      </section>
+
+      <!-- new group -->
+      <section x-show="view === 'new'" x-cloak style="max-width: 640px; margin: 0 auto">
+        <h1 class="page-title mb-24" x-text="t('groups.newGroup')"></h1>
+        <div class="card">
+          <div class="card__body" style="padding: 28px">
+            <div class="field">
+              <label class="label" x-text="t('group.groupName') + ' *'"></label>
+              <input class="input" x-model="form.name" placeholder="my-team" />
+              <div class="hint" x-text="t('group.groupNamePlaceholder')"></div>
+            </div>
+            <div class="field">
+              <label class="label" x-text="t('group.displayName')"></label>
+              <input class="input" x-model="form.display_name" />
+            </div>
+            <div class="field">
+              <label class="label" x-text="t('group.description')"></label>
+              <textarea class="textarea" rows="3" x-model="form.description"></textarea>
+            </div>
+            <div class="field">
+              <label class="label" x-text="t('group.website')"></label>
+              <input class="input" x-model="form.website" placeholder="https://example.com" />
+            </div>
+            <div class="field">
+              <label class="label" x-text="t('settings.repoRoot')"></label>
+              <input class="input mono" x-model="form.repo_root" placeholder="/data/repos/my-team" />
+              <div class="hint" x-text="t('settings.repoRootHint')"></div>
+            </div>
+            <div class="row" style="justify-content: flex-end; gap: 10px">
+              <a class="btn" href="/groups" x-text="t('common.cancel')"></a>
+              <button class="btn btn--primary" :disabled="submitting" @click="createGroup">
+                <span class="spinner spinner--sm" x-show="submitting" x-cloak></span>
+                <span x-text="t('common.create')"></span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- detail -->
+      <section x-show="view === 'detail' && !loading" x-cloak>
+        <div x-show="group">
+          <div class="card mb-24">
+            <div class="card__body" style="padding: 28px">
+              <div class="row gap-16 mb-16" style="gap: 16px">
+                <span class="group-avatar group-avatar--lg">
+                  <span x-icon="{ name: 'users', size: 30, color: '#16a34a' }"></span>
+                </span>
+                <div class="grow">
+                  <h1 class="page-title" x-text="group.display_name || group.name"></h1>
+                  <div class="row gap-16 text-sm muted-2 mt-4 wrap">
+                    <span x-text="'@' + group.name"></span>
+                    <span class="row gap-4">
+                      <span x-icon="{ name: 'user', size: 13 }"></span>
+                      <span x-text="t('group.membersCount', { count: members.length })"></span>
+                    </span>
+                    <span x-text="t('group.createdAt') + ' ' + timeAgo(group.created_at)"></span>
+                    <a class="blue" x-show="group.website" :href="group.website" target="_blank"
+                      rel="noopener" x-text="group.website"></a>
+                  </div>
+                </div>
+              </div>
+              <p class="text-sm muted" x-text="group.description || t('group.noDescription')"></p>
+              <div class="kv mt-16" x-show="group.repo_root">
+                <dt x-text="t('settings.repoRoot')"></dt>
+                <dd class="mono" x-text="group.repo_root"></dd>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card__head">
+              <span class="card__title">
+                <span x-text="t('group.members')"></span>
+                <span class="muted" x-text="'(' + members.length + ')'"></span>
+              </span>
+              <button class="btn btn--sm" x-show="canManage" @click="showAdd = !showAdd"
+                x-text="showAdd ? t('common.cancel') : t('group.addMember')"></button>
+            </div>
+
+            <div class="card__body" x-show="showAdd" x-cloak style="border-bottom: 1px solid var(--border)">
+              <div class="row gap-10 wrap" style="align-items: flex-end">
+                <div class="field" style="margin: 0; flex: 1; min-width: 180px">
+                  <label class="label" x-text="t('group.username')"></label>
+                  <input class="input input--sm" x-model="memberForm.username"
+                    :placeholder="t('group.username')" />
+                </div>
+                <div class="field" style="margin: 0; width: 140px">
+                  <label class="label" x-text="t('group.role')"></label>
+                  <select class="select" style="height: 32px" x-model="memberForm.role">
+                    <option value="member" x-text="t('group.member')"></option>
+                    <option value="leader" x-text="t('group.leader')"></option>
+                  </select>
+                </div>
+                <button class="btn btn--primary btn--sm" :disabled="adding" @click="addMember"
+                  x-text="t('group.add')"></button>
+              </div>
+            </div>
+
+            <div class="list">
+              <template x-for="m in members" :key="m.user && m.user.username">
+                <div class="list__item" style="align-items: center">
+                  <span class="avatar" x-text="initials(m.user && m.user.username)"></span>
+                  <div class="grow">
+                    <a class="strong" :href="'/users/' + (m.user && m.user.username)"
+                      x-text="(m.user && (m.user.full_name || m.user.username)) || ''"></a>
+                    <div class="text-xs muted-2" x-text="'@' + ((m.user && m.user.username) || '')"></div>
+                  </div>
+                  <span class="badge" :class="m.role === 'leader' ? 'badge--blue' : ''"
+                    x-text="m.role === 'leader' ? t('group.leader') : t('group.member')"></span>
+                  <button class="btn btn--sm btn--danger-ghost" style="margin-left: 8px"
+                    x-show="canManage && m.role !== 'leader'"
+                    @click="removeMember(m.user && m.user.username)"
+                    x-text="t('group.remove')"></button>
+                </div>
+              </template>
+              <div class="empty" x-show="!members.length" x-cloak>
+                <div class="empty__desc" x-text="t('group.noMembers')"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="empty" x-show="!group" x-cloak>
+          <div class="empty__icon" x-icon="{ name: 'users', size: 40 }"></div>
+          <div class="empty__title" x-text="t('group.notFound')"></div>
+        </div>
+      </section>
+    </main>
+
+    <div id="app-footer"></div>
+    <script type="module" src="/assets/js/app.js"></script>
+  </body>
+</html>

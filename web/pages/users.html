@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>GitFolio · 用户</title>
+    <link rel="stylesheet" href="/assets/css/app.css" />
+  </head>
+  <body class="app-body" data-page="users">
+    <div id="app-shell"></div>
+
+    <main class="app-main" x-data="users">
+      <div class="loading-box" x-show="loading">
+        <span class="spinner"></span><span x-text="t('common.loading')"></span>
+      </div>
+
+      <!-- user list -->
+      <section x-show="view === 'list' && !loading" x-cloak>
+        <div class="page-head">
+          <div class="row gap-8">
+            <span x-icon="{ name: 'users', size: 22 }"></span>
+            <h1 class="page-title" x-text="t('userMgmt.title')"></h1>
+            <span class="muted text-sm" x-text="t('userMgmt.totalUsers', { count: users.length })"></span>
+          </div>
+        </div>
+
+        <div class="card mb-20">
+          <div class="card__body" style="padding: 14px 16px">
+            <input class="input" type="search" x-model="search"
+              :placeholder="t('userMgmt.searchPlaceholder')" />
+          </div>
+        </div>
+
+        <div class="col gap-12">
+          <template x-for="u in filtered" :key="u.id || u.username">
+            <a class="card card--link" :href="'/users/' + u.username">
+              <div class="row gap-14" style="padding: 18px 20px; gap: 14px">
+                <span class="avatar avatar--lg" style="width: 44px; height: 44px; font-size: 18px"
+                  x-text="(u.username || '?').slice(0, 1).toUpperCase()"></span>
+                <div class="grow">
+                  <div class="row gap-8 mb-4 wrap">
+                    <span class="strong" style="font-size: 15px"
+                      x-text="u.full_name || u.username"></span>
+                    <span class="muted text-sm" x-text="'@' + u.username"></span>
+                    <span class="badge badge--purple" x-show="u.role === 'admin'"
+                      x-text="t('userMgmt.admin')"></span>
+                    <span class="badge badge--gray" x-show="u.role === 'guest'"
+                      x-text="t('common.guest')"></span>
+                  </div>
+                  <div class="text-sm muted" x-text="u.email || t('userMgmt.noEmail')"></div>
+                  <div class="row gap-14 text-xs muted-2 mt-6">
+                    <span x-text="t('common.createdAt') + ' ' + timeAgo(u.created_at)"></span>
+                    <span x-show="u.last_login"
+                      x-text="t('userMgmt.lastLogin') + ' ' + timeAgo(u.last_login)"></span>
+                  </div>
+                </div>
+                <span x-icon="{ name: 'chevron-right', size: 16, color: '#d1d5db' }"></span>
+              </div>
+            </a>
+          </template>
+        </div>
+
+        <div class="empty" x-show="!filtered.length" x-cloak>
+          <div class="empty__icon" x-icon="{ name: 'user', size: 40 }"></div>
+          <div class="empty__title" x-text="t('userMgmt.noUsers')"></div>
+        </div>
+      </section>
+
+      <!-- profile -->
+      <section x-show="view === 'profile' && !loading" x-cloak>
+        <div x-show="user">
+          <div class="card mb-20">
+            <div class="card__body" style="padding: 28px">
+              <div class="row gap-20 wrap" style="gap: 20px">
+                <span class="avatar avatar--xl"
+                  x-text="(user && user.username || '?').slice(0, 2).toUpperCase()"></span>
+                <div class="grow" style="min-width: 200px">
+                  <h1 class="page-title" x-text="user && (user.full_name || user.username)"></h1>
+                  <div class="muted text-sm" x-text="user ? '@' + user.username : ''"></div>
+                  <p class="text-sm muted mt-8" x-text="(user && user.bio) || ''"></p>
+                  <div class="row gap-16 text-sm muted-2 mt-12 wrap">
+                    <span class="row gap-4" x-show="user && user.location">
+                      <span x-icon="{ name: 'map-pin', size: 13 }"></span>
+                      <span x-text="user && user.location"></span>
+                    </span>
+                    <span class="row gap-4" x-show="user && user.website">
+                      <span x-icon="{ name: 'link-2', size: 13 }"></span>
+                      <a class="blue" :href="user && user.website" target="_blank" rel="noopener"
+                        x-text="user && user.website"></a>
+                    </span>
+                    <span class="row gap-4" x-show="user">
+                      <span x-icon="{ name: 'calendar', size: 13 }"></span>
+                      <span x-text="user ? t('common.createdAt') + ' ' + timeAgo(user.created_at) : ''"></span>
+                    </span>
+                  </div>
+                </div>
+                <a class="btn btn--sm" href="/settings" x-show="isSelf" x-text="t('common.edit')"></a>
+              </div>
+            </div>
+          </div>
+
+          <h2 class="card__title mb-12" x-text="t('dashboard.yourProjects')"></h2>
+          <div class="grid grid--2">
+            <template x-for="repo in repos" :key="repo.id || repo.name">
+              <a class="card card--link" :href="'/' + repo.owner + '/' + repo.name">
+                <div class="card__body">
+                  <div class="row gap-8 mb-6">
+                    <span class="strong green" x-text="repo.name"></span>
+                    <span class="badge" :class="projectTypeClass(repo.project_type)"
+                      x-text="projectTypeLabel(repo.project_type)"></span>
+                  </div>
+                  <p class="text-sm muted" x-text="repo.description || t('dashboard.noDescription')"></p>
+                </div>
+              </a>
+            </template>
+          </div>
+          <div class="empty" x-show="!repos.length" x-cloak>
+            <div class="empty__desc" x-text="t('dashboard.noProjects')"></div>
+          </div>
+        </div>
+
+        <div class="empty" x-show="!user" x-cloak>
+          <div class="empty__icon" x-icon="{ name: 'user', size: 40 }"></div>
+          <div class="empty__title" x-text="t('user.notFound')"></div>
+        </div>
+      </section>
+    </main>
+
+    <div id="app-footer"></div>
+    <script type="module" src="/assets/js/app.js"></script>
+  </body>
+</html>
