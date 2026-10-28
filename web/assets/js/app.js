@@ -7,6 +7,7 @@ import { toastStore, dialogStore, toast, toastError } from './ui.js'
 import {
   t,
   timeAgo,
+  dated,
   formatDate,
   formatDateTime,
   formatBytes,
@@ -15,6 +16,7 @@ import {
   setLanguage,
 } from './i18n.js'
 import { icon, fileIcon, hasIcon, STATUS_ICONS, ACTIVITY_ICONS } from './icon.js'
+import { avatarHtml, initials } from './avatar.js'
 import { mountShell } from './shell.js'
 
 window.Alpine = Alpine
@@ -25,7 +27,10 @@ window.icon = icon
 window.fileIcon = fileIcon
 window.toast = toast
 window.toastError = toastError
-window.fmt = { timeAgo, formatDate, formatDateTime, formatBytes, formatDuration }
+window.dated = dated
+window.avatarHtml = avatarHtml
+window.initials = initials
+window.fmt = { timeAgo, dated, formatDate, formatDateTime, formatBytes, formatDuration }
 window.lang = { get: getLanguage, set: setLanguage }
 
 Alpine.store('auth', authStore)

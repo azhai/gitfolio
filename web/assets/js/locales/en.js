@@ -155,6 +155,7 @@ var en = {
     responsible: 'Assignee',
     searchPlaceholder: 'Search issues...',
     noIssues: 'No issues',
+    markdownHint: 'Markdown supported',
   },
   pr: {
     title: 'Merge Request Title',
@@ -178,6 +179,7 @@ var en = {
   },
   commit: {
     title: 'Commit',
+    noCommits: 'No commits yet',
     message: 'Commit Message',
     author: 'Author',
     date: 'Date',
@@ -487,6 +489,17 @@ var en = {
     changePassword: 'Change Password',
     newPassword: 'New Password',
   },
+  sync: {
+    itemsSynced: 'Synced / Failed',
+    duration: 'Duration',
+  },
+  settings: {
+    repoRoot: 'Repository directory',
+    repoRootHint: 'Leave empty to store bare repositories under the global root.',
+  },
+  user: {
+    notFound: 'User not found',
+  },
   projectSettings: {
     title: 'Project Settings',
     generalSettings: 'General Settings',
@@ -509,6 +522,7 @@ var en = {
     mirrorProjectDesc: 'Mirror project: synced from remote, visible to owner/team members only, cannot push to remote, always stored as a bare repository',
     localProjectDesc: 'Local project: created locally, supports remote URL and push, does not sync Issues/PRs from GitHub',
     saveChanges: 'Save Changes',
+    saveChangesHint: 'Save applies your changes',
     settingsSaved: 'Settings saved',
     saveFailed: 'Save failed',
     scheduledSync: 'Scheduled Sync',
@@ -518,6 +532,7 @@ var en = {
     syncIntervalHint: '0 hours 0 minutes = manual sync, minimum auto interval 1 minute, maximum 999 hours',
     enableScheduledSync: 'Enable Scheduled Sync',
     currentlyPaused: 'Currently paused',
+    pauseSync: 'Pause automatic sync',
     currentlyRunning: 'Currently running',
     lastSync: 'Last sync',
     nextSync: 'Next sync',

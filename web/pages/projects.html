@@ -58,11 +58,11 @@
                   <span class="badge badge--gray" x-show="repo.storage_kind === 'bare'"
                     x-text="t('storage.bare')"></span>
                 </div>
-                <p class="text-sm muted" style="margin-bottom: 12px"
+                <p class="text-sm muted" style="flex: 1; margin-bottom: 12px"
                   x-text="repo.description || t('dashboard.noDescription')"></p>
                 <div class="text-xs blue truncate" style="margin-bottom: 10px" x-show="repo.mirror_url"
                   x-text="repo.mirror_url ? repo.mirror_url.replace(/\.git$/, '') : ''"></div>
-                <div class="row gap-16 text-sm muted-2">
+                <div class="row gap-16 text-sm muted-2 mt-auto">
                   <span class="row gap-4"><span x-icon="{ name: 'star', size: 13 }"></span>
                     <span x-text="repo.stars_count || 0"></span></span>
                   <span class="row gap-4"><span x-icon="{ name: 'git-fork', size: 13 }"></span>
@@ -73,7 +73,8 @@
                   </span>
                 </div>
                 <div class="text-xs muted-2 mt-8">
-                  <span x-text="t('projects.updatedAt') + ' ' + timeAgo(repo.updated_at || repo.last_commit_at)"></span>
+                  <span x-show="dated(t('projects.updatedAt'), repo.updated_at || repo.last_commit_at)"
+                    x-text="dated(t('projects.updatedAt'), repo.updated_at || repo.last_commit_at)"></span>
                 </div>
               </div>
             </a>

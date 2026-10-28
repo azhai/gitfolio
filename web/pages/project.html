@@ -35,15 +35,27 @@
       </a>
 
       <div class="sidebar__group" x-text="t('project.issues')"></div>
-      <a class="sidebar__link" :class="tab === 'issues' ? 'is-active' : ''" :href="base + '/issues'">
+      <a class="sidebar__link" :class="tabIs('issues') ? 'is-active' : ''" :href="base + '/issues'">
         <span x-icon="{ name: 'triangle-alert', size: 15 }"></span>
         <span x-text="t('project.issues')"></span>
         <span class="sidebar__count" x-show="repo && repo.open_issues_count"
           x-text="repo && repo.open_issues_count"></span>
       </a>
-      <a class="sidebar__link" :class="tab === 'prs' ? 'is-active' : ''" :href="base + '/pull_requests'">
+      <a class="sidebar__link" :class="tabIs('prs') ? 'is-active' : ''" :href="base + '/pull_requests'">
         <span x-icon="{ name: 'git-pull-request', size: 15 }"></span>
         <span x-text="t('project.mergeRequests')"></span>
+      </a>
+
+      <div class="sidebar__group" x-show="canManage" x-text="t('project.settings')"></div>
+      <a class="sidebar__link" x-show="canManage" :class="tab === 'settings' ? 'is-active' : ''"
+        :href="base + '/settings'">
+        <span x-icon="{ name: 'settings', size: 15 }"></span>
+        <span x-text="t('project.settings')"></span>
+      </a>
+      <a class="sidebar__link" x-show="canManage" :class="tab === 'sync' ? 'is-active' : ''"
+        :href="base + '/sync'">
+        <span x-icon="{ name: 'refresh-cw', size: 15 }"></span>
+        <span x-text="t('project.sync')"></span>
       </a>
     </aside>
 
@@ -99,36 +111,42 @@
             <span x-icon="{ name: 'git-branch', size: 15 }"></span>
             <span x-text="t('project.branches')"></span>
           </a>
-          <a class="tab" :class="tab === 'issues' ? 'is-active' : ''" :href="base + '/issues'">
+          <a class="tab" :class="tabIs('issues') ? 'is-active' : ''" :href="base + '/issues'">
             <span x-icon="{ name: 'triangle-alert', size: 15 }"></span>
             <span x-text="t('project.issues')"></span>
           </a>
-          <a class="tab" :class="tab === 'prs' ? 'is-active' : ''" :href="base + '/pull_requests'">
+          <a class="tab" :class="tabIs('prs') ? 'is-active' : ''" :href="base + '/pull_requests'">
             <span x-icon="{ name: 'git-pull-request', size: 15 }"></span>
             <span x-text="t('project.mergeRequests')"></span>
+          </a>
+          <a class="tab" x-show="canManage" :class="tab === 'settings' ? 'is-active' : ''"
+            :href="base + '/settings'">
+            <span x-icon="{ name: 'settings', size: 15 }"></span>
+            <span x-text="t('project.settings')"></span>
           </a>
         </div>
 
         <!-- files -->
         <section x-show="tab === 'tree'">
-          <div class="row between gap-12 mb-12 wrap">
-            <div class="crumbs">
-              <a :href="base" x-text="repo && repo.name"></a>
-              <template x-for="(seg, i) in crumbSegs" :key="i">
-                <span class="row gap-6">
-                  <span class="muted-2">/</span>
-                  <a :href="base + '/tree/' + crumbSegs.slice(0, i + 1).join('/')" x-text="seg"></a>
-                </span>
-              </template>
-            </div>
-            <span class="text-xs muted-2" x-show="lastCommit && lastCommit.hash">
-              <span class="mono" x-text="lastCommit && lastCommit.short_hash"></span>
-              <span x-text="' ' + ((lastCommit && lastCommit.message) || '')"></span>
-            </span>
-          </div>
-
           <!-- directory listing -->
           <div class="card" x-show="!file">
+            <div class="card__head file-head">
+              <div class="crumbs">
+                <a :href="base" x-text="repo && repo.name"></a>
+                <template x-for="(seg, i) in crumbSegs" :key="i">
+                  <span class="row gap-6">
+                    <span class="muted-2">/</span>
+                    <a :href="base + '/tree/' + crumbSegs.slice(0, i + 1).join('/')" x-text="seg"></a>
+                  </span>
+                </template>
+              </div>
+              <a class="commit-brief" x-show="lastCommit && lastCommit.hash"
+                :href="base + '/commits'" :title="lastCommit && lastCommit.message">
+                <span class="hash-chip mono" x-text="lastCommit && lastCommit.hash"></span>
+                <span class="commit-brief__msg" x-text="lastCommit && lastCommit.message"></span>
+                <span class="text-xs muted-2" x-text="lastCommit && relativeTime(lastCommit.time)"></span>
+              </a>
+            </div>
             <table class="table">
               <tbody>
                 <tr x-show="dirPath">
@@ -141,7 +159,7 @@
                 </tr>
                 <template x-for="entry in entries" :key="entry.path">
                   <tr>
-                    <td style="width: 34px">
+                    <td style="width: 15px; padding-right: 0">
                       <span x-html="icon(iconFor(entry).icon, { size: 15, color: iconFor(entry).color })"></span>
                     </td>
                     <td>
@@ -241,6 +259,11 @@
 
         <!-- issues -->
         <section x-show="tab === 'issues'" x-cloak>
+          <div class="row between mb-12" x-show="canCreate">
+            <span class="muted text-sm" x-text="issues.length + ' / ' + ((repo && repo.open_issues_count) || 0)"></span>
+            <a class="btn btn--sm btn--primary" :href="base + '/issues/new'"
+              x-text="t('issue.newIssue')"></a>
+          </div>
           <div class="card">
             <div class="list">
               <template x-for="issue in issues" :key="issue.number">
@@ -265,6 +288,11 @@
 
         <!-- pull requests -->
         <section x-show="tab === 'prs'" x-cloak>
+          <div class="row between mb-12" x-show="canCreate">
+            <span class="muted text-sm" x-text="prs.length + ''"></span>
+            <a class="btn btn--sm btn--primary" :href="base + '/pull_requests/new'"
+              x-text="t('pr.newPR')"></a>
+          </div>
           <div class="card">
             <div class="list">
               <template x-for="pr in prs" :key="pr.number">
@@ -283,6 +311,409 @@
               <div class="empty" x-show="!prs.length" x-cloak>
                 <div class="empty__desc" x-text="prError || t('pr.noPRs')"></div>
               </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- issue detail -->
+        <section x-show="tab === 'issue'" x-cloak>
+          <a class="text-sm muted" :href="base + '/issues'">
+            <span x-text="'← ' + t('project.issues')"></span>
+          </a>
+
+          <div class="card mt-16" x-show="issue">
+            <div class="card__body" style="padding: 24px">
+              <div class="detail-head">
+                <div>
+                  <div class="detail-title">
+                    <span x-text="issue && issue.title"></span>
+                    <span class="detail-title__num" x-text="issue ? '#' + issue.number : ''"></span>
+                  </div>
+                  <div class="detail-meta">
+                    <span class="badge" :class="issue && issue.is_closed ? 'badge--red' : 'badge--green'"
+                      x-text="issue && issue.is_closed ? t('issue.closed') : t('issue.open')"></span>
+                    <span x-text="issue && (issue.author || issue.user || t('common.unknownUser'))"></span>
+                    <span x-show="issue"
+                      x-text="dated(t('common.createdAt'), issue && issue.created_at)"></span>
+                  </div>
+                </div>
+                <div class="btn-group" x-show="canManage">
+                  <button class="btn btn--sm" @click="toggleIssue"
+                    x-text="issue && issue.is_closed ? t('issue.reopenIssue') : t('issue.closeIssue')"></button>
+                </div>
+              </div>
+              <div class="md mt-16" x-show="issueHtml" x-html="issueHtml"></div>
+              <div class="empty empty--tight" x-show="issue && !issueHtml">
+                <div class="empty__desc" x-text="t('project.noDescription')"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="empty" x-show="!issue && issueError" x-cloak>
+            <div class="empty__icon" x-icon="{ name: 'triangle-alert', size: 36 }"></div>
+            <div class="empty__title" x-text="issueError"></div>
+          </div>
+
+          <div x-show="issue && !issueError">
+            <h2 class="section-title">
+              <span x-text="t('issue.comments')"></span>
+              <span class="muted-2" x-text="'(' + comments.length + ')'"></span>
+            </h2>
+
+            <template x-for="c in comments" :key="c.id">
+              <div class="comment">
+                <span class="avatar" x-html="avatarHtml(c.avatar, c.author || c.user)"></span>
+                <div class="comment__body">
+                  <div class="comment__head">
+                    <span class="strong" x-text="c.author || c.user || t('common.unknownUser')"></span>
+                    <span x-text="timeAgo(c.created_at)"></span>
+                  </div>
+                  <div class="comment__content md" x-html="markdownHtml(c.body)"></div>
+                </div>
+              </div>
+            </template>
+
+            <div class="empty empty--tight" x-show="!comments.length">
+              <div class="empty__desc" x-text="t('common.noData')"></div>
+            </div>
+
+            <div class="comment-form mt-16" x-show="canComment">
+              <textarea class="textarea" rows="4" x-model="commentText"
+                :placeholder="t('issue.writeComment')"></textarea>
+              <div class="row between mt-12">
+                <span class="text-xs muted-2" x-text="t('issue.markdownHint')"></span>
+                <button class="btn btn--primary btn--sm" :disabled="posting || !commentText.trim()"
+                  @click="submitComment" x-text="t('issue.submitComment')"></button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- new issue -->
+        <section x-show="tab === 'issue-new'" x-cloak style="max-width: 820px">
+          <h1 class="page-title mb-20" x-text="t('issue.newIssue')"></h1>
+          <div class="card">
+            <div class="card__body" style="padding: 24px">
+              <div class="field">
+                <label class="label" x-text="t('issue.title') + ' *'"></label>
+                <input class="input" x-model="newIssue.title" />
+              </div>
+              <div class="field">
+                <label class="label"><span x-text="t('issue.description')"></span>
+                  <span class="label__opt" x-text="t('issue.markdownHint')"></span></label>
+                <textarea class="textarea" rows="10" x-model="newIssue.body"
+                  :placeholder="t('issue.describeIssue')"></textarea>
+              </div>
+              <div class="row between">
+                <a class="btn btn--ghost" :href="base + '/issues'" x-text="t('common.cancel')"></a>
+                <button class="btn btn--primary" :disabled="creating || !newIssue.title.trim()"
+                  @click="createIssue" x-text="t('issue.createIssue')"></button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- pull request detail -->
+        <section x-show="tab === 'pr'" x-cloak>
+          <a class="text-sm muted" :href="base + '/pull_requests'">
+            <span x-text="'← ' + t('project.mergeRequests')"></span>
+          </a>
+
+          <div class="card mt-16" x-show="pr">
+            <div class="card__body" style="padding: 24px">
+              <div class="detail-head">
+                <div>
+                  <div class="detail-title">
+                    <span x-text="pr && pr.title"></span>
+                    <span class="detail-title__num" x-text="pr ? '#' + pr.number : ''"></span>
+                  </div>
+                  <div class="detail-meta">
+                    <span class="badge" :class="prStateCls()" x-text="prStateLabel()"></span>
+                    <span x-text="pr && (pr.author || pr.user || t('common.unknownUser'))"></span>
+                    <span x-show="pr"
+                      x-text="dated(t('common.createdAt'), pr && pr.created_at)"></span>
+                  </div>
+                </div>
+                <div class="btn-group" x-show="canManage && pr">
+                  <button class="btn btn--sm" x-show="pr && !pr.is_merged"
+                    @click="mergePR" x-text="t('pr.merge')"></button>
+                  <button class="btn btn--sm" @click="togglePR"
+                    x-text="pr && pr.is_closed ? t('pr.reopen') : t('pr.close')"></button>
+                </div>
+              </div>
+
+              <div class="row gap-8 mt-16 wrap">
+                <span class="hash-chip mono" x-text="pr && pr.source_branch"></span>
+                <span class="muted-2">→</span>
+                <span class="hash-chip mono" x-text="pr && pr.target_branch"></span>
+              </div>
+
+              <div class="md mt-16" x-show="prHtml" x-html="prHtml"></div>
+              <div class="empty empty--tight" x-show="pr && !prHtml">
+                <div class="empty__desc" x-text="t('project.noDescription')"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="empty" x-show="!pr && prError" x-cloak>
+            <div class="empty__icon" x-icon="{ name: 'git-pull-request', size: 36 }"></div>
+            <div class="empty__title" x-text="prError"></div>
+          </div>
+
+          <div x-show="pr && !prError">
+            <h2 class="section-title">
+              <span x-text="t('issue.comments')"></span>
+              <span class="muted-2" x-text="'(' + prComments.length + ')'"></span>
+            </h2>
+
+            <template x-for="c in prComments" :key="c.id">
+              <div class="comment">
+                <span class="avatar" x-html="avatarHtml(c.avatar, c.author || c.user)"></span>
+                <div class="comment__body">
+                  <div class="comment__head">
+                    <span class="strong" x-text="c.author || c.user || t('common.unknownUser')"></span>
+                    <span x-text="timeAgo(c.created_at)"></span>
+                  </div>
+                  <div class="comment__content md" x-html="markdownHtml(c.body)"></div>
+                </div>
+              </div>
+            </template>
+
+            <div class="empty empty--tight" x-show="!prComments.length">
+              <div class="empty__desc" x-text="t('common.noData')"></div>
+            </div>
+
+            <div class="comment-form mt-16" x-show="canComment">
+              <textarea class="textarea" rows="4" x-model="prCommentText"
+                :placeholder="t('issue.writeComment')"></textarea>
+              <div class="row between mt-12">
+                <span class="text-xs muted-2" x-text="t('issue.markdownHint')"></span>
+                <button class="btn btn--primary btn--sm" :disabled="posting || !prCommentText.trim()"
+                  @click="submitPRComment" x-text="t('issue.submitComment')"></button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- new pull request -->
+        <section x-show="tab === 'pr-new'" x-cloak style="max-width: 820px">
+          <h1 class="page-title mb-20" x-text="t('pr.newPR')"></h1>
+          <div class="card">
+            <div class="card__body" style="padding: 24px">
+              <div class="field">
+                <label class="label" x-text="t('pr.title') + ' *'"></label>
+                <input class="input" x-model="newPR.title" />
+              </div>
+              <div class="row gap-12 wrap">
+                <div class="field grow">
+                  <label class="label" x-text="t('pr.sourceBranch')"></label>
+                  <select class="select" x-model="newPR.source_branch">
+                    <template x-for="b in branches" :key="b">
+                      <option :value="b" x-text="b"></option>
+                    </template>
+                  </select>
+                </div>
+                <div class="field grow">
+                  <label class="label" x-text="t('pr.targetBranch')"></label>
+                  <select class="select" x-model="newPR.target_branch">
+                    <template x-for="b in branches" :key="b">
+                      <option :value="b" x-text="b"></option>
+                    </template>
+                  </select>
+                </div>
+              </div>
+              <div class="field">
+                <label class="label"><span x-text="t('pr.description')"></span>
+                  <span class="label__opt" x-text="t('issue.markdownHint')"></span></label>
+                <textarea class="textarea" rows="8" x-model="newPR.body"></textarea>
+              </div>
+              <div class="row between">
+                <a class="btn btn--ghost" :href="base + '/pull_requests'" x-text="t('common.cancel')"></a>
+                <button class="btn btn--primary" :disabled="creating || !newPR.title.trim()"
+                  @click="createPR" x-text="t('pr.newPR')"></button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- project settings -->
+        <section x-show="tab === 'settings'" x-cloak style="max-width: 900px">
+          <h1 class="page-title mb-20" x-text="t('projectSettings.title')"></h1>
+
+          <div class="card">
+            <div class="card__head">
+              <span class="card__title" x-text="t('projectSettings.generalSettings')"></span>
+            </div>
+            <div class="card__body" style="padding: 24px">
+              <div class="form-grid">
+                <label class="label" x-text="t('projectSettings.projectName')"></label>
+                <input class="input" x-model="settings.name" :disabled="!canManage" />
+
+                <label class="label" x-text="t('projectSettings.description')"></label>
+                <textarea class="textarea" rows="3" x-model="settings.description" :disabled="!canManage"></textarea>
+
+                <label class="label" x-text="t('projectSettings.homepage')"></label>
+                <input class="input" x-model="settings.homepage" :disabled="!canManage"
+                  placeholder="https://example.com" />
+
+                <label class="label" x-text="t('projectSettings.defaultBranch')"></label>
+                <div>
+                  <select class="select" x-model="settings.default_branch" :disabled="!canManage || !branches.length">
+                    <template x-for="b in branches" :key="b">
+                      <option :value="b" x-text="b"></option>
+                    </template>
+                  </select>
+                </div>
+              </div>
+
+              <div class="row between mt-20" x-show="canManage">
+                <span class="text-xs muted-2" x-text="t('projectSettings.saveChangesHint')"></span>
+                <button class="btn btn--primary btn--sm" :disabled="saving" @click="saveSettings"
+                  x-text="t('projectSettings.saveChanges')"></button>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card__head">
+              <span class="card__title" x-text="t('projectSettings.projectType')"></span>
+              <span class="badge" :class="projectTypeClass(repo && repo.project_type)"
+                x-text="projectTypeLabel(repo && repo.project_type)"></span>
+            </div>
+            <div class="card__body" style="padding: 24px">
+              <p class="text-sm muted mb-16" x-text="typeDescription()"></p>
+              <div class="row gap-12 wrap" x-show="canManage">
+                <template x-for="opt in typeOptions()" :key="opt.key">
+                  <button class="type-card" :class="repo && repo.project_type === opt.key ? 'is-selected' : ''"
+                    :disabled="opt.disabled" @click="convertType(opt.key)">
+                    <span x-icon="{ name: opt.icon, size: 20, color: opt.color }"></span>
+                    <span class="type-card__label" x-text="t('project.' + opt.key)"></span>
+                  </button>
+                </template>
+              </div>
+              <div class="alert alert--info mt-16" x-show="repo && repo.project_type === 'local'"
+                x-text="t('projectSettings.localCannotConvert')"></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card__head">
+              <span class="card__title" x-text="t('project.dangerZone')"></span>
+            </div>
+            <div class="card__body" style="padding: 24px">
+              <div class="row between gap-16 wrap">
+                <div>
+                  <div class="strong" x-text="t('projectSettings.deleteProject')"></div>
+                  <div class="text-sm muted mt-4" x-text="t('projectSettings.deleteWarning')"></div>
+                </div>
+                <button class="btn btn--danger btn--sm" x-show="canManage" @click="deleteRepo"
+                  x-text="t('project.deleteRepo')"></button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- project sync -->
+        <section x-show="tab === 'sync'" x-cloak style="max-width: 900px">
+          <h1 class="page-title mb-20" x-text="t('project.sync')"></h1>
+
+          <div class="card">
+            <div class="card__head">
+              <span class="card__title" x-text="t('projectSettings.codeSync')"></span>
+            </div>
+            <div class="card__body" style="padding: 24px">
+              <p class="text-sm muted mb-16" x-text="syncDesc()"></p>
+              <div class="row gap-10 wrap" x-show="canManage">
+                <button class="btn btn--sm" :disabled="syncing" @click="pullCode"
+                  x-text="t('projectSettings.pullCode')"></button>
+                <button class="btn btn--sm" :disabled="syncing" @click="pullIssues"
+                  x-text="t('projectSettings.pullIssues')"></button>
+                <button class="btn btn--sm" :disabled="syncing" @click="refreshStats"
+                  x-text="t('projectSettings.refreshStats')"></button>
+              </div>
+              <div class="text-xs muted-2 mt-12" x-show="syncing" x-text="t('projectSettings.syncStarted')"></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card__head">
+              <span class="card__title" x-text="t('projectSettings.scheduledSync')"></span>
+              <span class="badge" :class="syncConfig && syncConfig.is_paused ? 'badge--gray' : 'badge--green'"
+                x-text="syncConfig && syncConfig.is_paused ? t('projectSettings.currentlyPaused') : t('projectSettings.currentlyRunning')"></span>
+            </div>
+            <div class="card__body" style="padding: 24px">
+              <div class="grid grid--3 mb-16">
+                <div class="stat-mini">
+                  <span class="stat-mini__label" x-text="t('projectSettings.lastSync')"></span>
+                  <span class="stat-mini__value" x-text="syncConfig && syncConfig.last_sync_at ? fmt.formatDateTime(syncConfig.last_sync_at) : t('projectSettings.never')"></span>
+                </div>
+                <div class="stat-mini">
+                  <span class="stat-mini__label" x-text="t('projectSettings.nextSync')"></span>
+                  <span class="stat-mini__value" x-text="syncConfig && syncConfig.next_sync_at ? fmt.formatDateTime(syncConfig.next_sync_at) : t('common.manual')"></span>
+                </div>
+                <div class="stat-mini">
+                  <span class="stat-mini__label" x-text="t('projectSettings.syncInterval')"></span>
+                  <span class="stat-mini__value" x-text="syncDraft.intervalHours + 'h ' + syncDraft.intervalMinutes + 'm'"></span>
+                </div>
+              </div>
+
+              <div class="alert alert--error mb-16" x-show="syncConfig && syncConfig.last_error">
+                <span x-text="t('projectSettings.recentError') + ': '"></span>
+                <span x-text="syncConfig && syncConfig.last_error"></span>
+              </div>
+
+              <div class="row gap-12 wrap" x-show="canManage">
+                <div class="field" style="max-width: 140px">
+                  <label class="label" x-text="t('common.hour')"></label>
+                  <input class="input" type="number" min="0" max="999" x-model.number="syncDraft.intervalHours" />
+                </div>
+                <div class="field" style="max-width: 140px">
+                  <label class="label" x-text="t('common.minute')"></label>
+                  <input class="input" type="number" min="0" max="59" x-model.number="syncDraft.intervalMinutes" />
+                </div>
+                <label class="checkbox" style="align-self: flex-end; padding-bottom: 10px">
+                  <input type="checkbox" x-model="syncDraft.is_paused" />
+                  <span x-text="t('projectSettings.pauseSync')"></span>
+                </label>
+                <button class="btn btn--sm btn--primary" style="align-self: flex-end; margin-bottom: 10px"
+                  :disabled="savingSync" @click="saveSyncConfig"
+                  x-text="t('projectSettings.saveSyncConfig')"></button>
+              </div>
+              <div class="hint mt-8" x-text="t('projectSettings.syncIntervalHint')"></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card__head">
+              <span class="card__title" x-text="t('projectSettings.syncLogs')"></span>
+              <button class="btn btn--sm btn--ghost" @click="loadSyncLogs"
+                x-text="t('common.refresh')"></button>
+            </div>
+            <table class="table">
+              <thead>
+                <tr>
+                  <th x-text="t('admin.timeCol')"></th>
+                  <th x-text="t('projectSettings.backupStatus')"></th>
+                  <th x-text="t('sync.itemsSynced')"></th>
+                  <th style="width: 100px" x-text="t('sync.duration')"></th>
+                </tr>
+              </thead>
+              <tbody>
+                <template x-for="log in syncLogs" :key="log.id">
+                  <tr>
+                    <td class="muted text-xs" x-text="fmt.formatDateTime(log.created_at)"></td>
+                    <td>
+                      <span class="badge" :class="log.status === 'success' ? 'badge--green' : 'badge--red'"
+                        x-text="log.status === 'success' ? t('projectSettings.success') : t('projectSettings.failed')"></span>
+                    </td>
+                    <td class="muted" x-text="(log.items_synced || 0) + ' / ' + (log.items_failed || 0)"></td>
+                    <td class="muted text-xs" x-text="log.duration ? (log.duration + ' ms') : ''"></td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+            <div class="empty empty--tight" x-show="!syncLogs.length">
+              <div class="empty__desc" x-text="t('projectSettings.noSyncLogs')"></div>
             </div>
           </div>
         </section>

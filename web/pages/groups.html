@@ -35,11 +35,12 @@
                     <div class="strong truncate" style="font-size: 17px"
                       x-text="g.display_name || g.name"></div>
                     <div class="text-sm muted-2">
-                      <span x-text="t('groups.createdAt') + ' ' + timeAgo(g.created_at)"></span>
+                      <span x-show="dated(t('groups.createdAt'), g.created_at)"
+                        x-text="dated(t('groups.createdAt'), g.created_at)"></span>
                     </div>
                   </div>
                 </div>
-                <p class="text-sm muted" style="min-height: 42px; margin-bottom: 16px"
+                <p class="text-sm muted" style="flex: 1; margin-bottom: 16px"
                   x-text="g.description || t('dashboard.noDescription')"></p>
                 <div class="row between text-sm muted-2" style="padding-top: 14px; border-top: 1px solid #f0f0f0">
                   <span class="row gap-4">
@@ -114,7 +115,8 @@
                       <span x-icon="{ name: 'user', size: 13 }"></span>
                       <span x-text="t('group.membersCount', { count: members.length })"></span>
                     </span>
-                    <span x-text="t('group.createdAt') + ' ' + timeAgo(group.created_at)"></span>
+                    <span x-show="dated(t('group.createdAt'), group.created_at)"
+                          x-text="dated(t('group.createdAt'), group.created_at)"></span>
                     <a class="blue" x-show="group.website" :href="group.website" target="_blank"
                       rel="noopener" x-text="group.website"></a>
                   </div>
@@ -160,7 +162,7 @@
             <div class="list">
               <template x-for="m in members" :key="m.user && m.user.username">
                 <div class="list__item" style="align-items: center">
-                  <span class="avatar" x-text="initials(m.user && m.user.username)"></span>
+                  <span class="avatar" x-html="avatarHtml(m.user && m.user.avatar, m.user && m.user.username)"></span>
                   <div class="grow">
                     <a class="strong" :href="'/users/' + (m.user && m.user.username)"
                       x-text="(m.user && (m.user.full_name || m.user.username)) || ''"></a>

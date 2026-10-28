@@ -822,12 +822,77 @@ hr {
 }
 
 .card--link {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
   transition: box-shadow 0.2s var(--ease), transform 0.2s var(--ease);
+}
+
+/* grid tiles share one height, so the footer that follows the flexible
+   description always sits on the same line across a row */
+.card--link > .card__body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
 }
 
 .card--link:hover {
   box-shadow: var(--shadow);
   transform: translateY(-2px);
+}
+
+/* ---------- file browser header ---------- */
+.file-head {
+  gap: 16px;
+  min-height: 48px;
+  background: var(--panel-2);
+}
+
+.crumbs {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.crumbs a {
+  color: var(--text);
+}
+
+.crumbs a:hover {
+  color: var(--green-600);
+}
+
+.commit-brief {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+
+.commit-brief:hover {
+  color: var(--green-600);
+}
+
+.commit-brief__msg {
+  max-width: 340px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.hash-chip {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  font-size: 11.5px;
+  color: var(--text-3);
+  background: #eef2f6;
+  border-radius: var(--radius-sm);
 }
 
 /* ---------- table ---------- */
@@ -1196,6 +1261,14 @@ hr {
   padding: 56px 24px;
   text-align: center;
   color: var(--text-4);
+}
+
+.empty--tight {
+  padding: 24px;
+}
+
+.empty--tight {
+  padding: 24px;
 }
 
 .empty__icon {
@@ -1576,11 +1649,16 @@ hr {
 }
 
 .hero__logo {
-  width: 28px;
-  height: 28px;
+  width: 34px;
+  height: 34px;
+  padding: 5px;
+  box-sizing: content-box;
   object-fit: contain;
-  /* reuse the green logo on a green background instead of a second white asset */
-  filter: brightness(0) invert(1);
+  /* the logo is drawn in teal shades, so it needs a light tile to read
+     against the green hero instead of being inverted into a white blob */
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.16);
 }
 
 .hero__sub {
@@ -1682,6 +1760,142 @@ hr {
   color: var(--text-4);
 }
 
+/* ---------- issues / pull requests ---------- */
+.section-title {
+  margin: 22px 0 12px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.detail-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.detail-title {
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--text);
+}
+
+.detail-title__num {
+  margin-left: 6px;
+  font-weight: 400;
+  color: var(--text-4);
+}
+
+.detail-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  font-size: 12.5px;
+  color: var(--text-4);
+}
+
+.comment {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.comment__body {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.comment__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 12px;
+  font-size: 12.5px;
+  color: var(--text-3);
+  background: var(--panel-2);
+  border-bottom: 1px solid var(--border);
+}
+
+.comment__content {
+  padding: 12px 14px;
+  font-size: 13.5px;
+}
+
+.comment__content .md {
+  font-size: 13.5px;
+}
+
+.comment-form {
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--panel);
+}
+
+.state-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  margin-bottom: 16px;
+  font-size: 13px;
+  color: var(--text-2);
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+/* two-column label/input rows used by the project settings form */
+.form-grid {
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr);
+  gap: 14px 18px;
+  align-items: start;
+}
+
+.form-grid > .label {
+  margin: 0;
+  padding-top: 9px;
+}
+
+@media (max-width: 720px) {
+  .form-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
+  .form-grid > .label {
+    padding-top: 0;
+  }
+}
+
+.stat-mini {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 14px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.stat-mini__label {
+  font-size: 11.5px;
+  color: var(--text-4);
+}
+
+.stat-mini__value {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+
 /* ---------- utilities ---------- */
 .row {
   display: flex;
@@ -1735,6 +1949,7 @@ hr {
 .mb-20 { margin-bottom: 20px; }
 .mb-24 { margin-bottom: 24px; }
 .ml-auto { margin-left: auto; }
+.mt-auto { margin-top: auto; }
 .mx-auto { margin-left: auto; margin-right: auto; }
 
 .text-sm { font-size: 12.5px; }
@@ -1778,6 +1993,9 @@ hr {
 
 .icon {
   flex-shrink: 0;
+  /* the global svg rule caps width at 100%, which squeezes icons inside
+     narrow table cells down to a few pixels */
+  max-width: none;
 }
 
 /* link list used in dashboards */

@@ -65,7 +65,8 @@
                   <tr>
                     <td>
                       <div class="row gap-8">
-                        <span class="avatar avatar--sm" x-text="(u.username || '?').slice(0, 2)"></span>
+                        <span class="avatar avatar--sm"
+                          x-html="avatarHtml(u.avatar || u.avatar_url, u.username)"></span>
                         <a class="strong" :href="'/users/' + u.username" x-text="u.username"></a>
                       </div>
                     </td>
@@ -78,7 +79,7 @@
                         <option value="admin" x-text="t('userMgmt.admin')"></option>
                       </select>
                     </td>
-                    <td class="muted text-xs" x-text="timeAgo(u.created_at)"></td>
+                    <td class="muted text-xs" x-text="timeAgo(u.created_at) || '—'"></td>
                     <td class="text-right">
                       <button class="btn btn--sm btn--ghost" @click="resetPassword(u)"
                         x-text="t('admin.changePassword')"></button>

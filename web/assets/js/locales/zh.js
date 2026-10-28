@@ -156,6 +156,7 @@ var zh = {
     responsible: '负责人',
     searchPlaceholder: '搜索议题...',
     noIssues: '暂无议题',
+    markdownHint: '支持 Markdown',
   },
   pr: {
     title: '合并请求标题',
@@ -179,6 +180,7 @@ var zh = {
   },
   commit: {
     title: '提交',
+    noCommits: '暂无提交',
     message: '提交信息',
     author: '提交者',
     date: '提交时间',
@@ -488,6 +490,17 @@ var zh = {
     changePassword: '改密码',
     newPassword: '新密码',
   },
+  sync: {
+    itemsSynced: '成功 / 失败',
+    duration: '耗时',
+  },
+  settings: {
+    repoRoot: '自有仓库目录',
+    repoRootHint: '留空则存放到全局裸仓库目录下以账号名命名的子目录。',
+  },
+  user: {
+    notFound: '未找到该用户',
+  },
   projectSettings: {
     title: '项目设置',
     generalSettings: '基本设置',
@@ -512,6 +525,7 @@ var zh = {
     privateProjectDesc: '私有项目：从远程仓库同步，仅所有者/团队成员可见，可推送远程',
     localProjectDesc: '本地项目：本地创建，可配置远程地址并推送，不支持从 GitHub 同步 Issues/PRs',
     saveChanges: '保存更改',
+    saveChangesHint: '修改后点击保存生效',
     settingsSaved: '设置已保存',
     saveFailed: '保存失败',
     scheduledSync: '定时同步',
@@ -521,6 +535,7 @@ var zh = {
     syncIntervalHint: '0 小时 0 分钟 = 手动同步，最小自动间隔 1 分钟，最大 999 小时',
     enableScheduledSync: '启用定时同步',
     currentlyPaused: '当前已暂停',
+    pauseSync: '暂停自动同步',
     currentlyRunning: '当前运行中',
     lastSync: '上次同步',
     nextSync: '下次同步',

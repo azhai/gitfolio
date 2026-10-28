@@ -117,6 +117,39 @@ export function escapeHtml(value) {
     .replace(/'/g, '&#39;')
 }
 
+// Markdown from synced repositories and user comments is rendered with
+// innerHTML, so strip anything executable before it reaches the DOM.
+export function sanitizeHtml(html) {
+  if (!html) return ''
+  var doc = new DOMParser().parseFromString(html, 'text/html')
+  var blocked = doc.querySelectorAll('script,style,iframe,object,embed,form,link,meta,base')
+  for (var i = 0; i < blocked.length; i++) blocked[i].remove()
+  var nodes = doc.body.querySelectorAll('*')
+  for (var j = 0; j < nodes.length; j++) {
+    var el = nodes[j]
+    var attrs = Array.prototype.slice.call(el.attributes)
+    for (var k = 0; k < attrs.length; k++) {
+      var name = attrs[k].name.toLowerCase()
+      var value = attrs[k].value || ''
+      if (name.indexOf('on') === 0 || name === 'srcdoc' || name === 'formaction') {
+        el.removeAttribute(attrs[k].name)
+      } else if ((name === 'href' || name === 'src' || name === 'xlink:href') &&
+        /^\s*(javascript|data):/i.test(value)) {
+        el.removeAttribute(attrs[k].name)
+      }
+    }
+    if (el.tagName === 'A') {
+      el.setAttribute('target', '_blank')
+      el.setAttribute('rel', 'noopener noreferrer')
+    }
+    if (el.tagName === 'IMG') {
+      el.setAttribute('loading', 'lazy')
+      el.setAttribute('referrerpolicy', 'no-referrer')
+    }
+  }
+  return doc.body.innerHTML
+}
+
 // Query string / path helpers ------------------------------------------------
 
 export function query(name) {

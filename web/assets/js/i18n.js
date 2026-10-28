@@ -51,7 +51,7 @@ export function timeAgo(dateStr) {
   if (!dateStr) return ''
   var d = new Date(dateStr)
   // Zero-value timestamps (0001-01-01) reach us as "1/1" and only add noise.
-  if (isNaN(d.getTime()) || d.getFullYear() < 1970) return '-'
+  if (isNaN(d.getTime()) || d.getFullYear() < 1970) return ''
   var diff = (Date.now() - d.getTime()) / 1000
   var time = packs[currentLang].time || {}
   if (diff < 10) return time.justNow || 'just now'
@@ -67,6 +67,14 @@ export function formatDate(dateStr) {
   var d = new Date(dateStr)
   if (isNaN(d.getTime())) return ''
   return d.toLocaleDateString(currentLang === 'zh' ? 'zh-CN' : 'en-US')
+}
+
+// dated('创建于', value) renders "创建于 3d ago", or nothing at all when the
+// backend hands us a zero timestamp. Templates bind the result with x-show so
+// the label never dangles without a value.
+export function dated(label, value) {
+  var rel = timeAgo(value)
+  return rel ? label + ' ' + rel : ''
 }
 
 export function formatDateTime(dateStr) {
