@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>GitFolio · 项目</title>
+    <link rel="stylesheet" href="/assets/css/app.css" />
+  </head>
+  <body class="app-body" data-page="project">
+    <div id="app-shell"></div>
+
+    <div x-data="project">
+      <aside class="sidebar" x-show="!loading" x-cloak>
+      <div class="sidebar__owner">
+        <span x-icon="{ name: 'folder-open', size: 13 }"></span>
+        <a :href="'/' + owner" x-text="owner"></a>
+      </div>
+      <div class="sidebar__repo" x-text="repo && repo.name"></div>
+      <div class="sidebar__desc" x-text="(repo && repo.description) || ''"></div>
+
+      <div class="sidebar__group" x-text="t('project.overview')"></div>
+      <a class="sidebar__link" :class="tab === 'tree' ? 'is-active' : ''" :href="base">
+        <span x-icon="{ name: 'file-code', size: 15 }"></span>
+        <span x-text="t('project.files')"></span>
+      </a>
+      <a class="sidebar__link" :class="tab === 'commits' ? 'is-active' : ''" :href="base + '/commits'">
+        <span x-icon="{ name: 'file-diff', size: 15 }"></span>
+        <span x-text="t('project.commits')"></span>
+      </a>
+      <a class="sidebar__link" :class="tab === 'branches' ? 'is-active' : ''" :href="base + '/branches'">
+        <span x-icon="{ name: 'git-branch', size: 15 }"></span>
+        <span x-text="t('project.branches')"></span>
+        <span class="sidebar__count" x-show="repo" x-text="repo && repo.branches_count"></span>
+      </a>
+
+      <div class="sidebar__group" x-text="t('project.issues')"></div>
+      <a class="sidebar__link" :class="tab === 'issues' ? 'is-active' : ''" :href="base + '/issues'">
+        <span x-icon="{ name: 'triangle-alert', size: 15 }"></span>
+        <span x-text="t('project.issues')"></span>
+        <span class="sidebar__count" x-show="repo && repo.open_issues_count"
+          x-text="repo && repo.open_issues_count"></span>
+      </a>
+      <a class="sidebar__link" :class="tab === 'prs' ? 'is-active' : ''" :href="base + '/pull_requests'">
+        <span x-icon="{ name: 'git-pull-request', size: 15 }"></span>
+        <span x-text="t('project.mergeRequests')"></span>
+      </a>
+    </aside>
+
+    <main class="app-main app-main--with-sidebar">
+      <div class="loading-box" x-show="loading">
+        <span class="spinner"></span><span x-text="t('common.loading')"></span>
+      </div>
+
+      <div x-show="!loading" x-cloak>
+        <!-- header -->
+        <div class="repo-head">
+          <div class="row between gap-16 wrap">
+            <div>
+              <h1 class="repo-title">
+                <span class="muted" x-text="owner + ' / '"></span>
+                <span x-text="repo && repo.name"></span>
+              </h1>
+              <div class="row gap-8 mt-8 wrap">
+                <span class="badge" :class="projectTypeClass(repo && repo.project_type)"
+                  x-text="projectTypeLabel(repo && repo.project_type)"></span>
+                <span class="badge badge--gray" x-show="repo && repo.storage_kind === 'bare'"
+                  x-text="t('storage.bare')"></span>
+                <span class="text-sm muted" x-show="repo && repo.default_branch"
+                  x-text="repo && repo.default_branch"></span>
+              </div>
+            </div>
+            <div class="btn-group">
+              <button class="btn btn--sm" @click="toggleStar">
+                <span x-icon="{ name: 'star', size: 14 }"></span>
+                <span x-text="(repo && repo.stars_count) || 0"></span>
+              </button>
+              <button class="btn btn--sm" @click="copyClone">
+                <span x-icon="{ name: 'link-2', size: 14 }"></span>
+                <span x-text="t('project.copyClone')"></span>
+              </button>
+            </div>
+          </div>
+          <p class="text-sm muted mt-12" x-show="repo && repo.description"
+            x-text="repo && repo.description"></p>
+        </div>
+
+        <div class="tabs mb-20">
+          <a class="tab" :class="tab === 'tree' ? 'is-active' : ''" :href="base">
+            <span x-icon="{ name: 'file-code', size: 15 }"></span>
+            <span x-text="t('project.files')"></span>
+          </a>
+          <a class="tab" :class="tab === 'commits' ? 'is-active' : ''" :href="base + '/commits'">
+            <span x-icon="{ name: 'file-diff', size: 15 }"></span>
+            <span x-text="t('project.commits')"></span>
+            <span class="tab__count" x-show="repo" x-text="repo && repo.commits_count"></span>
+          </a>
+          <a class="tab" :class="tab === 'branches' ? 'is-active' : ''" :href="base + '/branches'">
+            <span x-icon="{ name: 'git-branch', size: 15 }"></span>
+            <span x-text="t('project.branches')"></span>
+          </a>
+          <a class="tab" :class="tab === 'issues' ? 'is-active' : ''" :href="base + '/issues'">
+            <span x-icon="{ name: 'triangle-alert', size: 15 }"></span>
+            <span x-text="t('project.issues')"></span>
+          </a>
+          <a class="tab" :class="tab === 'prs' ? 'is-active' : ''" :href="base + '/pull_requests'">
+            <span x-icon="{ name: 'git-pull-request', size: 15 }"></span>
+            <span x-text="t('project.mergeRequests')"></span>
+          </a>
+        </div>
+
+        <!-- files -->
+        <section x-show="tab === 'tree'">
+          <div class="row between gap-12 mb-12 wrap">
+            <div class="crumbs">
+              <a :href="base" x-text="repo && repo.name"></a>
+              <template x-for="(seg, i) in crumbSegs" :key="i">
+                <span class="row gap-6">
+                  <span class="muted-2">/</span>
+                  <a :href="base + '/tree/' + crumbSegs.slice(0, i + 1).join('/')" x-text="seg"></a>
+                </span>
+              </template>
+            </div>
+            <span class="text-xs muted-2" x-show="lastCommit && lastCommit.hash">
+              <span class="mono" x-text="lastCommit && lastCommit.short_hash"></span>
+              <span x-text="' ' + ((lastCommit && lastCommit.message) || '')"></span>
+            </span>
+          </div>
+
+          <!-- directory listing -->
+          <div class="card" x-show="!file">
+            <table class="table">
+              <tbody>
+                <tr x-show="dirPath">
+                  <td colspan="2">
+                    <a class="row gap-8 muted" :href="parentUrl">
+                      <span x-icon="{ name: 'chevron-left', size: 14 }"></span>
+                      <span x-text="'..'"></span>
+                    </a>
+                  </td>
+                </tr>
+                <template x-for="entry in entries" :key="entry.path">
+                  <tr>
+                    <td style="width: 34px">
+                      <span x-html="icon(iconFor(entry).icon, { size: 15, color: iconFor(entry).color })"></span>
+                    </td>
+                    <td>
+                      <a :href="base + '/tree/' + entry.path" x-text="entry.name"></a>
+                    </td>
+                    <td class="muted text-xs truncate" style="max-width: 320px"
+                      x-text="entry.last_commit_message || ''"></td>
+                    <td class="muted text-xs text-right" style="width: 140px"
+                      x-text="entry.last_commit_time ? relativeTime(entry.last_commit_time) : ''"></td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+            <div class="empty" x-show="!entries.length" x-cloak>
+              <div class="empty__desc" x-text="emptyMessage"></div>
+            </div>
+          </div>
+
+          <!-- file view -->
+          <div x-show="file" x-cloak>
+            <div class="card">
+              <div class="card__head">
+                <span class="card__title mono" x-text="filePath"></span>
+                <span class="text-xs muted-2" x-text="fileSize"></span>
+              </div>
+              <div class="code-block" style="border: 0; border-radius: 0">
+                <pre><code :class="fileLangClass" x-ref="fileCode" x-text="fileContent"></code></pre>
+              </div>
+            </div>
+          </div>
+
+          <!-- readme -->
+          <div class="card mt-20" x-show="!file && readmeHtml" x-cloak>
+            <div class="card__head">
+              <span class="card__title" x-text="'README.md'"></span>
+            </div>
+            <div class="card__body">
+              <div class="md" x-html="readmeHtml"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- commits -->
+        <section x-show="tab === 'commits'" x-cloak>
+          <div class="card">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th x-text="t('admin.messageCol')"></th>
+                  <th style="width: 160px" x-text="t('commit.author')"></th>
+                  <th style="width: 90px" x-text="t('project.hash')"></th>
+                  <th style="width: 140px" x-text="t('admin.timeCol')"></th>
+                </tr>
+              </thead>
+              <tbody>
+                <template x-for="c in commits" :key="c.hash">
+                  <tr>
+                    <td class="truncate" style="max-width: 460px" x-text="c.message"></td>
+                    <td class="muted" x-text="c.author"></td>
+                    <td class="mono muted-2" x-text="c.short_hash"></td>
+                    <td class="muted text-xs" x-text="relativeTime(c.date)"></td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+            <div class="empty" x-show="!commits.length" x-cloak>
+              <div class="empty__desc" x-text="t('commit.noCommits')"></div>
+            </div>
+          </div>
+          <div class="row center gap-8 mt-16" x-show="commitPages > 1" x-cloak>
+            <button class="btn btn--sm" :disabled="commitPage <= 1" @click="goCommitPage(commitPage - 1)"
+              x-text="t('projects.prevPage')"></button>
+            <span class="text-sm muted" x-text="commitPage + ' / ' + commitPages"></span>
+            <button class="btn btn--sm" :disabled="commitPage >= commitPages" @click="goCommitPage(commitPage + 1)"
+              x-text="t('projects.nextPage')"></button>
+          </div>
+        </section>
+
+        <!-- branches -->
+        <section x-show="tab === 'branches'" x-cloak>
+          <div class="card">
+            <div class="list">
+              <template x-for="b in branches" :key="b">
+                <div class="list__item" style="align-items: center">
+                  <span x-icon="{ name: 'git-branch', size: 15, color: '#6b7280' }"></span>
+                  <span class="mono grow" x-text="b"></span>
+                  <span class="badge badge--green" x-show="repo && b === repo.default_branch"
+                    x-text="t('project.defaultBranch')"></span>
+                </div>
+              </template>
+              <div class="empty" x-show="!branches.length" x-cloak>
+                <div class="empty__desc" x-text="t('common.noData')"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- issues -->
+        <section x-show="tab === 'issues'" x-cloak>
+          <div class="card">
+            <div class="list">
+              <template x-for="issue in issues" :key="issue.number">
+                <a class="list__item" :href="base + '/issues/' + issue.number">
+                  <span x-icon="{ name: issue.is_closed ? 'circle-check-big' : 'circle-dot', size: 16,
+                    color: issue.is_closed ? '#6b7280' : '#22c55e' }"></span>
+                  <div class="grow">
+                    <div class="strong" x-text="issue.title"></div>
+                    <div class="text-xs muted-2"
+                      x-text="'#' + issue.number + ' · ' + (issue.author_name || issue.user || '') + ' · ' + timeAgo(issue.created_at)"></div>
+                  </div>
+                  <span class="badge" :class="issue.is_closed ? 'badge--red' : 'badge--green'"
+                    x-text="issue.is_closed ? t('common.closed') : t('common.open')"></span>
+                </a>
+              </template>
+              <div class="empty" x-show="!issues.length" x-cloak>
+                <div class="empty__desc" x-text="issueError || t('issue.noIssues')"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- pull requests -->
+        <section x-show="tab === 'prs'" x-cloak>
+          <div class="card">
+            <div class="list">
+              <template x-for="pr in prs" :key="pr.number">
+                <a class="list__item" :href="base + '/pull_requests/' + pr.number">
+                  <span x-icon="{ name: 'git-pull-request', size: 16, color: '#8b5cf6' }"></span>
+                  <div class="grow">
+                    <div class="strong" x-text="pr.title"></div>
+                    <div class="text-xs muted-2"
+                      x-text="'#' + pr.number + ' · ' + (pr.user || pr.author_name || '') + ' · ' + timeAgo(pr.created_at)"></div>
+                  </div>
+                  <span class="badge"
+                    :class="pr.status === 'merged' ? 'badge--purple' : (pr.status === 'closed' ? 'badge--red' : 'badge--green')"
+                    x-text="pr.status"></span>
+                </a>
+              </template>
+              <div class="empty" x-show="!prs.length" x-cloak>
+                <div class="empty__desc" x-text="prError || t('pr.noPRs')"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+    </div>
+
+    <div id="app-footer"></div>
+    <script src="/assets/lib/prism.js" defer></script>
+    <script type="module" src="/assets/js/app.js"></script>
+  </body>
+</html>

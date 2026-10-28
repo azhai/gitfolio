@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>GitFolio · 代码片段</title>
+    <link rel="stylesheet" href="/assets/css/app.css" />
+  </head>
+  <body class="app-body" data-page="snippets">
+    <div id="app-shell"></div>
+
+    <main class="app-main" x-data="snippets">
+      <div class="loading-box" x-show="loading">
+        <span class="spinner"></span><span x-text="t('common.loading')"></span>
+      </div>
+
+      <!-- list -->
+      <section x-show="view === 'list' && !loading" x-cloak>
+        <div class="page-head">
+          <div class="row gap-8">
+            <span x-icon="{ name: 'file-code', size: 22 }"></span>
+            <h1 class="page-title" x-text="t('snippets.title')"></h1>
+          </div>
+          <a class="btn btn--primary btn--sm" href="/snippets/new"
+            x-text="t('snippets.newSnippet')"></a>
+        </div>
+
+        <div class="card mb-20">
+          <div class="card__body" style="padding: 14px 16px">
+            <input class="input" type="search" x-model="search"
+              :placeholder="t('snippets.searchPlaceholder')" />
+          </div>
+        </div>
+
+        <div class="grid grid--2">
+          <template x-for="s in filtered" :key="s.id">
+            <a class="card card--link" :href="'/snippets/' + s.id">
+              <div class="card__body">
+                <div class="row gap-8 mb-6 wrap">
+                  <span class="strong" style="font-size: 15px" x-text="s.title"></span>
+                  <span class="badge badge--gray" x-show="s.language" x-text="s.language"></span>
+                  <span class="badge" :class="s.visibility === 'private' ? 'badge--amber' : 'badge--green'"
+                    x-text="s.visibility === 'private' ? t('common.private') : t('common.public')"></span>
+                </div>
+                <p class="text-sm muted" x-text="s.description || s.filename || ''"></p>
+                <div class="text-xs muted-2 mt-8"
+                  x-text="t('snippets.updatedAt') + ' ' + timeAgo(s.updated_at)"></div>
+              </div>
+            </a>
+          </template>
+        </div>
+
+        <div class="empty" x-show="!filtered.length" x-cloak>
+          <div class="empty__icon" x-icon="{ name: 'file-code', size: 40 }"></div>
+          <div class="empty__title" x-text="t('snippets.notFound')"></div>
+        </div>
+      </section>
+
+      <!-- editor (new / edit) -->
+      <section x-show="view === 'new' || view === 'edit'" x-cloak style="max-width: 860px; margin: 0 auto">
+        <h1 class="page-title mb-24"
+          x-text="view === 'edit' ? t('snippet.editSnippet') : t('snippet.newSnippet')"></h1>
+        <div class="card">
+          <div class="card__body" style="padding: 24px">
+            <div class="field">
+              <label class="label" x-text="t('snippet.title') + ' *'"></label>
+              <input class="input" x-model="form.title" :placeholder="t('snippet.titlePlaceholder')" />
+            </div>
+            <div class="grid grid--2" style="gap: 0 18px">
+              <div class="field">
+                <label class="label" x-text="t('snippet.filename')"></label>
+                <input class="input mono" x-model="form.filename" placeholder="main.go" />
+              </div>
+              <div class="field">
+                <label class="label" x-text="t('snippet.language')"></label>
+                <input class="input" x-model="form.language" placeholder="go" />
+              </div>
+            </div>
+            <div class="field">
+              <label class="label" x-text="t('snippet.description')"></label>
+              <input class="input" x-model="form.description"
+                :placeholder="t('snippet.descriptionPlaceholder')" />
+            </div>
+            <div class="field">
+              <label class="label" x-text="t('snippet.visibility')"></label>
+              <select class="select" x-model="form.visibility">
+                <option value="public" x-text="t('common.public')"></option>
+                <option value="private" x-text="t('common.private')"></option>
+              </select>
+            </div>
+            <div class="field mb-20">
+              <label class="label" x-text="t('snippet.codeContent')"></label>
+              <textarea class="textarea mono" rows="18" x-model="form.content"
+                :placeholder="t('snippet.codePlaceholder')" spellcheck="false"></textarea>
+            </div>
+            <div class="row" style="justify-content: flex-end; gap: 10px">
+              <a class="btn" href="/snippets" x-text="t('common.cancel')"></a>
+              <button class="btn btn--primary" :disabled="saving" @click="save">
+                <span class="spinner spinner--sm" x-show="saving" x-cloak></span>
+                <span x-text="view === 'edit' ? t('snippet.saveChanges') : t('snippet.createSnippet')"></span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- detail -->
+      <section x-show="view === 'detail' && !loading" x-cloak>
+        <div x-show="snippet">
+          <div class="page-head">
+            <div>
+              <h1 class="page-title" x-text="snippet && snippet.title"></h1>
+              <div class="row gap-12 text-sm muted-2 mt-4 wrap">
+                <span class="badge badge--gray" x-show="snippet && snippet.language"
+                  x-text="snippet && snippet.language"></span>
+                <span x-text="snippet ? t('snippet.revision', { version: snippet.version || 1 }) : ''"></span>
+                <span x-text="snippet ? t('snippet.updatedAt') + ' ' + timeAgo(snippet.updated_at) : ''"></span>
+              </div>
+            </div>
+            <div class="btn-group" x-show="canEdit">
+              <a class="btn btn--sm" :href="'/snippets/' + id + '/edit'"
+                x-text="t('snippet.edit')"></a>
+              <button class="btn btn--sm btn--danger-ghost" @click="remove"
+                x-text="t('snippet.delete')"></button>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card__head">
+              <span class="card__title mono" x-text="(snippet && snippet.filename) || 'snippet'"></span>
+              <button class="btn btn--sm btn--ghost" @click="copyCode">
+                <span x-icon="{ name: 'file-text', size: 14 }"></span>
+                <span x-text="t('snippet.copy')"></span>
+              </button>
+            </div>
+            <div class="code-block" style="border: 0; border-radius: 0">
+              <pre><code :class="codeClass" x-ref="code" x-text="snippet && snippet.content"></code></pre>
+            </div>
+          </div>
+
+          <p class="text-sm muted mt-16" x-show="snippet && snippet.description"
+            x-text="snippet && snippet.description"></p>
+        </div>
+
+        <div class="empty" x-show="!snippet" x-cloak>
+          <div class="empty__icon" x-icon="{ name: 'file-code', size: 40 }"></div>
+          <div class="empty__title" x-text="t('snippet.notFound')"></div>
+        </div>
+      </section>
+    </main>
+
+    <div id="app-footer"></div>
+    <script src="/assets/lib/prism.js" defer></script>
+    <script type="module" src="/assets/js/app.js"></script>
+  </body>
+</html>
