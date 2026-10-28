@@ -5,9 +5,9 @@
 // prevents the whole tree from mounting.
 import Alpine from '../../lib/alpine.min.js'
 import { marked } from '../../lib/marked.js'
-import { reposAPI, issuesAPI, prsAPI } from '../api.js'
+import { reposAPI, issuesAPI, prsAPI, tasksAPI, releasesAPI } from '../api.js'
 import { t, timeAgo, dated } from '../i18n.js'
-import { projectTypeClass, projectTypeLabel } from '../model.js'
+import { projectTypeClass, projectTypeLabel, taskStatus } from '../model.js'
 import { fileIcon } from '../icon.js'
 import { toast, copyText, sanitizeHtml, confirmBox } from '../ui.js'
 
@@ -26,6 +26,7 @@ var EXT_LANG = {
 var TAB_GROUPS = {
   issues: ['issues', 'issue', 'issue-new'],
   prs: ['prs', 'pr', 'pr-new'],
+  tasks: ['tasks', 'task', 'task-new'],
 }
 
 function parsePath() {
@@ -34,11 +35,25 @@ function parsePath() {
   var tab = 'tree'
   var sub = ''
   var number = 0
+  var sha = ''
   var head = rest[0] || ''
 
-  if (head === 'commits') tab = 'commits'
-  else if (head === 'branches') tab = 'branches'
-  else if (head === 'issues') {
+  if (head === 'commits') {
+    if (rest[1]) {
+      tab = 'commit'
+      sha = decodeURIComponent(rest[1])
+    } else tab = 'commits'
+  } else if (head === 'branches') tab = 'branches'
+  else if (head === 'tags') tab = 'tags'
+  else if (head === 'releases') tab = 'releases'
+  else if (head === 'stats') tab = 'stats'
+  else if (head === 'tasks') {
+    if (rest[1] === 'new') tab = 'task-new'
+    else if (rest[1]) {
+      tab = 'task'
+      number = parseInt(rest[1], 10) || 0
+    } else tab = 'tasks'
+  } else if (head === 'issues') {
     if (rest[1] === 'new') tab = 'issue-new'
     else if (rest[1]) {
       tab = 'issue'
@@ -60,6 +75,7 @@ function parsePath() {
     tab: tab,
     sub: decodeURIComponent(sub),
     number: number,
+    sha: sha,
   }
 }
 
@@ -70,6 +86,7 @@ Alpine.data('project', function () {
     tab: 'tree',
     number: 0,
     base: '/',
+    ownerUrl: '',
     crumbSegs: [],
     parentUrl: '',
     dirPath: '',
@@ -118,6 +135,38 @@ Alpine.data('project', function () {
     prCommentText: '',
     newPR: { title: '', body: '', source_branch: '', target_branch: '' },
 
+    sha: '',
+    commit: null,
+    commitError: '',
+
+    tags: [],
+    tagDraft: { name: '', branch: '' },
+    showTagForm: false,
+    savingTag: false,
+
+    releases: [],
+    releaseError: '',
+    syncingReleases: false,
+
+    tasks: [],
+    taskColumns: [],
+    tasksError: '',
+    task: null,
+    taskError: '',
+    taskHtml: '',
+    taskComments: [],
+    taskTransitions: [],
+    taskCommentText: '',
+    postingTask: false,
+    transitioning: false,
+    newTask: { title: '', goal: '', draft: '', priority: 3, handler: '', verifier: '' },
+
+    codeStats: null,
+    statsError: '',
+    languageRows: [],
+    contributors: [],
+    commitActivity: [],
+
     settings: { name: '', description: '', homepage: '', default_branch: '' },
 
     syncConfig: null,
@@ -130,8 +179,10 @@ Alpine.data('project', function () {
       this.repoName = r.repo
       this.tab = r.tab
       this.number = r.number
+      this.sha = r.sha
       this.dirPath = r.sub
       this.base = '/' + r.owner + '/' + r.repo
+      this.ownerUrl = '/users/' + r.owner
       this.emptyMessage = t('project.emptyTree')
       this.updateCrumbs()
       this.load().catch(
@@ -157,7 +208,13 @@ Alpine.data('project', function () {
       this.repo = await reposAPI.get(this.owner, this.repoName)
       var auth = this.$store.auth
       var uid = auth.user && auth.user.id
-      this.canManage = auth.isAdmin || (!!uid && this.repo.owner_id === uid)
+      // can_manage comes from the backend because team repos require group
+      // admin rights, which the client cannot derive from owner_id alone.
+      this.canManage =
+        !!this.repo.can_manage ||
+        auth.isAdmin ||
+        (!!uid && this.repo.owner_type !== 'group' && this.repo.owner_id === uid)
+      this.ownerUrl = this.repo.owner_type === 'group' ? '/groups/' + this.owner : '/users/' + this.owner
       this.canCreate = auth.isAuthenticated && !auth.isGuest
       this.canComment = this.canCreate
       this.settings = {
@@ -169,7 +226,14 @@ Alpine.data('project', function () {
       try {
         if (this.tab === 'tree') await this.loadTree()
         else if (this.tab === 'commits') await this.loadCommits(1)
+        else if (this.tab === 'commit') await this.loadCommit()
         else if (this.tab === 'branches') await this.loadBranches()
+        else if (this.tab === 'tags') await this.loadTags()
+        else if (this.tab === 'releases') await this.loadReleases()
+        else if (this.tab === 'stats') await this.loadStats()
+        else if (this.tab === 'tasks') await this.loadTasks()
+        else if (this.tab === 'task') await this.loadTask()
+        else if (this.tab === 'task-new') await this.loadBranches()
         else if (this.tab === 'issues') await this.loadIssues()
         else if (this.tab === 'issue') await this.loadIssue()
         else if (this.tab === 'prs') await this.loadPRs()
@@ -252,11 +316,300 @@ Alpine.data('project', function () {
     loadBranches: async function () {
       var data = await reposAPI.branches(this.owner, this.repoName)
       this.branches = (data && data.branches) || (Array.isArray(data) ? data : [])
+      // A freshly created repo has no branch listing yet, and the configured
+      // default (e.g. "main") may be missing from a stale cache; keep it
+      // selectable so saving settings cannot silently switch the default.
+      var def = (this.repo && this.repo.default_branch) || ''
+      if (def && this.branches.indexOf(def) < 0) this.branches = [def].concat(this.branches)
       if (this.tab === 'pr-new') {
-        var def = (this.repo && this.repo.default_branch) || this.branches[0] || ''
-        if (!this.newPR.target_branch) this.newPR.target_branch = def
-        if (!this.newPR.source_branch) this.newPR.source_branch = def
+        if (!this.newPR.target_branch) this.newPR.target_branch = def || this.branches[0] || ''
+        if (!this.newPR.source_branch) this.newPR.source_branch = def || this.branches[0] || ''
       }
+    },
+
+    // ---------- tags / releases / stats ----------
+
+    loadTags: async function () {
+      try {
+        var data = await reposAPI.tags(this.owner, this.repoName)
+        this.tags = (data && data.tags) || (Array.isArray(data) ? data : [])
+      } catch (err) {
+        this.tags = []
+      }
+      if (this.canManage) {
+        await this.loadBranches()
+        if (!this.tagDraft.branch) {
+          this.tagDraft.branch = (this.repo && this.repo.default_branch) || this.branches[0] || ''
+        }
+      }
+    },
+
+    createTag: async function () {
+      var name = this.tagDraft.name.trim()
+      if (!name) {
+        toast(t('projectCommits.tagName'), 'error')
+        return
+      }
+      this.savingTag = true
+      try {
+        await reposAPI.createTag(this.owner, this.repoName, name, this.tagDraft.branch)
+        this.tagDraft.name = ''
+        this.showTagForm = false
+        await this.loadTags()
+        toast(t('common.success'))
+      } catch (err) {
+        toast(err.message || t('common.failed'), 'error')
+      } finally {
+        this.savingTag = false
+      }
+    },
+
+    deleteTag: async function (name) {
+      var ok = await confirmBox({
+        title: t('common.delete'),
+        message: t('project.tags') + ': ' + name,
+        danger: true,
+        confirmText: t('common.delete'),
+      })
+      if (!ok) return
+      try {
+        await reposAPI.deleteTag(this.owner, this.repoName, name)
+        await this.loadTags()
+        toast(t('common.success'))
+      } catch (err) {
+        toast(err.message || t('common.failed'), 'error')
+      }
+    },
+
+    loadReleases: async function () {
+      try {
+        var data = await releasesAPI.list(this.owner, this.repoName)
+        this.releases = Array.isArray(data) ? data : (data && data.data) || []
+      } catch (err) {
+        this.releases = []
+        this.releaseError = err.message || ''
+      }
+    },
+
+    syncReleases: async function () {
+      this.syncingReleases = true
+      try {
+        await releasesAPI.sync(this.owner, this.repoName)
+        await this.loadReleases()
+        toast(t('common.success'))
+      } catch (err) {
+        toast(err.message || t('common.failed'), 'error')
+      } finally {
+        this.syncingReleases = false
+      }
+    },
+
+    loadStats: async function () {
+      var results = await Promise.all([
+        reposAPI.codeStats(this.owner, this.repoName).catch(function () { return null }),
+        reposAPI.contributors(this.owner, this.repoName).catch(function () { return [] }),
+        reposAPI.commitActivity(this.owner, this.repoName, 30).catch(function () { return null }),
+      ])
+      this.codeStats = results[0] || null
+      this.contributors = Array.isArray(results[1]) ? results[1] : []
+      this.commitActivity = (results[2] && results[2].activity) || []
+      if (!this.codeStats) this.statsError = t('stats.noStats')
+      var languages = (this.codeStats && this.codeStats.languages) || {}
+      var total = 0
+      Object.keys(languages).forEach(function (key) {
+        total += languages[key]
+      })
+      this.languageRows = Object.keys(languages)
+        .map(function (key) {
+          return {
+            name: key,
+            lines: languages[key],
+            percent: total ? Math.round((languages[key] * 1000) / total) / 10 : 0,
+          }
+        })
+        .sort(function (a, b) {
+          return b.lines - a.lines
+        })
+    },
+
+    // ---------- tasks ----------
+
+    loadTasks: async function () {
+      try {
+        var data = await tasksAPI.list(this.owner, this.repoName, { per_page: 100 })
+        this.tasks = Array.isArray(data) ? data : (data && data.data) || []
+      } catch (err) {
+        this.tasks = []
+        this.tasksError = err.message || ''
+      }
+      this.rebuildTaskColumns()
+    },
+
+    rebuildTaskColumns: function () {
+      var self = this
+      var columns = [
+        { key: 'draft', label: t('task.draft') },
+        { key: 'progress', label: t('task.inProgress') },
+        { key: 'review', label: t('task.review') },
+        { key: 'completed', label: t('task.completed') },
+      ]
+      var known = {}
+      columns.forEach(function (col) {
+        known[col.key] = true
+      })
+      // Keep unexpected states (e.g. rejected) visible instead of dropping them.
+      this.tasks.forEach(function (task) {
+        if (!known[task.status]) {
+          known[task.status] = true
+          columns.push({ key: task.status, label: task.status })
+        }
+      })
+      this.taskColumns = columns.map(function (col) {
+        return {
+          key: col.key,
+          label: col.label,
+          tasks: self.tasks.filter(function (task) {
+            return task.status === col.key
+          }),
+        }
+      })
+    },
+
+    loadTask: async function () {
+      try {
+        this.task = await tasksAPI.get(this.owner, this.repoName, this.number)
+        this.taskHtml = this.markdownHtml(
+          (this.task && (this.task.goal || this.task.draft)) || ''
+        )
+        var pair = await Promise.all([
+          tasksAPI.comments(this.owner, this.repoName, this.number).catch(function () {
+            return []
+          }),
+          tasksAPI.transitions(this.owner, this.repoName, this.number).catch(function () {
+            return []
+          }),
+        ])
+        this.taskComments = Array.isArray(pair[0]) ? pair[0] : (pair[0] && pair[0].data) || []
+        this.taskTransitions = Array.isArray(pair[1]) ? pair[1] : []
+      } catch (err) {
+        this.taskError = err.message || t('task.notFound')
+      }
+    },
+
+    taskTransitionOptions: function () {
+      var self = this
+      var allowed = {
+        draft: ['progress'],
+        progress: ['review'],
+        review: ['completed', 'rejected'],
+        rejected: ['progress'],
+      }
+      var labels = {
+        draft: 'task.draft',
+        progress: 'task.inProgress',
+        review: 'task.review',
+        completed: 'task.completed',
+        rejected: 'task.cancelled',
+      }
+      var status = (this.task && this.task.status) || ''
+      return (allowed[status] || []).map(function (next) {
+        return { value: next, label: labels[next] ? t(labels[next]) : next }
+      })
+    },
+
+    transitionTask: async function (next) {
+      if (!this.task) return
+      this.transitioning = true
+      var self = this
+      try {
+        var updated = await tasksAPI.transition(this.owner, this.repoName, this.number, {
+          to_status: next,
+        })
+        this.task = updated || this.task
+        this.taskTransitions = await tasksAPI
+          .transitions(this.owner, this.repoName, this.number)
+          .catch(function () {
+            return self.taskTransitions
+          })
+        toast(t('common.success'))
+      } catch (err) {
+        toast(err.message || t('common.failed'), 'error')
+      } finally {
+        this.transitioning = false
+      }
+    },
+
+    createTask: async function () {
+      if (!this.newTask.title.trim()) {
+        toast(t('task.titleRequired'), 'error')
+        return
+      }
+      this.creating = true
+      try {
+        var task = await tasksAPI.create(this.owner, this.repoName, this.newTask)
+        window.location.href = this.base + '/tasks/' + ((task && task.id) || '')
+      } catch (err) {
+        toast(err.message || t('task.createFailed'), 'error')
+      } finally {
+        this.creating = false
+      }
+    },
+
+    submitTaskComment: async function () {
+      var text = this.taskCommentText.trim()
+      if (!text) return
+      this.postingTask = true
+      try {
+        var created = await tasksAPI.createComment(this.owner, this.repoName, this.number, {
+          body: text,
+        })
+        this.taskCommentText = ''
+        if (created && created.id) this.taskComments.push(created)
+        else await this.loadTask()
+      } catch (err) {
+        toast(err.message || t('issue.commentFailed'), 'error')
+      } finally {
+        this.postingTask = false
+      }
+    },
+
+    // ---------- commit detail ----------
+
+    loadCommit: async function () {
+      try {
+        this.commit = await reposAPI.commitDetail(this.owner, this.repoName, this.sha)
+      } catch (err) {
+        this.commitError = err.message || t('commitDetail.notFound')
+      }
+    },
+
+    patchLines: function (patch) {
+      if (!patch) return []
+      var lines = String(patch).split('\n')
+      var out = []
+      var inHunk = false
+      for (var i = 0; i < lines.length; i++) {
+        var line = lines[i]
+        if (line.indexOf('@@') === 0) {
+          inHunk = true
+          out.push({ cls: 'diff__hunk', sign: '', text: line })
+          continue
+        }
+        // git diff-tree prefixes the commit id, author and file headers;
+        // only hunk contents below the first @@ marker are diff lines.
+        if (!inHunk) continue
+        if (line.charAt(0) === '\\') {
+          out.push({ cls: 'diff__line diff__meta', sign: '', text: line.replace(/^\\\s?/, '') })
+          continue
+        }
+        var sign = line.charAt(0)
+        var cls = 'diff__line'
+        if (sign === '+') cls += ' diff__line--add'
+        else if (sign === '-') cls += ' diff__line--del'
+        else sign = ' '
+        out.push({ cls: cls, sign: sign, text: line.slice(1) })
+      }
+      return out
     },
 
     // ---------- issues ----------
@@ -666,6 +1019,7 @@ Alpine.data('project', function () {
     t: t,
     timeAgo: timeAgo,
     dated: dated,
+    statusOf: taskStatus,
     projectTypeClass: projectTypeClass,
     projectTypeLabel: projectTypeLabel,
   }

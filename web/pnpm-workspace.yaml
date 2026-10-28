@@ -1,7 +1,0 @@
-# pnpm >=10: settings live here (not package.json's "pnpm" field).
-# Approve esbuild's install script so `pnpm install` never hits
-# ERR_PNPM_IGNORED_BUILDS on a fresh machine.
-allowBuilds:
-  esbuild: true
-minimumReleaseAgeExclude:
-  - lucide@1.63.0

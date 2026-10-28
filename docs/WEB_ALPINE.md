@@ -1,8 +1,8 @@
 # 前端：静态页面 + Alpine.js
 
-React 已移除，前端是一组静态 HTML 页面 + Alpine.js 组件，没有打包和转译步骤。
-`web/pages/*.html` 和 `web/assets/**` 由 `node web/scripts/build.mjs` 原样复制到
-`web/dist/`，Go 用 `embed` 把 `web/dist` 编进二进制。
+React 已移除，前端是一组静态 HTML 页面 + Alpine.js 组件，没有打包、转译、
+复制或监听步骤。Go 直接用 `embed` 把 `web/pages`、`web/assets`、`web/public`
+编进二进制，`web/dist` 这种中间产物已经不存在。
 
 ## 目录
 
@@ -21,13 +21,11 @@ web/
     js/locales/     zh.js / en.js
     js/shell.js     顶部导航、toast 宿主、确认框、页脚
     js/icon.js      内联 SVG 图标 + 按文件类型取图标
-    js/icons.js     由 scripts/vendor.mjs 从 lucide 生成，勿手改
+    js/icons.js     lucide 图标集（新图标按原有格式手工补）
     js/model.js     项目类型、任务状态等展示元数据
     js/pages/*.js   每个页面一个 Alpine 组件模块
-    lib/            alpine / marked / prism / sortable（从 node_modules 复制）
-  scripts/vendor.mjs  把依赖产物复制到 assets/lib，并按需生成图标集
-  scripts/build.mjs   复制到 dist；--watch 时监听改动
-  public/             favicon 等静态资源
+    lib/            alpine / marked / prism / sortable 预构建产物
+  public/           favicon 等静态资源
 ```
 
 ## 路由
@@ -72,38 +70,35 @@ web/
 ## 依赖与升级
 
 运行时库只有四个：Alpine 3.17、marked（Markdown）、Prism（代码高亮）、
-SortableJS（拖拽排序）。它们被复制到 `web/assets/lib/` 并随仓库提交，
-因此**部署不需要 Node**。
+SortableJS（拖拽排序）。它们的产物已放在 `web/assets/lib/`，图标集
+`web/assets/js/icons.js` 也已生成，全部随仓库提交。项目没有 `package.json`
+或包管理器，构建、部署都不需要 Node。
 
-升级依赖：
-
-```bash
-cd web && pnpm update && pnpm run vendor && pnpm run build
-```
-
-`vendor.mjs` 只复制用到的产物，并按 `ICON_SLUGS` 把 lucide 图标烘成
-`assets/js/icons.js`（71 个图标约 12KB，而不是整包 460KB）。
+升级时直接替换 `assets/lib/` 下对应的文件；新增图标需要按现有格式把 SVG
+路径补进 `assets/js/icons.js`。
 
 ## 开发
 
+构建只需要 make 和 Go：
+
 ```bash
-./build-frontend.sh dev     # 监听 web/{pages,assets,public}，改动即复制到 dist
-go run .                    # 另一个终端；Go 内嵌的是 dist
+make dev      # go run ./（http://127.0.0.1:9000）
+make one      # 编译当前平台
 ```
 
-改完记得重启 Go 进程，`embed` 在编译期取值。
+改完前端文件要重新编译并重启 Go 进程：`embed` 在编译期取值，运行时读的是
+编进二进制的那一份。`./build-frontend.sh` 是薄包装（`build` / `dev` / `serve`）。
 
 ## 迁移状态
 
-已迁移：登录、仪表盘、项目、团队、动态、片段、用户、设置、管理后台，以及
-项目工作区——文件树/文件查看/README、提交、分支、议题（列表/详情/新建、评论、
-关闭与重开）、合并请求（列表/详情/新建、评论、合并与关闭）、项目设置（基本信息、
-类型转换、删除）、同步（代码同步、定时同步、日志）。
+React 源码与 Vite/Vitest 配置已删除。所有页面都由 `web/pages/*.html` +
+`web/assets/js/pages/*.js` 渲染：登录、仪表盘、项目、团队、动态、片段、用户、
+设置、管理后台，以及项目工作区——文件树/文件查看/README、提交列表与详情、
+分支、标签、发行版、统计、议题（列表/详情/新建、评论、关闭与重开）、合并请求
+（列表/详情/新建、评论、合并与关闭）、任务看板（列表/新建/详情、状态流转、
+评论）、项目设置（基本信息、类型转换、删除）、同步（代码同步、定时同步、日志）。
 
-尚未迁移：提交详情、任务看板、Git 工作流（暂存/提交/交互式 rebase/stash/行级
-暂存）、文件编辑、分支/标签管理、统计与发行版。这些 URL 会落到 `project.html`
-并显示对应列表或空态。旧的 React 源码仍在 `web/src/`（不参与构建），全部迁移
-完成后删除。
+尚未迁移：Git 工作流（暂存/提交/交互式 rebase/stash/行级暂存）与文件编辑。
 
 ## 渲染约定
 

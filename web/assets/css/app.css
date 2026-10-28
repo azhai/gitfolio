@@ -1627,6 +1627,11 @@ hr {
   color: #b91c1c;
 }
 
+.diff__meta {
+  color: var(--text-3);
+  font-style: italic;
+}
+
 /* ---------- dashboard ---------- */
 .hero {
   padding: 40px;
@@ -2039,11 +2044,123 @@ hr {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+/* ---------- task board ---------- */
+.task-board {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.task-col {
+  display: flex;
+  flex-direction: column;
+  min-height: 120px;
+  background: var(--panel-2);
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius);
+}
+
+.task-col__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-2);
+}
+
+.task-col__body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+}
+
+.task-card {
+  display: block;
+  padding: 10px 12px;
+  color: inherit;
+  background: var(--panel);
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius-sm);
+  transition: border-color 0.15s var(--ease), box-shadow 0.15s var(--ease);
+}
+
+.task-card:hover {
+  border-color: var(--border-3);
+  box-shadow: var(--shadow-xs);
+}
+
+/* ---------- release list ---------- */
+.release {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-2);
+}
+
+.release:last-of-type {
+  border-bottom: 0;
+}
+
+/* ---------- commit file changes ---------- */
+.commit-file {
+  border-top: 1px solid var(--border-2);
+}
+
+.commit-file__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.commit-file__head::-webkit-details-marker {
+  display: none;
+}
+
+.commit-file__head:hover {
+  background: var(--panel-2);
+}
+
+/* ---------- language distribution ---------- */
+.lang-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 0;
+}
+
+.lang-bar {
+  flex: 1;
+  height: 8px;
+  overflow: hidden;
+  background: var(--border-2);
+  border-radius: var(--radius-full);
+}
+
+.lang-bar__fill {
+  display: block;
+  height: 100%;
+  background: var(--green-500);
+  border-radius: inherit;
+}
+
+.text-green {
+  color: var(--green-600);
+}
+
+.text-red {
+  color: var(--red-600);
+}
+
 @media (max-width: 1080px) {
   .grid--4 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .grid--3 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .task-board {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .nav-search {
@@ -2057,7 +2174,8 @@ hr {
   }
   .grid--2,
   .grid--3,
-  .grid--4 {
+  .grid--4,
+  .task-board {
     grid-template-columns: minmax(0, 1fr);
   }
   .sidebar {

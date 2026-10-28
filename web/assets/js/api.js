@@ -184,7 +184,7 @@ export const reposAPI = {
     return api.post('/' + owner + '/' + repo + '/tags', { name: name, branch: branch })
   },
   deleteTag(owner, repo, name) {
-    return api.del('/' + owner + '/' + repo + '/tags/' + name)
+    return api.del('/' + owner + '/' + repo + '/tags/' + encodeURIComponent(name))
   },
   deleteCommitRange(owner, repo, fromSHA, toSHA) {
     return api.post('/' + owner + '/' + repo + '/delete-commits', { from_sha: fromSHA, to_sha: toSHA })

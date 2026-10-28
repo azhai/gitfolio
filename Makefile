@@ -19,10 +19,12 @@ RELEASE  = "-s -w"
 GOBUILD  = $(GOARGS) $(GOBIN) build -ldflags=$(RELEASE)
 BINFILES = $(SINGLETON) $(COMMANDS)
 
+# No frontend build step: go:embed pulls web/{pages,assets,public} straight into
+# the binary, so editing a file only needs a recompile.
 
 .PHONY: one all front build dev clean upx upxx $(BINFILES)
 
-one: front
+one:
 	@echo "Compile one ($(GOOS)/$(GOARCH)) ..."
 ifneq ($(SINGLETON),)
 		CGO_ENABLED=1 $(GOBUILD) -o ./bin/$(SINGLETON) ./
@@ -34,13 +36,12 @@ endif
 all: clean one build
 
 front:
-	@echo "Copy frontend ..."
-	cd web && node scripts/build.mjs
+	@echo "ℹ️  No frontend build: web/{pages,assets,public} are embedded by go:embed."
 
 build: $(BINFILES)
 	@echo "✅ Build success."
 
-$(SINGLETON): front
+$(SINGLETON):
 	@echo "Compile $@ ..."
 	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 $(GOBUILD) -o ./bin/$@.darwin-arm64 ./
 	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 $(GOBUILD) -o ./bin/$@.darwin-amd64 ./
@@ -60,16 +61,12 @@ dev:
 	@echo ""
 	@echo "💡 Tips:"
 	@echo "   - Visit:  http://127.0.0.1:$(SERVER_PORT)"
-	@echo "   - HMR:    Disabled"
-	@echo "📦 Building frontend..."
-	cd web && npx vite build
-	cp web/landing.html web/dist/landing.html
-	cp web/screenshot-1.png web/dist/screenshot-1.png
+	@echo "   - Assets: edit web/{pages,assets,public} and restart (go:embed, no copy step)"
 	@echo "🚀 Starting backend..."
 	go run ./
 
 clean:
-	rm -rf web/dist $(BINFILES:%=./bin/%)
+	rm -rf $(BINFILES:%=./bin/%)
 	@echo "✅ Clean complete."
 
 upx: all

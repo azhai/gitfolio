@@ -62,5 +62,5 @@
 
 - Go: 1.26+
 - Fiber: v3
-- React: 18 + Vite 5
+- 前端: 静态 HTML + Alpine.js（无打包器，Go embed 内嵌）
 - 数据库: SQLite（默认）/ PostgreSQL

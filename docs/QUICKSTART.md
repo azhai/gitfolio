@@ -5,7 +5,6 @@
 ### 1. 环境要求
 
 - Go 1.26+
-- Node.js 18+
 - SQLite（默认）或 PostgreSQL
 
 ### 2. 安装
@@ -14,21 +13,17 @@
 git clone https://github.com/azhai/gitfolio.git
 cd gitfolio
 
-# 安装前端依赖
-cd web && npm install && cd ..
-
 # 配置环境变量
-cp .env.example .env
+cp example.env .env
 # 编辑 .env，至少修改 JWT_SECRET
 ```
 
 ### 3. 运行
 
 ```bash
-# 开发模式
+# 开发模式：直接启动后端（前端由 go:embed 编进二进制，无需复制）
 make dev
-
-# 或直接运行
+# 或
 go run main.go
 ```
 

@@ -100,7 +100,10 @@
 
       <!-- detail -->
       <section x-show="view === 'detail' && !loading" x-cloak>
-        <div x-show="group">
+        <!-- x-if removes the subtree until the group loads, so the template
+             never evaluates group.* on null -->
+        <template x-if="group">
+        <div>
           <div class="card mb-24">
             <div class="card__body" style="padding: 28px">
               <div class="row gap-16 mb-16" style="gap: 16px">
@@ -160,7 +163,7 @@
             </div>
 
             <div class="list">
-              <template x-for="m in members" :key="m.user && m.user.username">
+              <template x-for="m in members" :key="(m.user && m.user.username) || m.id">
                 <div class="list__item" style="align-items: center">
                   <span class="avatar" x-html="avatarHtml(m.user && m.user.avatar, m.user && m.user.username)"></span>
                   <div class="grow">
@@ -182,6 +185,7 @@
             </div>
           </div>
         </div>
+        </template>
 
         <div class="empty" x-show="!group" x-cloak>
           <div class="empty__icon" x-icon="{ name: 'users', size: 40 }"></div>

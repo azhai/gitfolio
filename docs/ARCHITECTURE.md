@@ -51,61 +51,30 @@ gitfolio/
 │   ├── scheduler_service.go # 定时同步调度
 │   ├── stats_service.go    # 统计服务
 │   └── sync_service.go     # 同步服务（Issue/PR/评论并发同步）
-├── web/                    # 前端（React + Chakra UI + Vite）
-│   ├── src/
-│   │   ├── api/            # API 调用封装
-│   │   ├── components/     # 通用组件
-│   │   │   └── gitworkflow/ # Git 工作流组件（暂存、提交、Rebase、Stash）
-│   │   ├── contexts/       # React Context（认证、Git 工作流）
-│   │   ├── i18n/           # 国际化（中文/英文）
-│   │   ├── pages/          # 页面组件（按功能域合并）
-│   │   │   ├── HomePages.jsx       # 首页、项目列表、创建项目、迁移
-│   │   │   ├── CommunityPages.jsx  # 登录、团队、团队详情
-│   │   │   ├── UserPages.jsx       # 活动、用户管理、个人资料、设置、管理后台
-│   │   │   ├── SnippetPages.jsx    # 代码片段列表、详情、新建、编辑
-│   │   │   ├── ProjectDetail.jsx   # 项目详情框架页
-│   │   │   └── project/
-│   │   │       └── ProjectPages.jsx # 项目子页面（树、Issue、PR、提交等）
-│   │   ├── test/           # 前端测试
-│   │   ├── theme/          # Chakra UI 主题
-│   │   ├── App.jsx         # 路由配置
-│   │   ├── codeThemes.js   # 代码高亮主题
-│   │   └── main.jsx        # 入口
-│   └── package.json
+├── web/                    # 前端（静态 HTML + Alpine.js，无打包器）
+│   ├── pages/              # 每个顶层路由一个 HTML 文档
+│   ├── assets/
+│   │   ├── css/            # 设计令牌与组件样式
+│   │   ├── js/             # Alpine 组件、API 客户端、i18n、图标
+│   │   └── lib/            # Alpine/marked/Prism/Sortable 运行时产物
+│   └── public/             # favicon 等静态资源
 ├── main.go                 # 程序入口
 └── Makefile                # 构建命令
 ```
 
 ## 前端架构
 
-### 页面组件合并策略
+前端不使用打包器，也没有中间产物：Go 直接用 `embed` 把 `web/pages`、
+`web/assets`、`web/public` 编进二进制，构建和部署都不需要 Node。改完前端文件
+重新编译即可（`make front` 现在只打印提示，不复制任何东西）。
 
-前端页面按功能域合并，减少文件数量，同时保持路由级代码分割：
-
-| 文件 | 包含组件 | 加载方式 |
-|------|---------|---------|
-| HomePages.jsx | Dashboard, Projects, CreateProject, MigrateProject | 直接导入 |
-| CommunityPages.jsx | LoginPage, Groups, NewGroup, GroupDetail | 直接导入 |
-| UserPages.jsx | Activity, UserManagement, UserProfile, UserSettings, AdminPage | 懒加载 |
-| SnippetPages.jsx | Snippets, SnippetDetail, NewSnippet, EditSnippet | 懒加载 |
-| ProjectDetail.jsx | ProjectDetail | 直接导入 |
-| ProjectPages.jsx | ProjectTree, ProjectIssues, ProjectPRs, ProjectCommits, ProjectBranches, ProjectTags, ProjectStats, ProjectReleases, ProjectTasks, NewIssue, NewPR, NewTask, CommitDetail, IssueDetail, PRDetail, TaskDetail, ProjectSettings, FileViewer | 懒加载 |
-
-### 构建产物
-
-Vite 构建配置通过 `manualChunks` 拆分第三方依赖，首屏仅加载核心 chunk：
-
-| Chunk | gzip 大小 | 说明 |
-|-------|----------|------|
-| index | ~33 kB | 应用核心代码 |
-| react-vendor | ~68 kB | React + React Router + React Icons |
-| chakra-core | ~92 kB | Chakra UI + Emotion |
-| framer-motion | ~37 kB | 动画库 |
-| datepicker | ~40 kB | 日期选择器（按需） |
-| syntax-highlighter | ~227 kB | 代码高亮（按需） |
-| syntax-styles | ~18 kB | 高亮主题样式（按需） |
-| markdown-editor | ~112 kB | Markdown 编辑器（按需） |
-| ProjectPages | ~57 kB | 项目子页面（按需） |
+- 每个顶层路由一个 HTML 文档；项目工作区（`/owner/repo/...`）共用
+  `project.html`，页面脚本从 `location.pathname` 解析子路径。
+- 页面逻辑是 `web/assets/js/pages/*.js` 里的 Alpine 组件
+  （`Alpine.data(...)`），`<body data-page="...">` 决定动态加载哪个模块。
+- 运行时库与 lucide 图标集都是预生成产物，直接放在 `assets/lib/` 和
+  `assets/js/icons.js`，随仓库提交。
+- 组件写法、路由映射和样式约定见 `docs/WEB_ALPINE.md`。
 
 ## 项目类型
 

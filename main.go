@@ -10,6 +10,7 @@ import (
 
 	"github.com/VictoriaMetrics/fastcache"
 	"github.com/azhai/gitfolio/config"
+	"github.com/azhai/gitfolio/helpers"
 	"github.com/azhai/gitfolio/middleware"
 	"github.com/azhai/gitfolio/models"
 	"github.com/azhai/gitfolio/routes"
@@ -23,8 +24,8 @@ import (
 	"github.com/gofiber/fiber/v3/middleware/static"
 )
 
-func subFS(prefix string) fs.FS {
-	fsys, err := fs.Sub(efs, prefix)
+func subFS(parent fs.FS, prefix string) fs.FS {
+	fsys, err := fs.Sub(parent, prefix)
 	if err != nil {
 		panic(err)
 	}
@@ -32,9 +33,14 @@ func subFS(prefix string) fs.FS {
 }
 
 var (
-	//go:embed web/dist
-	efs           embed.FS
-	distFS        = subFS("web/dist")
+	// The Alpine frontend is served straight from its sources; there is no
+	// bundling or copy step before embedding.
+	//go:embed web/pages web/assets web/public web/landing.html
+	webFS    embed.FS
+	pagesFS  = subFS(webFS, "web/pages")
+	assetsFS = subFS(webFS, "web/assets")
+	publicFS = subFS(webFS, "web/public")
+
 	etagCacheSize = 32 * 1024 * 1024 // 32MB
 )
 
@@ -116,9 +122,10 @@ func CreateApp() *fiber.App {
 	})
 	app.Use(compress.New(), cors.New(), logger.New())
 
-	landingHTML, _ := fs.ReadFile(distFS, "landing.html")
+	landingHTML, _ := fs.ReadFile(webFS, "web/landing.html")
 
-	distHandler := static.New("", static.Config{FS: distFS})
+	assetsHandler := static.New("", static.Config{FS: assetsFS})
+	publicHandler := static.New("", static.Config{FS: publicFS})
 	uploadsHandler := static.New("./uploads")
 
 	app.Get("/", func(c fiber.Ctx) error {
@@ -126,7 +133,24 @@ func CreateApp() *fiber.App {
 		return c.Send(landingHTML)
 	})
 	app.Use("/uploads", uploadsHandler)
-	app.Use("/", distHandler)
+
+	// Embedded files have a zero modification time, so browsers heuristically
+	// treat them as fresh forever and keep running an old frontend after a
+	// deploy. Require revalidation for documents and assets instead. The
+	// validators are dropped too: the embedded file server answers any
+	// If-Modified-Since with 304 because that zero mtime predates every date a
+	// browser could send, which would hand back the stale body it cached.
+	app.Use(func(c fiber.Ctx) error {
+		path := c.Path()
+		if !strings.HasPrefix(path, "/api/") && !strings.HasPrefix(path, "/uploads/") {
+			c.Request().Header.Del(fiber.HeaderIfModifiedSince)
+			c.Request().Header.Del(fiber.HeaderIfNoneMatch)
+			c.Set(fiber.HeaderCacheControl, "no-cache")
+		}
+		return c.Next()
+	})
+	app.Use("/assets", assetsHandler)
+	app.Use("/", publicHandler)
 
 	routes.SetupAPIRoutes(app)
 
@@ -138,17 +162,37 @@ func CreateApp() *fiber.App {
 		}
 		file := pageFor(path)
 		if file == "" {
-			return c.Status(fiber.StatusNotFound).SendString("Not found")
+			return serveNotFound(c)
 		}
-		body, err := fs.ReadFile(distFS, file)
+		// The workspace shell asks the API for the repository as soon as it
+		// mounts, so only hand it out when that repository exists.
+		if file == "project.html" {
+			segs := strings.Split(strings.Trim(path, "/"), "/")
+			if len(segs) < 2 {
+				return serveNotFound(c)
+			}
+			if res := helpers.FindOwnerAndRepo(segs[0], segs[1]); res == nil || res.Repo == nil {
+				return serveNotFound(c)
+			}
+		}
+		body, err := fs.ReadFile(pagesFS, file)
 		if err != nil {
-			return c.Status(fiber.StatusNotFound).SendString("Page not available: " + file)
+			return serveNotFound(c)
 		}
 		c.Set("Content-Type", "text/html; charset=utf-8")
 		return c.Send(body)
 	})
 
 	return app
+}
+
+func serveNotFound(c fiber.Ctx) error {
+	body, err := fs.ReadFile(pagesFS, "404.html")
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).SendString("Not found")
+	}
+	c.Set("Content-Type", "text/html; charset=utf-8")
+	return c.Status(fiber.StatusNotFound).Send(body)
 }
 
 func ErrorHandler(c fiber.Ctx, err error) error {

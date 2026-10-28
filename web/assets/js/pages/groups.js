@@ -22,10 +22,13 @@ Alpine.data('groups', function () {
     showAdd: false,
     adding: false,
     submitting: false,
+    canManage: false,
     form: { name: '', display_name: '', description: '', website: '', location: '', repo_root: '' },
     memberForm: { username: '', role: 'member' },
 
     init: async function () {
+      var auth = this.$store.auth
+      this.canManage = auth.isAuthenticated && !auth.isGuest
       var r = route()
       this.view = r.view
       if (this.view === 'list') {
@@ -58,10 +61,6 @@ Alpine.data('groups', function () {
       } finally {
         this.loading = false
       }
-    },
-
-    get canManage() {
-      return this.$store.auth.isAuthenticated && !this.$store.auth.isGuest
     },
 
     createGroup: async function () {
