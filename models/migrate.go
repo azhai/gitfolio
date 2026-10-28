@@ -3,6 +3,8 @@ package models
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/azhai/goent/rename"
@@ -262,8 +264,8 @@ func MigrateOrphanRepositories(db *Database, globalRepoRoot string) error {
 		}
 
 		account, repoRoot := accountAndRootFor(repo, users, groups)
-		if strings.TrimSpace(repo.LocalPath) == "" {
-			repo.LocalPath = ResolveRepoLocationUnder(globalRepoRoot, account, repoRoot, repo.Name, repo.ProjectType).Path
+		if resolved := resolveStoredPath(globalRepoRoot, account, repoRoot, repo); resolved != repo.LocalPath {
+			repo.LocalPath = resolved
 			changed = true
 		}
 		if changed {
@@ -274,6 +276,40 @@ func MigrateOrphanRepositories(db *Database, globalRepoRoot string) error {
 	}
 
 	return nil
+}
+
+// resolveStoredPath 返回仓库实际可用的绝对落盘路径。
+//
+// 依次尝试：记录值（相对路径按进程工作目录绝对化，并校验存在）>
+// 按当前规则计算的路径 > 旧命名的 <name>.git。都找不到时返回规则路径，
+// 供后续重新克隆或初始化时使用。
+func resolveStoredPath(globalRoot, account, repoRoot string, repo *Repository) string {
+	if p := strings.TrimSpace(repo.LocalPath); p != "" {
+		abs := p
+		if !filepath.IsAbs(abs) {
+			if a, err := filepath.Abs(abs); err == nil {
+				abs = a
+			}
+		}
+		if dirExists(abs) {
+			return abs
+		}
+	}
+
+	loc := ResolveRepoLocationUnder(globalRoot, account, repoRoot, repo.Name, repo.ProjectType)
+	if dirExists(loc.Path) {
+		return loc.Path
+	}
+	if legacy := loc.Path + ".git"; dirExists(legacy) {
+		return legacy
+	}
+	return loc.Path
+}
+
+// dirExists 报告路径是否为已存在的目录。
+func dirExists(path string) bool {
+	fi, err := os.Stat(path)
+	return err == nil && fi.IsDir()
 }
 
 // accountAndRootFor 返回仓库所属账号的名称与自有仓库目录。

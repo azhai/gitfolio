@@ -56,7 +56,7 @@ func setupTestBareRepo(t *testing.T) (string, func()) {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
 
-	barePath := filepath.Join(tmpDir, "repo.git")
+	barePath := filepath.Join(tmpDir, "repo")
 	cmd := exec.Command("git", "init", "--bare", barePath)
 	if err := cmd.Run(); err != nil {
 		os.RemoveAll(tmpDir)
@@ -545,7 +545,7 @@ func TestGitService_InitRepositoryBare(t *testing.T) {
 		t.Fatalf("InitRepository() error = %v", err)
 	}
 
-	want := filepath.Join(tmpDir, "testowner", "test-repo.git")
+	want := filepath.Join(tmpDir, "testowner", "test-repo")
 	if repo.LocalPath != want {
 		t.Fatalf("InitRepository() LocalPath = %q, want %q", repo.LocalPath, want)
 	}
@@ -566,7 +566,7 @@ func TestGitService_InitRepositoryMirrorIgnoresOwnRoot(t *testing.T) {
 		t.Fatalf("InitRepository() error = %v", err)
 	}
 
-	want := filepath.Join(tmpDir, "testowner", "mirror-repo.git")
+	want := filepath.Join(tmpDir, "testowner", "mirror-repo")
 	if repo.LocalPath != want {
 		t.Fatalf("InitRepository() LocalPath = %q, want %q", repo.LocalPath, want)
 	}
@@ -593,7 +593,7 @@ func TestResolveRepoLocation(t *testing.T) {
 	if shared.Storage != models.RepoStorageBare {
 		t.Errorf("shared storage = %v, want bare", shared.Storage)
 	}
-	if want := filepath.Join(tmpDir, "alice", "repo.git"); shared.Path != want {
+	if want := filepath.Join(tmpDir, "alice", "repo"); shared.Path != want {
 		t.Errorf("shared path = %q, want %q", shared.Path, want)
 	}
 
@@ -602,7 +602,7 @@ func TestResolveRepoLocation(t *testing.T) {
 	if mirror.Storage != models.RepoStorageBare {
 		t.Errorf("mirror storage = %v, want bare", mirror.Storage)
 	}
-	if want := filepath.Join(tmpDir, "alice", "repo.git"); mirror.Path != want {
+	if want := filepath.Join(tmpDir, "alice", "repo"); mirror.Path != want {
 		t.Errorf("mirror path = %q, want %q", mirror.Path, want)
 	}
 

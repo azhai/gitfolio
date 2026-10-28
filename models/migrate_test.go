@@ -188,7 +188,7 @@ func TestMigrateOrphanRepositories(t *testing.T) {
 		t.Errorf("OwnerType = %q, want user", got.OwnerType)
 	}
 	// 管理员未设置自有目录：落到全局裸仓库目录下的账号子目录
-	want := filepath.Join(globalRoot, admin.Username, "legacy-repo.git")
+	want := filepath.Join(globalRoot, admin.Username, "legacy-repo")
 	if got.LocalPath != want {
 		t.Errorf("LocalPath = %q, want %q", got.LocalPath, want)
 	}
