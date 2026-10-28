@@ -14,6 +14,12 @@ func SetupAPIRoutes(app *fiber.App) {
 		return c.JSON(fiber.Map{"status": "ok"})
 	})
 
+	// System cron endpoints: called by an external cron job.
+	// Kept outside the auth group so cron can reach them directly.
+	app.Get(config.APIBaseURL+"/system/cron/sync", handlers.RunSchedulerCron)
+	app.Get(config.APIBaseURL+"/system/cron/backup/full", handlers.CronFullBackup)
+	app.Get(config.APIBaseURL+"/system/cron/backup/incremental", handlers.CronIncrementalBackup)
+
 	api.Get("/stats", handlers.GetStats)
 	api.Get("/recent-issues", handlers.GetRecentIssues)
 	api.Get("/recent-tasks", handlers.GetRecentTasks)
@@ -90,6 +96,10 @@ func setupAdminRoutes(api fiber.Router) {
 	admin.Get("/sync-points", handlers.ListAllSyncPoints)
 	admin.Put("/sync-points/:id", handlers.AdminUpdateSyncPoint)
 	admin.Get("/sync-logs", handlers.ListAllSyncLogs)
+
+	admin.Get("/backups", handlers.ListBackups)
+	admin.Post("/backups", handlers.CreateBackup)
+	admin.Post("/backups/:id/restore", handlers.RestoreBackup)
 }
 
 func setupRepositoryRoutes(api fiber.Router) {
@@ -165,11 +175,13 @@ func setupRepoGitRoutes(repo fiber.Router) {
 	repo.Get("/commits/:sha", handlers.GetCommitDetail)
 	repo.Get("/compare/:basehead", handlers.CompareCommits)
 	repo.Post("/refresh-stats", middleware.GuestReadOnly(), handlers.RefreshRepositoryStats)
+	repo.Post("/refresh-contributors", middleware.GuestReadOnly(), handlers.RefreshRepositoryContributors)
 }
 
 func setupRepoSyncRoutes(repo fiber.Router) {
 	repo.Post("/sync/pull", middleware.GuestReadOnly(), handlers.SyncPullRepository)
 	repo.Post("/sync/issues", middleware.GuestReadOnly(), handlers.SyncIssuesData)
+	repo.Get("/sync/issues/stream", middleware.GuestReadOnly(), handlers.SyncIssuesDataSSE)
 	repo.Post("/sync/push", middleware.GuestReadOnly(), handlers.SyncPushRepository)
 	repo.Get("/sync/config", handlers.GetSyncConfig)
 	repo.Put("/sync/config", middleware.GuestReadOnly(), handlers.UpdateSyncConfig)

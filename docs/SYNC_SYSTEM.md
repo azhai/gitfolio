@@ -226,3 +226,64 @@ GET /api/v1/admin/sync-logs
 - 首次同步为全量拉取，确保同步完成
 - 增量同步基于时间戳，如果远程有回退操作可能遗漏
 - 可删除 SyncPoint 中的时间记录，触发全量重新同步
+
+## 数据备份与恢复
+
+GitFolio 提供后台备份接口，支持全量和增量备份。备份和恢复的具体实现因数据库类型而异。
+
+### SQLite
+
+- **全量备份**：直接复制 SQLite 数据库文件（`.db`），包含所有表结构和数据。
+- **增量备份**：不支持；SQLite 只提供全量备份。
+- **恢复**：用备份文件覆盖当前数据库文件。
+
+### PostgreSQL
+
+- **全量备份**：
+  - 使用 `pg_dump --schema-only --clean --if-exists` 导出 `schema.sql`
+  - 使用 `COPY ... TO STDOUT` 为每张非日志表导出 `table.csv`
+  - 日志表（`sync_log`、`git_command_log`）只保留结构，不备份数据
+- **增量备份**：
+  - 基于最近一次成功全量备份的 `started_at` 时间
+  - 扫描带有 `updated_at` 字段的非日志表
+  - 把变更行导出为 `incremental.jsonl`，每行格式为 `{"table": "...", "action": "upsert", "data": {...}}`
+- **恢复**：
+  - 全量：先执行 `schema.sql`，再通过 `COPY FROM STDIN` 导入各表 CSV
+  - 增量：读取 `incremental.jsonl`，按表分组后使用 `INSERT ... ON CONFLICT (id) DO UPDATE` 批量 upsert
+
+### 管理接口
+
+```bash
+# 列出备份
+GET /api/v1/system/admin/backups
+
+# 创建全量备份
+POST /api/v1/system/admin/backups
+{
+  "backup_type": "full"
+}
+
+# 创建增量备份
+POST /api/v1/system/admin/backups
+{
+  "backup_type": "incremental"
+}
+
+# 恢复指定备份
+POST /api/v1/system/admin/backups/:id/restore
+```
+
+### 系统 Cron 端点
+
+以下端点无需登录，供外部系统 cron 调用：
+
+```bash
+# 触发到期同步任务（建议每 10 分钟）
+GET /api/v1/system/cron/sync
+
+# 触发全量备份
+GET /api/v1/system/cron/backup/full
+
+# 触发增量备份
+GET /api/v1/system/cron/backup/incremental
+```
