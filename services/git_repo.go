@@ -15,8 +15,6 @@ import (
 // GitService 提供 Git 仓库操作服务
 type GitService struct {
 	repoRoot string
-	// localRoot 仅用于定位迁移前的老仓库（平铺在 LOCAL_ROOT 下）。
-	localRoot string
 	// ownerRoot 是账号的自有仓库目录，为空表示使用全局裸仓库目录。
 	ownerRoot         string
 	db                *models.Database
@@ -25,19 +23,12 @@ type GitService struct {
 
 // NewGitService 创建 GitService 实例，使用配置中的仓库根目录
 func NewGitService() *GitService {
-	return &GitService{
-		repoRoot:  config.GetRepoRoot(),
-		localRoot: config.GetLocalRoot(),
-	}
+	return &GitService{repoRoot: config.GetRepoRoot()}
 }
 
 // NewGitServiceWithDB 创建带数据库的 GitService 实例（用于需要日志记录的场景）
 func NewGitServiceWithDB(db *models.Database) *GitService {
-	return &GitService{
-		repoRoot:  config.GetRepoRoot(),
-		localRoot: config.GetLocalRoot(),
-		db:        db,
-	}
+	return &GitService{repoRoot: config.GetRepoRoot(), db: db}
 }
 
 // WithLocalPath 设置本地路径覆盖，优先使用此路径
@@ -60,8 +51,8 @@ func (s *GitService) locationFor(owner, name string) RepoLocation {
 
 // getRepoPath 返回仓库的本地磁盘路径。
 //
-// 优先级：显式覆盖路径 > 按自有目录规则计算出的已存在路径 >
-// 迁移前平铺在 LOCAL_ROOT 下的老仓库 > 规则计算出的目标路径。
+// 优先级：显式覆盖路径 > 按自有目录规则计算出的已存在路径 > 规则计算出的目标路径。
+// 迁移前的老仓库靠 repository.local_path 记录定位，不再依赖全局目录猜测。
 func (s *GitService) getRepoPath(owner, name string) string {
 	if s.localPathOverride != "" {
 		if _, err := os.Stat(s.localPathOverride); err == nil {
@@ -71,14 +62,6 @@ func (s *GitService) getRepoPath(owner, name string) string {
 	loc := s.locationFor(owner, name)
 	if _, err := os.Stat(loc.Path); err == nil {
 		return loc.Path
-	}
-	// 兼容迁移前的老仓库：它们平铺在 LOCAL_ROOT 下且无归属账号目录。
-	if s.ownerRoot == "" {
-		if legacy := filepath.Join(s.localRoot, name); legacy != "" {
-			if _, err := os.Stat(legacy); err == nil {
-				return legacy
-			}
-		}
 	}
 	return loc.Path
 }

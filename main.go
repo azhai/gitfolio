@@ -60,7 +60,7 @@ func main() {
 	seedUsers(cfg.Admin.Username, cfg.Admin.Password)
 
 	// 迁移旧版本遗留的本地仓库：补齐归属账号并回填落盘路径。
-	if err := models.MigrateOrphanRepositories(models.GetDB(), cfg.Repository.Root, cfg.Repository.LocalRoot); err != nil {
+	if err := models.MigrateOrphanRepositories(models.GetDB(), cfg.Repository.Root); err != nil {
 		log.Printf("Warning: failed to migrate orphan repositories: %v", err)
 	}
 

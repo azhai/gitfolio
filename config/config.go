@@ -39,9 +39,6 @@ type RepositoryConfig struct {
 	// Root 是全局裸仓库根目录。账号未设置自有仓库目录时，
 	// 仓库以裸仓库形式存放在 <Root>/<账号名>/<仓库名>.git。
 	Root string
-	// LocalRoot 是历史遗留的本地仓库平铺目录，仅用于定位迁移前创建的
-	// 老仓库（OwnerID=0 且 LocalPath 指向此处）。新仓库不再使用它。
-	LocalRoot string
 }
 
 type ProxyConfig struct {
@@ -83,8 +80,7 @@ func Load(env *environ.Environ) *Config {
 			Password: env.GetStr("ADMIN_PASSWORD", ""),
 		},
 		Repository: RepositoryConfig{
-			Root:      env.GetStr("REPO_ROOT", "./repos"),
-			LocalRoot: env.GetStr("LOCAL_ROOT", "./repos/local"),
+			Root: env.GetStr("REPO_ROOT", "./repos"),
 		},
 		Proxy: ProxyConfig{
 			URL: env.GetStr("PROXY_URL", ""),
@@ -113,7 +109,6 @@ func GetServerMode() string { return cfg.Server.Mode }
 func GetTheme() string      { return cfg.Server.Theme }
 func GetSiteMark() string   { return cfg.Server.SiteMark }
 func GetRepoRoot() string   { return cfg.Repository.Root }
-func GetLocalRoot() string  { return cfg.Repository.LocalRoot }
 func GetJWTSecret() string {
 	return cfg.Auth.JWTSecret
 }

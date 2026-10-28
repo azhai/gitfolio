@@ -45,7 +45,7 @@ func TestPGMigrations(t *testing.T) {
 	if err := EnsureRepoRootColumns(db); err != nil {
 		t.Fatalf("EnsureRepoRootColumns second run: %v", err)
 	}
-	if err := MigrateOrphanRepositories(db, "/tmp/gitfolio-pg-repos", "/tmp/gitfolio-pg-legacy"); err != nil {
+	if err := MigrateOrphanRepositories(db, "/tmp/gitfolio-pg-repos"); err != nil {
 		t.Fatalf("MigrateOrphanRepositories: %v", err)
 	}
 }

@@ -3,8 +3,6 @@ package models
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/azhai/goent/rename"
@@ -193,10 +191,10 @@ func pgSchemaFor(db *Database, table string) string {
 
 // MigrateOrphanRepositories 迁移旧版本的本地仓库：
 //   - OwnerID = 0 的仓库（旧代码创建本地项目时清空了归属）挂到第一个管理员账号；
-//   - LocalPath 为空的仓库按当前存储规则回填落盘路径，已存在的旧目录优先沿用。
+//   - LocalPath 为空的仓库按当前存储规则回填落盘路径。
 //
-// globalRepoRoot 是全局裸仓库根目录，legacyLocalRoot 是旧版本平铺本地仓库的目录。
-func MigrateOrphanRepositories(db *Database, globalRepoRoot, legacyLocalRoot string) error {
+// globalRepoRoot 是全局裸仓库根目录。
+func MigrateOrphanRepositories(db *Database, globalRepoRoot string) error {
 	if db == nil || db.DB == nil {
 		return fmt.Errorf("database not initialized")
 	}
@@ -265,7 +263,7 @@ func MigrateOrphanRepositories(db *Database, globalRepoRoot, legacyLocalRoot str
 
 		account, repoRoot := accountAndRootFor(repo, users, groups)
 		if strings.TrimSpace(repo.LocalPath) == "" {
-			repo.LocalPath = resolveExistingPath(globalRepoRoot, legacyLocalRoot, account, repoRoot, repo.Name)
+			repo.LocalPath = ResolveRepoLocationUnder(globalRepoRoot, account, repoRoot, repo.Name).Path
 			changed = true
 		}
 		if changed {
@@ -288,22 +286,6 @@ func accountAndRootFor(repo *Repository, users map[int64]*User, groups map[int64
 		return u.Username, u.RepoRoot
 	}
 	return "local", ""
-}
-
-// resolveExistingPath 计算迁移时使用的落盘路径：
-// 优先沿用磁盘上已存在的旧目录，否则按当前规则给出目标路径。
-func resolveExistingPath(globalRepoRoot, legacyLocalRoot, account, repoRoot, name string) string {
-	target := ResolveRepoLocationUnder(globalRepoRoot, account, repoRoot, name).Path
-	if _, err := os.Stat(target); err == nil {
-		return target
-	}
-	if legacyLocalRoot != "" {
-		legacy := filepath.Join(legacyLocalRoot, name)
-		if _, err := os.Stat(legacy); err == nil {
-			return legacy
-		}
-	}
-	return target
 }
 
 // EnsureIssueStatusColumn ensures the issue table has a status column.

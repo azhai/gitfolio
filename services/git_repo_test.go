@@ -72,8 +72,7 @@ func setupTestBareRepo(t *testing.T) (string, func()) {
 
 func newTestGitService() *GitService {
 	return &GitService{
-		repoRoot:  "/tmp/gitfolio-test/repos",
-		localRoot: "/tmp/gitfolio-test/local",
+		repoRoot: "/tmp/gitfolio-test/repos",
 	}
 }
 
@@ -490,8 +489,7 @@ func TestGitService_InitRepository(t *testing.T) {
 	// 账号设置了自有仓库目录：创建带工作区的普通仓库
 	workRoot := filepath.Join(tmpDir, "work")
 	svc := &GitService{
-		localRoot: tmpDir,
-		repoRoot:  tmpDir,
+		repoRoot: tmpDir,
 		ownerRoot: workRoot,
 	}
 
@@ -539,8 +537,7 @@ func TestGitService_InitRepositoryBare(t *testing.T) {
 
 	// 账号未设置自有仓库目录：落到全局裸仓库目录的账号子目录
 	svc := &GitService{
-		localRoot: tmpDir,
-		repoRoot:  tmpDir,
+		repoRoot: tmpDir,
 	}
 
 	repo := &models.Repository{Name: "test-repo"}

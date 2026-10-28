@@ -2,7 +2,6 @@ package models
 
 import (
 	"context"
-	"os"
 	"path/filepath"
 	"testing"
 
@@ -174,12 +173,7 @@ func TestMigrateOrphanRepositories(t *testing.T) {
 	}
 
 	globalRoot := t.TempDir()
-	legacyRoot := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(legacyRoot, "legacy-repo", ".git"), 0755); err != nil {
-		t.Fatalf("create legacy dir: %v", err)
-	}
-
-	if err := MigrateOrphanRepositories(db, globalRoot, legacyRoot); err != nil {
+	if err := MigrateOrphanRepositories(db, globalRoot); err != nil {
 		t.Fatalf("migrate orphan repositories: %v", err)
 	}
 
@@ -193,8 +187,38 @@ func TestMigrateOrphanRepositories(t *testing.T) {
 	if got.OwnerType != "user" {
 		t.Errorf("OwnerType = %q, want user", got.OwnerType)
 	}
-	// 磁盘上已存在的旧目录必须被沿用
-	want := filepath.Join(legacyRoot, "legacy-repo")
+	// 管理员未设置自有目录：落到全局裸仓库目录下的账号子目录
+	want := filepath.Join(globalRoot, admin.Username, "legacy-repo.git")
+	if got.LocalPath != want {
+		t.Errorf("LocalPath = %q, want %q", got.LocalPath, want)
+	}
+}
+
+func TestMigrateOrphanRepositoriesUsesOwnRoot(t *testing.T) {
+	db := openTestDB(t)
+	defer CloseDB()
+
+	workRoot := t.TempDir()
+	admin := &User{Username: "root-admin", Email: "admin@example.com", Role: "admin", RepoRoot: workRoot}
+	if err := db.User.Insert().One(admin); err != nil {
+		t.Fatalf("insert admin: %v", err)
+	}
+
+	orphan := &Repository{Name: "legacy-repo", ProjectType: "local"}
+	if err := db.Repository.Insert().One(orphan); err != nil {
+		t.Fatalf("insert orphan repo: %v", err)
+	}
+
+	if err := MigrateOrphanRepositories(db, t.TempDir()); err != nil {
+		t.Fatalf("migrate orphan repositories: %v", err)
+	}
+
+	got, err := db.Repository.Select().Where("id = ?", orphan.ID).One()
+	if err != nil {
+		t.Fatalf("reload repo: %v", err)
+	}
+	// 管理员设置了自有目录：落到 <repo_root>/<仓库名>
+	want := filepath.Join(workRoot, "legacy-repo")
 	if got.LocalPath != want {
 		t.Errorf("LocalPath = %q, want %q", got.LocalPath, want)
 	}
