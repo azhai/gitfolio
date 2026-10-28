@@ -121,23 +121,36 @@ func EnsureRepoRootColumns(db *Database) error {
 }
 
 // ensureColumn adds a column to a table when it is missing.
+//
+// 表名与列名全部来自代码内的常量，不拼接任何用户输入。
+// 原生 SQL 里不能使用 "?" 占位符：驱动不会把它改写成 PostgreSQL 的 $1，
+// 因此这里统一拼接字面量。
 func ensureColumn(db *Database, table, column, colType string) error {
 	ctx := context.Background()
 	driverName := strings.ToLower(db.Driver().Name())
 
 	var cnt int
-	switch driverName {
-	case "postgres", "postgresql":
-		err := db.RawQueryRowContext(ctx,
-			"SELECT count(*) FROM information_schema.columns WHERE table_name = ? AND column_name = ?",
-			table, column).Scan(&cnt)
-		if err != nil {
+	isPG := driverName == "postgres" || driverName == "postgresql"
+	schema := ""
+	if isPG {
+		// 表可能不在默认 search_path 上（例如 folio schema），先定位它。
+		schema = pgSchemaFor(db, table)
+	}
+
+	switch {
+	case isPG:
+		query := fmt.Sprintf(
+			"SELECT count(*) FROM information_schema.columns WHERE table_name = '%s' AND column_name = '%s'",
+			table, column)
+		if schema != "" {
+			query += fmt.Sprintf(" AND table_schema = '%s'", schema)
+		}
+		if err := db.RawQueryRowContext(ctx, query).Scan(&cnt); err != nil {
 			return fmt.Errorf("failed to inspect %s.%s: %w", table, column, err)
 		}
 	default: // sqlite: PRAGMA table_info
-		err := db.RawQueryRowContext(ctx,
-			"SELECT count(*) FROM pragma_table_info(?) WHERE name = ?", table, column).Scan(&cnt)
-		if err != nil {
+		query := fmt.Sprintf("SELECT count(*) FROM pragma_table_info('%s') WHERE name = '%s'", table, column)
+		if err := db.RawQueryRowContext(ctx, query).Scan(&cnt); err != nil {
 			return fmt.Errorf("failed to inspect %s.%s: %w", table, column, err)
 		}
 	}
@@ -145,13 +158,37 @@ func ensureColumn(db *Database, table, column, colType string) error {
 		return nil
 	}
 
-	sql := fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s DEFAULT ''", table, column, colType)
+	target := quoteIdent(table)
+	if isPG && schema != "" {
+		target = quoteIdent(schema) + "." + quoteIdent(table)
+	}
+	sql := fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s DEFAULT ''", target, quoteIdent(column), colType)
 	if err := db.RawExecContext(ctx, sql); err != nil {
 		return fmt.Errorf("failed to add %s.%s column: %w", table, column, err)
 	}
 	// 把 NULL 归一化为默认空字符串，避免读取时出现 NULL 扫描错误。
-	_ = db.RawExecContext(ctx, fmt.Sprintf("UPDATE %s SET %s = '' WHERE %s IS NULL", table, column, column))
+	_ = db.RawExecContext(ctx,
+		fmt.Sprintf("UPDATE %s SET %s = '' WHERE %s IS NULL", target, quoteIdent(column), quoteIdent(column)))
 	return nil
+}
+
+// quoteIdent 用双引号包裹标识符，兼容 PostgreSQL 与 SQLite，
+// 同时避免 user 这类保留字导致的语法错误。
+func quoteIdent(name string) string {
+	return `"` + strings.ReplaceAll(name, `"`, `""`) + `"`
+}
+
+// pgSchemaFor 返回表所在的 schema，优先当前 schema。
+// 查不到时返回空字符串，调用方退化为依赖 search_path。
+func pgSchemaFor(db *Database, table string) string {
+	query := fmt.Sprintf(
+		"SELECT table_schema FROM information_schema.tables WHERE table_name = '%s' "+
+			"ORDER BY (table_schema = current_schema()) DESC LIMIT 1", table)
+	var schema string
+	if err := db.RawQueryRowContext(context.Background(), query).Scan(&schema); err != nil {
+		return ""
+	}
+	return schema
 }
 
 // MigrateOrphanRepositories 迁移旧版本的本地仓库：
