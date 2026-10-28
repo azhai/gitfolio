@@ -7,11 +7,11 @@ cd "$(dirname "$0")"
 case "${1:-build}" in
   dev)
     echo "🚀 Starting frontend dev server..."
-    cd "$WEB_DIR" && npm run dev
+    cd "$WEB_DIR" && pnpm run dev
     ;;
   build)
     echo "🔨 Building frontend..."
-    cd "$WEB_DIR" && npm install && npm run build
+    cd "$WEB_DIR" && pnpm install && pnpm run build
     echo "✅ Frontend build complete: $WEB_DIR/dist/"
     ;;
   clean)
@@ -21,7 +21,7 @@ case "${1:-build}" in
     ;;
   install)
     echo "📦 Installing frontend dependencies..."
-    cd "$WEB_DIR" && npm install
+    cd "$WEB_DIR" && pnpm install
     ;;
   serve)
     echo "🌐 Serving frontend preview..."

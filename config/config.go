@@ -1,8 +1,8 @@
 package config
 
 import (
+	"github.com/azhai/gobus/environ"
 	"github.com/azhai/goent/drivers"
-	"github.com/azhai/goent/utils"
 )
 
 type Config struct {
@@ -51,7 +51,15 @@ type GithubConfig struct {
 
 var cfg *Config
 
-func Load(env *utils.Environ) *Config {
+// Load 初始化全局配置。仅在 main 启动时调用一次；
+// 重复调用不会覆盖已加载的配置，避免运行期误用空 Environ 清空 token 等。
+func Load(env *environ.Environ) *Config {
+	if cfg != nil {
+		return cfg
+	}
+	if env == nil {
+		env = environ.NewEmptyEnviron()
+	}
 	cfg = &Config{
 		Server: ServerConfig{
 			Mode:     env.GetStr("APP_MODE", "debug"),
@@ -85,7 +93,11 @@ func Load(env *utils.Environ) *Config {
 	return cfg
 }
 
+// GetConfig 返回已加载的全局配置。未初始化时 panic，避免空指针在深处爆出。
 func GetConfig() *Config {
+	if cfg == nil {
+		panic("config not loaded: call config.Load at startup before using GetConfig")
+	}
 	return cfg
 }
 

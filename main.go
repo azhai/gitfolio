@@ -8,21 +8,20 @@ import (
 	"os"
 	"strings"
 
+	"github.com/VictoriaMetrics/fastcache"
 	"github.com/azhai/gitfolio/config"
 	"github.com/azhai/gitfolio/middleware"
 	"github.com/azhai/gitfolio/models"
 	"github.com/azhai/gitfolio/routes"
 	"github.com/azhai/gitfolio/services"
-	"github.com/azhai/goent/utils"
+	"github.com/azhai/gobus"
+	"github.com/azhai/gobus/environ"
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/compress"
 	"github.com/gofiber/fiber/v3/middleware/cors"
 	"github.com/gofiber/fiber/v3/middleware/logger"
 	"github.com/gofiber/fiber/v3/middleware/static"
 )
-
-//go:embed web/dist
-var efs embed.FS
 
 func subFS(prefix string) fs.FS {
 	fsys, err := fs.Sub(efs, prefix)
@@ -32,14 +31,24 @@ func subFS(prefix string) fs.FS {
 	return fsys
 }
 
-var distFS = subFS("web/dist")
+var (
+	//go:embed web/dist
+	efs           embed.FS
+	distFS        = subFS("web/dist")
+	etagCacheSize = 32 * 1024 * 1024 // 32MB
+)
 
 func main() {
-	cfg := config.Load(utils.NewEnv())
+	cfg := config.Load(environ.NewEnv())
 	if _, err := models.OpenDB(cfg.Database); err != nil {
 		log.Fatalf("Failed to open database: %v", err)
 	}
 	defer models.CloseDB()
+
+	// Share sync progress/warning/error events across the application.
+	services.SetDefaultSyncBus(gobus.NewEventBus(0))
+	// Cache ETag values in memory to avoid a database round-trip per GitHub API request.
+	services.SetDefaultETagCache(fastcache.New(etagCacheSize))
 
 	if err := os.MkdirAll(cfg.Repository.Root, 0755); err != nil {
 		log.Fatalf("Failed to create repository root: %v", err)

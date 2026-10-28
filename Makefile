@@ -5,6 +5,7 @@ SERVER_PORT = 9000
 ifndef GOAMD64
 	GOAMD64 = v2
 endif
+GOOS    = $(shell uname | tr [A-Z] [a-z])
 GOARCH  = $(shell uname -m | tr [A-Z] [a-z])
 ifeq ($(GOARCH), amd64)
 	GOARGS = GOAMD64=$(GOAMD64)
