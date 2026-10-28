@@ -11,8 +11,9 @@ import (
 )
 
 // 手动验证用（默认不参与 CI）：
-//   PGTEST_DSN='postgres://ryan@127.0.0.1:5432/gitfolio_mig_test?sslmode=disable' \
-//   go test -tags pgintegration -run TestPGMigrations ./models/
+//
+//	PGTEST_DSN='postgres://ryan@127.0.0.1:5432/gitfolio_mig_test?sslmode=disable' \
+//	go test -tags pgintegration -run TestPGMigrations ./models/
 func TestPGMigrations(t *testing.T) {
 	dsn := os.Getenv("PGTEST_DSN")
 	if dsn == "" {

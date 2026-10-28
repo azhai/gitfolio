@@ -57,6 +57,7 @@ func AddGroupMember(c fiber.Ctx) error {
 		Role:    req.Role,
 	}
 
+	member.Stamp()
 	err = db.GroupMember.Insert().One(member)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to add member"})

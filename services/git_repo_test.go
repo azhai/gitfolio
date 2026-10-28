@@ -489,7 +489,7 @@ func TestGitService_InitRepository(t *testing.T) {
 	// 账号设置了自有仓库目录：创建带工作区的普通仓库
 	workRoot := filepath.Join(tmpDir, "work")
 	svc := &GitService{
-		repoRoot: tmpDir,
+		repoRoot:  tmpDir,
 		ownerRoot: workRoot,
 	}
 

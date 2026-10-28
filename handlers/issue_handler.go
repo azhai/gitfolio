@@ -23,6 +23,9 @@ type UpdateIssueRequest struct {
 	Labels   []string `json:"labels"`
 	Assignee string   `json:"assignee"`
 	IsClosed *bool    `json:"is_closed"`
+	// Status optionally pins the state (open/closed/hidden); the UI sends it
+	// together with is_closed so the two never disagree.
+	Status string `json:"status"`
 }
 
 type CreateCommentRequest struct {
@@ -139,6 +142,7 @@ func CreateIssue(c fiber.Ctx) error {
 		}
 	}
 
+	issueModel.Stamp()
 	err = db.Issue.Insert().One(issueModel)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create issue"})
@@ -329,7 +333,10 @@ func UpdateIssue(c fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Issue not found"})
 	}
 
-	if issueModel.AuthorID != userID {
+	// Authors may edit their own issue; repository admins may also close or
+	// reopen any issue (synced issues have no local author).
+	isAuthor := userID != 0 && issueModel.AuthorID == userID
+	if !isAuthor && helpers.CheckRepoAccess(c, result) < helpers.RepoAccessWrite {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Access denied"})
 	}
 
@@ -341,6 +348,15 @@ func UpdateIssue(c fiber.Ctx) error {
 	}
 	if req.IsClosed != nil {
 		issueModel.IsClosed = *req.IsClosed
+		if issueModel.IsClosed {
+			issueModel.Status = "closed"
+		} else if issueModel.Status == "" || issueModel.Status == "closed" {
+			issueModel.Status = "open"
+		}
+	}
+	if req.Status != "" {
+		issueModel.Status = req.Status
+		issueModel.IsClosed = req.Status != "open"
 	}
 	if req.Assignee != "" {
 		assigneeContribs, _ := db.Contributor.Select().Filter(
@@ -427,6 +443,7 @@ func CreateComment(c fiber.Ctx) error {
 		AuthorName: authorName,
 	}
 
+	commentModel.Stamp()
 	err = db.Comment.Insert().One(commentModel)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create comment"})

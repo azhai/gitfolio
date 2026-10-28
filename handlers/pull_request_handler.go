@@ -185,6 +185,7 @@ func CreatePullRequest(c fiber.Ctx) error {
 		}
 	}
 
+	mr.Stamp()
 	err = db.PullRequest.Insert().One(mr)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create merge request"})

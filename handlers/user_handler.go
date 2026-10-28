@@ -183,14 +183,14 @@ func UpdateUserByUsername(c fiber.Ctx) error {
 	targetUsername := c.Params("username")
 
 	var req struct {
-		FullName string `json:"full_name"`
-		Bio      string `json:"bio"`
-		Website  string `json:"website"`
-		Location string `json:"location"`
-		Avatar   string `json:"avatar"`
-		IsActive *bool  `json:"is_active"`
-		Role     string `json:"role"`
-		Password string `json:"password"`
+		FullName string  `json:"full_name"`
+		Bio      string  `json:"bio"`
+		Website  string  `json:"website"`
+		Location string  `json:"location"`
+		Avatar   string  `json:"avatar"`
+		IsActive *bool   `json:"is_active"`
+		Role     string  `json:"role"`
+		Password string  `json:"password"`
 		RepoRoot *string `json:"repo_root"`
 	}
 
@@ -369,6 +369,7 @@ func CreateUser(c fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to hash password"})
 	}
 
+	userModel.Stamp()
 	if err := db.User.Insert().One(userModel); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create user"})
 	}

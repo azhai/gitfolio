@@ -41,7 +41,7 @@ type RepositoryResponse struct {
 	// StorageKind 是磁盘上的存储形态：bare（裸仓库）或 work（带工作区的普通仓库）。
 	StorageKind string `json:"storage_kind"`
 	// HasWorkTree 为 true 时可以直接在网页上编辑文件（普通仓库）。
-	HasWorkTree bool `json:"has_work_tree"`
+	HasWorkTree   bool   `json:"has_work_tree"`
 	LastSyncAt    string `json:"last_sync_at"`
 	StarsCount    int    `json:"stars_count"`
 	ForksCount    int    `json:"forks_count"`

@@ -81,6 +81,7 @@ func CreateRepository(c fiber.Ctx) error {
 		// InitRepository 已按规则写入 LocalPath。
 	}
 
+	repo.Stamp()
 	err = db.Repository.Insert().One(repo)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create repository"})

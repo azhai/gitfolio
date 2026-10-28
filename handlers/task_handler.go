@@ -443,6 +443,7 @@ func CreateTask(c fiber.Ctx) error {
 	task.VerifierID = findUserByUsername(db, req.Verifier)
 	task.HandlerID = findUserByUsername(db, req.Handler)
 
+	task.Stamp()
 	err = db.Task.Insert().One(task)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create task"})
@@ -928,6 +929,7 @@ func CreateTaskComment(c fiber.Ctx) error {
 		AuthorID: userID,
 	}
 
+	comment.Stamp()
 	if err := db.Comment.Insert().One(comment); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create comment"})
 	}

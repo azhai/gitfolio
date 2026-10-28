@@ -531,6 +531,7 @@ func (t *Issue) UpdatePairs() []goent.Pair {
 		{Key: "is_closed", Value: t.IsClosed},
 		{Key: "is_locked", Value: t.IsLocked},
 		{Key: "comments_count", Value: t.CommentsCount},
+		{Key: "status", Value: t.Status},
 	}
 }
 
@@ -545,11 +546,12 @@ func (t *Issue) ScanDest() []any {
 		&t.Number,
 		&t.RepositoryID,
 		&t.AuthorID,
-		&t.AuthorName,
 		&t.AssigneeID,
 		&t.IsClosed,
 		&t.IsLocked,
 		&t.CommentsCount,
+		&t.AuthorName,
+		&t.Status,
 	}
 }
 

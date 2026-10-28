@@ -13,14 +13,14 @@ import (
 )
 
 type GroupResponse struct {
-	ID           int64  `json:"id"`
-	Name         string `json:"name"`
-	DisplayName  string `json:"display_name"`
-	Description  string `json:"description"`
-	Avatar       string `json:"avatar"`
-	Website      string `json:"website"`
-	Location     string `json:"location"`
-	OwnerID      int64  `json:"owner_id"`
+	ID          int64  `json:"id"`
+	Name        string `json:"name"`
+	DisplayName string `json:"display_name"`
+	Description string `json:"description"`
+	Avatar      string `json:"avatar"`
+	Website     string `json:"website"`
+	Location    string `json:"location"`
+	OwnerID     int64  `json:"owner_id"`
 	// RepoRoot 是团队的自有仓库目录，为空表示使用全局裸仓库目录。
 	RepoRoot     string `json:"repo_root"`
 	MembersCount int    `json:"members_count"`
@@ -172,6 +172,7 @@ func CreateGroup(c fiber.Ctx) error {
 		RepoRoot:    repoRoot,
 	}
 
+	group.Stamp()
 	err := db.Group.Insert().One(group)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create group"})
@@ -182,6 +183,7 @@ func CreateGroup(c fiber.Ctx) error {
 		UserID:  userID,
 		Role:    "leader",
 	}
+	member.Stamp()
 	db.GroupMember.Insert().One(member)
 
 	return c.Status(fiber.StatusCreated).JSON(ToGroupResponse(group, 1))
@@ -192,11 +194,11 @@ func UpdateGroup(c fiber.Ctx) error {
 	name := c.Params("name")
 
 	var req struct {
-		DisplayName string `json:"display_name"`
-		Description string `json:"description"`
-		Website     string `json:"website"`
-		Location    string `json:"location"`
-		Avatar      string `json:"avatar"`
+		DisplayName string  `json:"display_name"`
+		Description string  `json:"description"`
+		Website     string  `json:"website"`
+		Location    string  `json:"location"`
+		Avatar      string  `json:"avatar"`
 		RepoRoot    *string `json:"repo_root"`
 	}
 
@@ -406,6 +408,7 @@ func CreateActivity(c fiber.Ctx) error {
 		TargetType:   req.TargetType,
 	}
 
+	activity.Stamp()
 	err := db.Activity.Insert().One(activity)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create activity"})
