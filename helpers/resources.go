@@ -13,7 +13,7 @@ type ResourceResult struct {
 	Repo  *models.Repository
 }
 
-// OwnerName 返回仓库所有者的名称，local 项目返回 "local"
+// OwnerName 返回仓库所有者的名称，无归属的项目返回 "local"
 func (r *ResourceResult) OwnerName() string {
 	if r.Owner != nil {
 		return r.Owner.Username
@@ -22,6 +22,29 @@ func (r *ResourceResult) OwnerName() string {
 		return r.Group.Name
 	}
 	return "local"
+}
+
+// OwnerID 返回仓库所有者的账号 ID，无归属时返回 0
+func (r *ResourceResult) OwnerID() int64 {
+	if r.Owner != nil {
+		return r.Owner.ID
+	}
+	if r.Group != nil {
+		return r.Group.ID
+	}
+	return 0
+}
+
+// RepoRoot 返回所有者的自有仓库目录，未设置时返回空字符串
+// （此时仓库落在全局裸仓库目录下）。
+func (r *ResourceResult) RepoRoot() string {
+	if r.Owner != nil {
+		return r.Owner.RepoRoot
+	}
+	if r.Group != nil {
+		return r.Group.RepoRoot
+	}
+	return ""
 }
 
 // GetOwnerAndRepo 根据用户名或团队名和仓库名查找所有者和仓库
@@ -72,7 +95,7 @@ func GetOwnerAndRepoFromParams(c fiber.Ctx) (*ResourceResult, error) {
 	return GetOwnerAndRepo(c, owner, repoName)
 }
 
-// RequireOwnerAndRepo 查找仓库并验证当前用户为仓库所有者或团队管理员
+// RequireOwnerAndRepo 查找仓库并验证当前用户有管理权限（所有者或团队管理员）
 func RequireOwnerAndRepo(c fiber.Ctx, ownerName, repoName string) (*ResourceResult, error) {
 	result, err := GetOwnerAndRepo(c, ownerName, repoName)
 	if err != nil {
@@ -83,19 +106,11 @@ func RequireOwnerAndRepo(c fiber.Ctx, ownerName, repoName string) (*ResourceResu
 		return nil, JSONError(c, HTTPStatusNotFound, "Repository not found")
 	}
 
-	if result.Repo.IsLocal() {
-		role := middleware.GetCurrentUserRole(c)
-		if role == "guest" {
+	if !CheckRepoAdminPermission(c, result) {
+		if middleware.GetCurrentUserRole(c) == SysRoleGuest {
 			return nil, JSONError(c, HTTPStatusForbidden, "Guest users cannot manage this project")
 		}
-	} else if result.Repo.IsGroupOwned() {
-		if err := RequireGroupLeader(c, result.Group.ID); err != nil {
-			return nil, err
-		}
-	} else {
-		if err := RequireOwner(c, result.Repo.OwnerID); err != nil {
-			return nil, err
-		}
+		return nil, JSONError(c, HTTPStatusForbidden, "Access denied")
 	}
 
 	return result, nil
@@ -124,34 +139,15 @@ func GetOwnerAndRepoWithPrivateAccess(c fiber.Ctx, ownerName, repoName string) (
 		return nil, JSONError(c, HTTPStatusNotFound, "Repository not found")
 	}
 
-	if result.Repo.IsPrivate() {
-		role := middleware.GetCurrentUserRole(c)
-		if role == "admin" {
-			return result, nil
-		}
-		if role == "guest" {
+	access := CheckRepoAccess(c, result)
+	if access == RepoAccessNone {
+		if middleware.GetCurrentUserRole(c) == SysRoleGuest {
 			return nil, JSONError(c, HTTPStatusForbidden, "Guest users cannot access this project")
 		}
-		if result.Repo.IsGroupOwned() {
-			if err := RequireGroupMember(c, result.Group.ID); err != nil {
-				return nil, err
-			}
-		} else {
-			if err := RequireOwner(c, result.Repo.OwnerID); err != nil {
-				return nil, err
-			}
+		if middleware.GetCurrentUserID(c) == 0 {
+			return nil, JSONError(c, HTTPStatusUnauthorized, "Login required to access this project")
 		}
-	}
-
-	if result.Repo.ProjectType == "local" {
-		userID := middleware.GetCurrentUserID(c)
-		role := middleware.GetCurrentUserRole(c)
-		if userID == 0 {
-			return nil, JSONError(c, HTTPStatusForbidden, "Login required to access this project")
-		}
-		if role == "guest" {
-			return nil, JSONError(c, HTTPStatusForbidden, "Guest users cannot access this project")
-		}
+		return nil, JSONError(c, HTTPStatusForbidden, "Access denied")
 	}
 
 	return result, nil

@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"fmt"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -71,16 +70,15 @@ func CreateRepository(c fiber.Ctx) error {
 
 		repo.MigrateStatus = "cloning"
 	} else {
+		// 本地自有项目：存储形态由账号的自有仓库目录决定。
 		repo.ProjectType = "local"
-		repo.OwnerID = 0
-		repo.OwnerType = "user"
-		gitSvc := services.NewGitService()
+		gitSvc := services.NewGitService().WithOwnerRoot(ownerUser.RepoRoot)
 		if err := gitSvc.InitRepository(ownerUser.Username, repo); err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"error": fmt.Sprintf("Failed to initialize repository: %v", err),
 			})
 		}
-		repo.LocalPath = filepath.Join(config.GetLocalRoot(), req.Name)
+		// InitRepository 已按规则写入 LocalPath。
 	}
 
 	err = db.Repository.Insert().One(repo)
@@ -102,7 +100,7 @@ func CreateRepository(c fiber.Ctx) error {
 
 	if repo.MigrateStatus == "cloning" {
 		go func() {
-			gitSvc := services.NewGitServiceWithDB(db)
+			gitSvc := services.NewGitServiceWithDB(db).WithOwnerRoot(ownerUser.RepoRoot)
 			localPath, cloneErr := gitSvc.CloneRepository(ownerUser.Username, repo.Name, repo.MirrorURL, true)
 
 			refreshedRepo, findErr := db.Repository.Select().Where("id = ?", repo.ID).One()
@@ -150,7 +148,7 @@ func RetryMigrate(c fiber.Ctx) error {
 	}
 
 	go func() {
-		gitSvc := services.NewGitServiceWithDB(db)
+		gitSvc := services.NewGitServiceWithDB(db).WithOwnerRoot(result.RepoRoot())
 		localPath, cloneErr := gitSvc.CloneRepository(result.OwnerName(), repo.Name, repo.MirrorURL, true)
 
 		refreshedRepo, findErr := db.Repository.Select().Where("id = ?", repo.ID).One()
@@ -344,10 +342,6 @@ func ListRepositories(c fiber.Ctx) error {
 		for _, repo := range repos {
 			var ownerUser *models.User
 			var ownerGroup *models.Group
-			if repo.IsLocal() {
-				response = append(response, ToRepositoryResponse(repo, nil, nil))
-				continue
-			}
 			if repo.OwnerType == "group" {
 				ownerGroup = groupsMap[repo.OwnerID]
 				if ownerGroup == nil {
@@ -507,10 +501,8 @@ func DeleteRepository(c fiber.Ctx) error {
 
 	db.Repository.Delete().Where("id = ?", repo.ID).Exec()
 
-	if !repo.IsLocal() {
-		gitSvc := services.NewGitService()
-		gitSvc.DeleteRepository(result.OwnerName(), repo.Name)
-	}
+	gitSvc := gitSvcFor(result)
+	gitSvc.DeleteRepository(result.OwnerName(), repo.Name)
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Repository deleted successfully"})
 }

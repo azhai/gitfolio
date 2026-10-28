@@ -35,7 +35,7 @@ func GetRepositoryTree(c fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Repository not initialized"})
 	}
 
-	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
+	gitSvc := gitSvcFor(result)
 	entries, err := gitSvc.GetTreeWithSize(result.OwnerName(), result.Repo.Name, ref, path)
 	if err != nil {
 		// 仓库无提交时返回空列表而非错误
@@ -70,7 +70,7 @@ func GetRepositoryFile(c fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Repository not initialized"})
 	}
 
-	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
+	gitSvc := gitSvcFor(result)
 
 	if hexDump == "true" || hexDump == "1" {
 		hexContent, totalSize, err := gitSvc.GetFileHexDump(result.OwnerName(), result.Repo.Name, ref, path, 8192)
@@ -110,7 +110,7 @@ func GetRepositoryRawFile(c fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).SendString("Repository not initialized")
 	}
 
-	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
+	gitSvc := gitSvcFor(result)
 	content, err := gitSvc.GetFileContentByRef(result.OwnerName(), result.Repo.Name, ref, decodedPath)
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).SendString("File not found")
@@ -164,26 +164,30 @@ func GetRepositoryBranches(c fiber.Ctx) error {
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{"branches": []string{}})
 	}
 
-	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
+	gitSvc := gitSvcFor(result)
 	branches, err := gitSvc.GetAllBranches(result.OwnerName(), result.Repo.Name)
 	if err != nil {
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{"branches": []string{}})
 	}
 
-	response := fiber.Map{"branches": branches, "is_local": result.Repo.IsLocal()}
+	// has_work_tree 决定前端是否展示工作区操作（暂存/提交/编辑文件）。
+	// 它取决于磁盘形态（普通仓库），而不是项目类型：自有目录下的镜像仓库同样可编辑。
+	hasWorkTree := services.LocationForRepo(result.Repo, result.OwnerName(), result.RepoRoot()).Storage == models.RepoStorageWork
+	response := fiber.Map{
+		"branches":      branches,
+		"is_local":      hasWorkTree, // 兼容旧前端：等价于"有工作区"
+		"has_work_tree": hasWorkTree,
+	}
 
-	if result.Repo.IsLocal() {
-		isBare := gitSvc.IsBareRepository(result.OwnerName(), result.Repo.Name)
-		if !isBare {
-			stagedFiles, _ := gitSvc.GetStagedFiles(result.OwnerName(), result.Repo.Name)
-			workingFiles, _ := gitSvc.GetWorkingTreeFiles(result.OwnerName(), result.Repo.Name)
-			untrackedFiles, _ := gitSvc.GetUntrackedFiles(result.OwnerName(), result.Repo.Name)
-			unpushedCommits, _ := gitSvc.GetUnpushedCommits(result.OwnerName(), result.Repo.Name)
-			response["staged_files"] = stagedFiles
-			response["working_files"] = workingFiles
-			response["untracked_files"] = untrackedFiles
-			response["unpushed_commits"] = unpushedCommits
-		}
+	if hasWorkTree {
+		stagedFiles, _ := gitSvc.GetStagedFiles(result.OwnerName(), result.Repo.Name)
+		workingFiles, _ := gitSvc.GetWorkingTreeFiles(result.OwnerName(), result.Repo.Name)
+		untrackedFiles, _ := gitSvc.GetUntrackedFiles(result.OwnerName(), result.Repo.Name)
+		unpushedCommits, _ := gitSvc.GetUnpushedCommits(result.OwnerName(), result.Repo.Name)
+		response["staged_files"] = stagedFiles
+		response["working_files"] = workingFiles
+		response["untracked_files"] = untrackedFiles
+		response["unpushed_commits"] = unpushedCommits
 	}
 
 	return c.Status(fiber.StatusOK).JSON(response)
@@ -200,7 +204,7 @@ func GetRepositoryTags(c fiber.Ctx) error {
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{"tags": []string{}})
 	}
 
-	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
+	gitSvc := gitSvcFor(result)
 	tags, err := gitSvc.GetAllTags(result.OwnerName(), result.Repo.Name)
 	if err != nil {
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{"tags": []string{}})
@@ -222,7 +226,7 @@ func GetRepositoryLastCommit(c fiber.Ctx) error {
 	}
 
 	ref := c.Query("ref", "HEAD")
-	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
+	gitSvc := gitSvcFor(result)
 	message, time, author, hash, err := gitSvc.GetLastCommitInfo(result.OwnerName(), result.Repo.Name, ref)
 	if err != nil {
 		return c.Status(fiber.StatusOK).JSON(empty)
@@ -255,7 +259,7 @@ func GetRepositoryCommits(c fiber.Ctx) error {
 		perPage = 30
 	}
 
-	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
+	gitSvc := gitSvcFor(result)
 
 	var commits any
 	var total int
@@ -316,7 +320,7 @@ func GetCodeStats(c fiber.Ctx) error {
 		return err
 	}
 
-	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
+	gitSvc := gitSvcFor(result)
 	stats, err := gitSvc.GetCodeStats(result.OwnerName(), result.Repo.Name)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to get code stats: " + err.Error()})
@@ -339,7 +343,7 @@ func GetCommitActivity(c fiber.Ctx) error {
 		}
 	}
 
-	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
+	gitSvc := gitSvcFor(result)
 	activity, err := gitSvc.GetCommitActivity(result.OwnerName(), result.Repo.Name, days)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to get commit activity: " + err.Error()})
@@ -371,7 +375,7 @@ func RebaseCommits(c fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "No commits specified"})
 	}
 
-	gitSvc := services.NewGitService()
+	gitSvc := gitSvcFor(result)
 	if err := gitSvc.RebaseCommits(result.OwnerName(), result.Repo.Name, req.Commits); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -398,7 +402,7 @@ func StageFiles(c fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	gitSvc := services.NewGitService()
+	gitSvc := gitSvcFor(result)
 	if err := gitSvc.StageFiles(result.OwnerName(), result.Repo.Name, req.Files); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -438,7 +442,7 @@ func UnstageFiles(c fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "No files specified"})
 	}
 
-	gitSvc := services.NewGitService()
+	gitSvc := gitSvcFor(result)
 	if err := gitSvc.UnstageFiles(result.OwnerName(), result.Repo.Name, req.Files); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -484,7 +488,7 @@ func CommitChanges(c fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "User not found"})
 	}
 
-	gitSvc := services.NewGitService()
+	gitSvc := gitSvcFor(result)
 	commitHash, err := gitSvc.CommitChangesWithHash(result.OwnerName(), result.Repo.Name, req.Message, user.Username, user.Email)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
@@ -524,7 +528,7 @@ func GetCommitDetail(c fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Repository not initialized"})
 	}
 
-	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
+	gitSvc := gitSvcFor(result)
 	detail, err := gitSvc.GetCommitDetail(result.OwnerName(), result.Repo.Name, sha)
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Commit not found"})
@@ -566,7 +570,7 @@ func CompareCommits(c fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Repository not initialized"})
 	}
 
-	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
+	gitSvc := gitSvcFor(result)
 	compareResult, err := gitSvc.CompareCommits(result.OwnerName(), result.Repo.Name, base, head)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
@@ -661,7 +665,7 @@ func SetDefaultBranch(c fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Branch name is required"})
 	}
 
-	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
+	gitSvc := gitSvcFor(result)
 	if err := gitSvc.SetDefaultBranch(result.OwnerName(), result.Repo.Name, req.Branch); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -702,7 +706,7 @@ func CreateTag(c fiber.Ctx) error {
 		}
 	}
 
-	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
+	gitSvc := gitSvcFor(result)
 	if err := gitSvc.CreateTag(result.OwnerName(), result.Repo.Name, req.Name, req.Branch); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -726,7 +730,7 @@ func DeleteTag(c fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Tag name is required"})
 	}
 
-	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
+	gitSvc := gitSvcFor(result)
 	if err := gitSvc.DeleteTag(result.OwnerName(), result.Repo.Name, tagName); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -756,7 +760,7 @@ func DeleteCommitRange(c fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Both from_sha and to_sha are required"})
 	}
 
-	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
+	gitSvc := gitSvcFor(result)
 	if err := gitSvc.DeleteCommitRange(result.OwnerName(), result.Repo.Name, req.FromSHA, req.ToSHA); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -785,7 +789,7 @@ func RevertCommit(c fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Commit SHA is required"})
 	}
 
-	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
+	gitSvc := gitSvcFor(result)
 	if err := gitSvc.RevertCommit(result.OwnerName(), result.Repo.Name, req.SHA); err != nil {
 		// 检查是否是冲突错误
 		if strings.HasPrefix(err.Error(), "CONFLICT:") {
@@ -818,7 +822,7 @@ func ResetCommits(c fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Count must be positive"})
 	}
 
-	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
+	gitSvc := gitSvcFor(result)
 	if err := gitSvc.ResetCommits(result.OwnerName(), result.Repo.Name, req.Count); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -847,7 +851,7 @@ func AbortOperation(c fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Operation type is required (revert/rebase/merge/cherry-pick)"})
 	}
 
-	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
+	gitSvc := gitSvcFor(result)
 	if err := gitSvc.AbortOperation(result.OwnerName(), result.Repo.Name, req.Type); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -866,7 +870,7 @@ func GetRepoStatus(c fiber.Ctx) error {
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{"rebasing": false, "reverting": false, "merging": false})
 	}
 
-	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
+	gitSvc := gitSvcFor(result)
 
 	if gitSvc.IsBareRepository(result.OwnerName(), result.Repo.Name) {
 		branchCmd := exec.Command("git", "-C", result.Repo.LocalPath, "rev-parse", "--abbrev-ref", "HEAD")
@@ -916,7 +920,7 @@ func CreateBranch(c fiber.Ctx) error {
 		req.SourceRef = "HEAD"
 	}
 
-	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
+	gitSvc := gitSvcFor(result)
 	if err := gitSvc.CreateBranch(result.OwnerName(), result.Repo.Name, req.Name, req.SourceRef); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -942,7 +946,7 @@ func DeleteBranch(c fiber.Ctx) error {
 
 	force := c.Query("force", "false") == "true"
 
-	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
+	gitSvc := gitSvcFor(result)
 	if err := gitSvc.DeleteBranch(result.OwnerName(), result.Repo.Name, branchName, force); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -972,7 +976,7 @@ func RenameBranch(c fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Both old_name and new_name are required"})
 	}
 
-	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
+	gitSvc := gitSvcFor(result)
 	if err := gitSvc.RenameBranch(result.OwnerName(), result.Repo.Name, req.OldName, req.NewName); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -1002,7 +1006,7 @@ func MergeBranch(c fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "source_branch is required"})
 	}
 
-	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
+	gitSvc := gitSvcFor(result)
 	if err := gitSvc.MergeBranch(result.OwnerName(), result.Repo.Name, req.SourceBranch, req.TargetBranch); err != nil {
 		if strings.HasPrefix(err.Error(), "CONFLICT:") {
 			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": err.Error(), "conflict": true})
@@ -1034,7 +1038,7 @@ func CherryPick(c fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "At least one commit SHA is required"})
 	}
 
-	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
+	gitSvc := gitSvcFor(result)
 	if err := gitSvc.CherryPick(result.OwnerName(), result.Repo.Name, req.Shas); err != nil {
 		if strings.HasPrefix(err.Error(), "CONFLICT:") {
 			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": err.Error(), "conflict": true})
@@ -1082,7 +1086,7 @@ func EditFile(c fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "User not found"})
 	}
 
-	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
+	gitSvc := gitSvcFor(result)
 	commitHash, err := gitSvc.EditFile(result.OwnerName(), result.Repo.Name, req.Path, req.Content, req.Message, user.Username, user.Email)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
@@ -1137,7 +1141,7 @@ func DeleteFile(c fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "User not found"})
 	}
 
-	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
+	gitSvc := gitSvcFor(result)
 	commitHash, err := gitSvc.DeleteFile(result.OwnerName(), result.Repo.Name, req.Path, req.Message, user.Username, user.Email)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
@@ -1167,7 +1171,7 @@ func ListRemotes(c fiber.Ctx) error {
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{"remotes": []any{}})
 	}
 
-	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
+	gitSvc := gitSvcFor(result)
 	remotes, err := gitSvc.ListRemotes(result.OwnerName(), result.Repo.Name)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
@@ -1198,7 +1202,7 @@ func AddRemote(c fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Remote name and URL are required"})
 	}
 
-	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
+	gitSvc := gitSvcFor(result)
 	if err := gitSvc.AddRemote(result.OwnerName(), result.Repo.Name, req.Name, req.URL); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -1222,7 +1226,7 @@ func RemoveRemote(c fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Remote name is required"})
 	}
 
-	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
+	gitSvc := gitSvcFor(result)
 	if err := gitSvc.RemoveRemote(result.OwnerName(), result.Repo.Name, remoteName); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -1256,7 +1260,7 @@ func SetRemoteURL(c fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "URL is required"})
 	}
 
-	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
+	gitSvc := gitSvcFor(result)
 	if err := gitSvc.SetRemoteURL(result.OwnerName(), result.Repo.Name, remoteName, req.URL); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -1290,7 +1294,7 @@ func AddRemotePushURL(c fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Push URL is required"})
 	}
 
-	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
+	gitSvc := gitSvcFor(result)
 	if err := gitSvc.AddRemotePushURL(result.OwnerName(), result.Repo.Name, remoteName, req.URL); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -1324,7 +1328,7 @@ func RemoveRemotePushURL(c fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Push URL is required"})
 	}
 
-	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
+	gitSvc := gitSvcFor(result)
 	if err := gitSvc.RemoveRemotePushURL(result.OwnerName(), result.Repo.Name, remoteName, req.URL); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -1350,7 +1354,7 @@ func GetFileDiff(c fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "File path is required"})
 	}
 
-	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
+	gitSvc := gitSvcFor(result)
 	diffResult, err := gitSvc.GetFileDiff(result.OwnerName(), result.Repo.Name, filePath, staged)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
@@ -1376,7 +1380,7 @@ func GetCommitFileDiff(c fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "sha and path are required"})
 	}
 
-	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
+	gitSvc := gitSvcFor(result)
 	diffResult, err := gitSvc.GetCommitFileDiff(result.OwnerName(), result.Repo.Name, sha, filePath)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
@@ -1407,7 +1411,7 @@ func StagePatch(c fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "File path is required"})
 	}
 
-	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
+	gitSvc := gitSvcFor(result)
 	if err := gitSvc.StagePatch(result.OwnerName(), result.Repo.Name, req.Path, req.LineIndices); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -1437,7 +1441,7 @@ func DiscardFileChanges(c fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "File path is required"})
 	}
 
-	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
+	gitSvc := gitSvcFor(result)
 	if err := gitSvc.DiscardFileChanges(result.OwnerName(), result.Repo.Name, req.Path, req.IsUntracked); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -1466,7 +1470,7 @@ func CheckoutBranch(c fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Branch name is required"})
 	}
 
-	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
+	gitSvc := gitSvcFor(result)
 	if err := gitSvc.CheckoutBranch(result.OwnerName(), result.Repo.Name, req.Branch); err != nil {
 		if strings.HasPrefix(err.Error(), "CONFLICT:") {
 			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": err.Error(), "conflict": true})
@@ -1499,7 +1503,7 @@ func RebaseInteractive(c fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Base is required"})
 	}
 
-	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
+	gitSvc := gitSvcFor(result)
 	if err := gitSvc.RebaseInteractive(result.OwnerName(), result.Repo.Name, req.Base, req.Todos); err != nil {
 		if strings.HasPrefix(err.Error(), "CONFLICT:") {
 			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": err.Error(), "conflict": true})
@@ -1521,7 +1525,7 @@ func GetStashList(c fiber.Ctx) error {
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{"stashes": []any{}})
 	}
 
-	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
+	gitSvc := gitSvcFor(result)
 	entries, err := gitSvc.GetStashList(result.OwnerName(), result.Repo.Name)
 	if err != nil {
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{"stashes": []any{}})
@@ -1548,7 +1552,7 @@ func StashSave(c fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
+	gitSvc := gitSvcFor(result)
 	if err := gitSvc.StashSave(result.OwnerName(), result.Repo.Name, req.Message); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -1574,7 +1578,7 @@ func StashPop(c fiber.Ctx) error {
 		req.Index = 0
 	}
 
-	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
+	gitSvc := gitSvcFor(result)
 	if err := gitSvc.StashPop(result.OwnerName(), result.Repo.Name, req.Index); err != nil {
 		if strings.HasPrefix(err.Error(), "CONFLICT:") {
 			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": err.Error(), "conflict": true})
@@ -1603,7 +1607,7 @@ func StashApply(c fiber.Ctx) error {
 		req.Index = 0
 	}
 
-	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
+	gitSvc := gitSvcFor(result)
 	if err := gitSvc.StashApply(result.OwnerName(), result.Repo.Name, req.Index); err != nil {
 		if strings.HasPrefix(err.Error(), "CONFLICT:") {
 			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": err.Error(), "conflict": true})
@@ -1632,7 +1636,7 @@ func StashDrop(c fiber.Ctx) error {
 		req.Index = 0
 	}
 
-	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
+	gitSvc := gitSvcFor(result)
 	if err := gitSvc.StashDrop(result.OwnerName(), result.Repo.Name, req.Index); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}

@@ -63,6 +63,11 @@ type User struct {
 
 	IsActive bool   `goe:"default:true"`
 	Role     string `goe:"default:user"`
+
+	// RepoRoot 是账号的自有仓库目录（绝对路径）。
+	// 非空：该账号的仓库以普通（带工作区）仓库存放在 <RepoRoot>/<name>。
+	// 为空：仓库落到全局裸仓库目录下的 <账号名>/<name>.git。
+	RepoRoot string `goe:"default:''"`
 }
 
 func (u *User) SetPassword(password string) error {
@@ -105,14 +110,25 @@ type Repository struct {
 	LastCommitAt  *time.Time
 }
 
+// IsMirror 报告仓库是否为远程平台的只读镜像。
 func (r *Repository) IsMirror() bool {
 	return r.ProjectType == "mirror"
 }
 
+// IsPrivate 报告仓库是否为私有可见性。
 func (r *Repository) IsPrivate() bool {
 	return r.ProjectType == "private"
 }
 
+// IsPublic 报告仓库是否为公开可见性。
+func (r *Repository) IsPublic() bool {
+	return r.ProjectType == "public"
+}
+
+// IsLocal 报告仓库是否为本地自有项目（不绑定远程平台同步）。
+//
+// 注意：本地项目不等于非裸仓库。存储形态由所有者的自有仓库目录决定，
+// 详见 services.RepoPath。
 func (r *Repository) IsLocal() bool {
 	return r.ProjectType == "local"
 }
@@ -121,6 +137,12 @@ func (r *Repository) IsRemote() bool {
 	return r.ProjectType == "mirror" || r.ProjectType == "public" || r.ProjectType == "private"
 }
 
+// HasRemote 报告仓库是否配置了远程地址（镜像或已推送的平台仓库）。
+func (r *Repository) HasRemote() bool {
+	return r.MirrorURL != ""
+}
+
+// CanPushRemote 报告是否允许向远程推送本地提交。
 func (r *Repository) CanPushRemote() bool {
 	return r.ProjectType == "public" || r.ProjectType == "private" || r.ProjectType == "local"
 }
@@ -335,6 +357,15 @@ type Webhook struct {
 	Events   string
 }
 
+// ProjectType 描述仓库与远程平台的关系以及可见性，与磁盘上的存储形态无关。
+//
+//   - local：本地自有项目，不做平台同步（用户可自行 git remote 推送）
+//   - mirror：远程平台的只读镜像，从 MirrorURL 定期拉取
+//   - public：已推送到远程平台并同步议题/PR，所有人可见
+//   - private：同上，但仅所有者、团队成员和管理员可见
+//
+// 存储形态（裸仓库还是带工作区的普通仓库）由所有者的自有仓库目录决定，
+// 见 services.RepoPath / services.ResolveRepoPath。
 type ProjectType string
 
 const (
@@ -342,6 +373,34 @@ const (
 	ProjectTypeMirror  ProjectType = "mirror"
 	ProjectTypePublic  ProjectType = "public"
 	ProjectTypePrivate ProjectType = "private"
+)
+
+// ValidProjectTypes 列出所有合法的项目类型值。
+var ValidProjectTypes = []string{
+	string(ProjectTypeLocal),
+	string(ProjectTypeMirror),
+	string(ProjectTypePublic),
+	string(ProjectTypePrivate),
+}
+
+// IsValidProjectType 判断给定值是否为合法的项目类型。
+func IsValidProjectType(v string) bool {
+	for _, t := range ValidProjectTypes {
+		if t == v {
+			return true
+		}
+	}
+	return false
+}
+
+// RepoStorage 描述仓库在磁盘上的存储形态。
+type RepoStorage string
+
+const (
+	// RepoStorageBare 裸仓库，无工作区，不能直接编辑文件。
+	RepoStorageBare RepoStorage = "bare"
+	// RepoStorageWork 普通仓库，带工作区，可直接编辑文件。
+	RepoStorageWork RepoStorage = "work"
 )
 
 type PlatformType string
@@ -476,6 +535,10 @@ type Group struct {
 	Location    string
 
 	OwnerID int64 `goe:"index"`
+
+	// RepoRoot 是团队的自有仓库目录，语义同 User.RepoRoot。
+	// 为空时团队仓库落到全局裸仓库目录下的 <团队名>/<name>.git。
+	RepoRoot string `goe:"default:''"`
 }
 
 type GroupMember struct {

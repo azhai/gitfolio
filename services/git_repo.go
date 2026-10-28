@@ -14,8 +14,11 @@ import (
 
 // GitService 提供 Git 仓库操作服务
 type GitService struct {
-	repoRoot          string
-	localRoot         string
+	repoRoot string
+	// localRoot 仅用于定位迁移前的老仓库（平铺在 LOCAL_ROOT 下）。
+	localRoot string
+	// ownerRoot 是账号的自有仓库目录，为空表示使用全局裸仓库目录。
+	ownerRoot         string
 	db                *models.Database
 	localPathOverride string
 }
@@ -43,60 +46,90 @@ func (s *GitService) WithLocalPath(localPath string) *GitService {
 	return s
 }
 
-// getRepoPath 返回仓库的本地磁盘路径
-// 优先查找裸仓库（.git 后缀），不存在则查找非裸仓库（无后缀）
+// WithOwnerRoot 设置账号的自有仓库目录。
+// 非空时仓库以普通仓库（带工作区）存放在该目录下，否则使用全局裸仓库目录。
+func (s *GitService) WithOwnerRoot(root string) *GitService {
+	s.ownerRoot = root
+	return s
+}
+
+// locationFor 按服务自身的仓库根目录计算仓库落盘位置。
+func (s *GitService) locationFor(owner, name string) RepoLocation {
+	return models.ResolveRepoLocationUnder(s.repoRoot, owner, s.ownerRoot, name)
+}
+
+// getRepoPath 返回仓库的本地磁盘路径。
+//
+// 优先级：显式覆盖路径 > 按自有目录规则计算出的已存在路径 >
+// 迁移前平铺在 LOCAL_ROOT 下的老仓库 > 规则计算出的目标路径。
 func (s *GitService) getRepoPath(owner, name string) string {
 	if s.localPathOverride != "" {
 		if _, err := os.Stat(s.localPathOverride); err == nil {
 			return s.localPathOverride
 		}
 	}
-	barePath := filepath.Join(s.repoRoot, owner, name+".git")
-	if _, err := os.Stat(barePath); err == nil {
-		return barePath
+	loc := s.locationFor(owner, name)
+	if _, err := os.Stat(loc.Path); err == nil {
+		return loc.Path
 	}
-	localPath := filepath.Join(s.localRoot, name)
-	if _, err := os.Stat(localPath); err == nil {
-		return localPath
+	// 兼容迁移前的老仓库：它们平铺在 LOCAL_ROOT 下且无归属账号目录。
+	if s.ownerRoot == "" {
+		if legacy := filepath.Join(s.localRoot, name); legacy != "" {
+			if _, err := os.Stat(legacy); err == nil {
+				return legacy
+			}
+		}
 	}
-	return filepath.Join(s.repoRoot, owner, name)
+	return loc.Path
 }
 
-// getNonBareRepoPath 返回本地仓库（非镜像）的磁盘路径
-func (s *GitService) getNonBareRepoPath(owner, name string) string {
-	return filepath.Join(s.localRoot, name)
-}
-
-// InitRepository 初始化一个非裸仓库，并生成 README.md
+// InitRepository 初始化仓库并把落盘路径写回 repo.LocalPath。
+//
+// 账号设置了自有仓库目录时创建普通仓库（带工作区，并生成 README.md 作为首个提交）；
+// 否则创建裸仓库。
 func (s *GitService) InitRepository(owner string, repo *models.Repository) error {
-	repoPath := s.getNonBareRepoPath(owner, repo.Name)
+	loc := s.locationFor(owner, repo.Name)
 
-	if err := os.MkdirAll(repoPath, 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(loc.Path), 0755); err != nil {
 		return fmt.Errorf("failed to create repository directory: %w", err)
 	}
 
-	cmd := exec.Command("git", "init", repoPath)
+	if loc.IsBare() {
+		cmd := exec.Command("git", "init", "--bare", loc.Path)
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("failed to initialize bare git repository: %w", err)
+		}
+		repo.LocalPath = loc.Path
+		return nil
+	}
+
+	if err := os.MkdirAll(loc.Path, 0755); err != nil {
+		return fmt.Errorf("failed to create repository directory: %w", err)
+	}
+
+	cmd := exec.Command("git", "init", loc.Path)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to initialize git repository: %w", err)
 	}
 
-	readmePath := filepath.Join(repoPath, "README.md")
+	readmePath := filepath.Join(loc.Path, "README.md")
 	readmeContent := fmt.Sprintf("# %s\n\n%s", repo.Name, repo.Description)
 	if err := os.WriteFile(readmePath, []byte(readmeContent), 0644); err != nil {
 		return fmt.Errorf("failed to create README: %w", err)
 	}
 
-	addCmd := exec.Command("git", "-C", repoPath, "add", "README.md")
+	addCmd := exec.Command("git", "-C", loc.Path, "add", "README.md")
 	if err := addCmd.Run(); err != nil {
 		return fmt.Errorf("failed to stage README: %w", err)
 	}
 
-	commitCmd := exec.Command("git", "-C", repoPath, "commit", "-m", "Initial commit")
+	commitCmd := exec.Command("git", "-C", loc.Path, "commit", "-m", "Initial commit")
 	commitCmd.Env = append(os.Environ(), "GIT_AUTHOR_NAME=gitfolio", "GIT_AUTHOR_EMAIL=gitfolio@localhost", "GIT_COMMITTER_NAME=gitfolio", "GIT_COMMITTER_EMAIL=gitfolio@localhost")
 	if err := commitCmd.Run(); err != nil {
 		return fmt.Errorf("failed to create initial commit: %w", err)
 	}
 
+	repo.LocalPath = loc.Path
 	return nil
 }
 
@@ -120,6 +153,9 @@ func (s *GitService) CloneRepository(owner, name, cloneURL string, isMirror bool
 	}
 
 	localPath := s.getRepoPath(owner, name)
+	// 存储形态决定克隆出来的仓库是否带工作区：自有目录下为普通仓库，
+	// 全局目录下为裸仓库。isMirror 只影响调用方的语义标注。
+	bare := s.locationFor(owner, name).IsBare()
 
 	var lastErr error
 	for attempt := 0; attempt < 2; attempt++ {
@@ -136,7 +172,7 @@ func (s *GitService) CloneRepository(owner, name, cloneURL string, isMirror bool
 				lastErr = fmt.Errorf("failed to create repo parent dir: %w", err)
 				break
 			}
-			if isMirror {
+			if bare {
 				if _, err := s.runGitCommand([]string{"init", "--bare", localPath}, "", nil); err != nil {
 					lastErr = fmt.Errorf("failed to init bare repo: %w", err)
 					break
@@ -151,10 +187,18 @@ func (s *GitService) CloneRepository(owner, name, cloneURL string, isMirror bool
 				lastErr = fmt.Errorf("failed to add remote: %w", err)
 				break
 			}
+		} else {
+			// 续传时以磁盘现状为准，避免在普通仓库上按裸仓库处理。
+			bare = models.StorageOfPath(localPath) == models.RepoStorageBare
 		}
 
 		fetchErr := s.resumableFetch(localPath, cloneURL, resuming)
 		if fetchErr == nil {
+			if !bare {
+				if err := s.checkoutDefaultBranch(localPath); err != nil {
+					fmt.Printf("[GIT] Warning: failed to populate work tree for %s: %v\n", localPath, err)
+				}
+			}
 			return localPath, nil
 		}
 		lastErr = fetchErr
@@ -167,6 +211,32 @@ func (s *GitService) CloneRepository(owner, name, cloneURL string, isMirror bool
 	}
 
 	return "", lastErr
+}
+
+// checkoutDefaultBranch 在普通仓库中检出远程默认分支，让工作区有内容。
+// 优先 main，其次 master，最后退化为第一个远程分支。
+func (s *GitService) checkoutDefaultBranch(localPath string) error {
+	branches, err := s.listRemoteBranches(localPath)
+	if err != nil {
+		return err
+	}
+	target := ""
+	for _, b := range branches {
+		if b == "main" || b == "master" {
+			target = b
+			break
+		}
+	}
+	if target == "" && len(branches) > 0 {
+		target = branches[0]
+	}
+	if target == "" {
+		return nil
+	}
+	if _, err := s.runGitCommand([]string{"-C", localPath, "checkout", "-f", "-B", target, "origin/" + target}, "", nil); err != nil {
+		return err
+	}
+	return nil
 }
 
 // resumableFetch 先尝试一次性 fetch 所有分支和标签；失败时按分支逐个 fetch，

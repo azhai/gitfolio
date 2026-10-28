@@ -26,7 +26,11 @@ func (s *StatsService) UpdateRepositoryStats(repoID int64, owner, name string) e
 	closedPRs, _ := s.db.PullRequest.Select().Where("repository_id = ? AND is_closed = ?", repoID, true).Count("*")
 	contributors, _ := s.db.Contributor.Select().Where("repository_id = ?", repoID).Count("*")
 
+	repo, _ := s.db.Repository.Select().Where("id = ?", repoID).One()
 	gitSvc := NewGitService()
+	if repo != nil && repo.LocalPath != "" {
+		gitSvc = gitSvc.WithLocalPath(repo.LocalPath)
+	}
 	commitsCount, _ := gitSvc.GetCommitCount(owner, name, "")
 	branchesCount, _ := gitSvc.GetBranchCount(owner, name)
 	tagsCount, _ := gitSvc.GetTagCount(owner, name)
@@ -35,8 +39,7 @@ func (s *StatsService) UpdateRepositoryStats(repoID int64, owner, name string) e
 		_, commitTimeStr, _, _, err := gitSvc.GetLastCommitInfo(owner, name, "")
 		if err == nil && commitTimeStr != "" {
 			if commitTime, err := time.Parse("2006-01-02 15:04:05 -0700", commitTimeStr); err == nil {
-				repo, repoErr := s.db.Repository.Select().Where("id = ?", repoID).One()
-				if repoErr == nil {
+				if repo != nil {
 					repo.LastCommitAt = &commitTime
 					s.db.Repository.Save().One(repo)
 				}

@@ -7,7 +7,6 @@ import (
 	"github.com/azhai/gitfolio/helpers"
 	"github.com/azhai/gitfolio/middleware"
 	"github.com/azhai/gitfolio/models"
-	"github.com/azhai/gitfolio/services"
 	"github.com/gofiber/fiber/v3"
 )
 
@@ -1099,7 +1098,7 @@ func GetTaskCommits(c fiber.Ctx) error {
 		return c.Status(fiber.StatusOK).JSON([]any{})
 	}
 
-	gitSvc := services.NewGitService()
+	gitSvc := gitSvcFor(result)
 	type CommitSummary struct {
 		Hash        string `json:"hash"`
 		ShortHash   string `json:"short_hash"`

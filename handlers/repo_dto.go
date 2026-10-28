@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"github.com/azhai/gitfolio/models"
+	"github.com/azhai/gitfolio/services"
 )
 
 type CreateRepositoryRequest struct {
@@ -37,6 +38,10 @@ type RepositoryResponse struct {
 	CanPushRemote bool   `json:"can_push_remote"`
 	MirrorURL     string `json:"mirror_url"`
 	LocalPath     string `json:"local_path"`
+	// StorageKind 是磁盘上的存储形态：bare（裸仓库）或 work（带工作区的普通仓库）。
+	StorageKind string `json:"storage_kind"`
+	// HasWorkTree 为 true 时可以直接在网页上编辑文件（普通仓库）。
+	HasWorkTree bool `json:"has_work_tree"`
 	LastSyncAt    string `json:"last_sync_at"`
 	StarsCount    int    `json:"stars_count"`
 	ForksCount    int    `json:"forks_count"`
@@ -77,13 +82,22 @@ func ToRepositoryResponse(repo *models.Repository, owner *models.User, group *mo
 	}
 
 	ownerName := ""
-	if repo.IsLocal() {
-		ownerName = "local"
-	} else if repo.OwnerType == "group" && group != nil {
+	accountName := ""
+	repoRoot := ""
+	if repo.OwnerType == "group" && group != nil {
 		ownerName = group.Name
+		accountName, repoRoot = group.Name, group.RepoRoot
 	} else if owner != nil {
 		ownerName = owner.Username
+		accountName, repoRoot = owner.Username, owner.RepoRoot
 	}
+	// 无归属的遗留仓库：列表接口会传 nil owner，退回旧的 "local" 展示名。
+	if ownerName == "" {
+		ownerName = "local"
+		accountName = "local"
+	}
+
+	loc := services.LocationForRepo(repo, accountName, repoRoot)
 
 	response := &RepositoryResponse{
 		ID:            repo.ID,
@@ -99,7 +113,9 @@ func ToRepositoryResponse(repo *models.Repository, owner *models.User, group *mo
 		IsMirror:      repo.IsMirror(),
 		CanPushRemote: repo.CanPushRemote(),
 		MirrorURL:     repo.MirrorURL,
-		LocalPath:     repo.LocalPath,
+		LocalPath:     loc.Path,
+		StorageKind:   string(loc.Storage),
+		HasWorkTree:   loc.Storage == models.RepoStorageWork,
 		LastSyncAt:    lastSyncAt,
 		DefaultBranch: repo.DefaultBranch,
 		CreatedAt:     repo.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),

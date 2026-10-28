@@ -7,7 +7,6 @@ import (
 	"github.com/azhai/gitfolio/helpers"
 	"github.com/azhai/gitfolio/middleware"
 	"github.com/azhai/gitfolio/models"
-	"github.com/azhai/gitfolio/services"
 	"github.com/azhai/goent"
 	"github.com/gofiber/fiber/v3"
 )
@@ -350,7 +349,7 @@ func MergePullRequest(c fiber.Ctx) error {
 	}
 
 	if result.Repo.IsGroupOwned() {
-		if !helpers.CheckGroupLeaderPermission(c, result.Group.ID) {
+		if !helpers.CheckGroupAdminPermission(c, result.Group.ID) {
 			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Only group leader can merge"})
 		}
 	} else {
@@ -484,7 +483,7 @@ func GetPRCommits(c fiber.Ctx) error {
 		})
 	}
 
-	gitSvc := services.NewGitService()
+	gitSvc := gitSvcFor(result)
 	commits, total, err := gitSvc.GetPRCommits(
 		result.OwnerName(), result.Repo.Name,
 		mr.SourceBranch, mr.TargetBranch,
@@ -525,7 +524,7 @@ func GetPRFiles(c fiber.Ctx) error {
 		})
 	}
 
-	gitSvc := services.NewGitService()
+	gitSvc := gitSvcFor(result)
 	files, additions, deletions, err := gitSvc.GetPRFiles(
 		result.OwnerName(), result.Repo.Name,
 		mr.SourceBranch, mr.TargetBranch,

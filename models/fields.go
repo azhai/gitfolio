@@ -432,6 +432,7 @@ func (t *Group) UpdatePairs() []goent.Pair {
 		{Key: "website", Value: t.Website},
 		{Key: "location", Value: t.Location},
 		{Key: "owner_id", Value: t.OwnerID},
+		{Key: "repo_root", Value: t.RepoRoot},
 	}
 }
 
@@ -448,6 +449,7 @@ func (t *Group) ScanDest() []any {
 		&t.Website,
 		&t.Location,
 		&t.OwnerID,
+		&t.RepoRoot,
 	}
 }
 
@@ -1793,6 +1795,7 @@ func (t *User) UpdatePairs() []goent.Pair {
 		{Key: "location", Value: t.Location},
 		{Key: "is_active", Value: t.IsActive},
 		{Key: "role", Value: t.Role},
+		{Key: "repo_root", Value: t.RepoRoot},
 	}
 }
 
@@ -1812,6 +1815,7 @@ func (t *User) ScanDest() []any {
 		&t.Location,
 		&t.IsActive,
 		&t.Role,
+		&t.RepoRoot,
 	}
 }
 

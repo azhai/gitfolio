@@ -487,9 +487,12 @@ func TestGitService_InitRepository(t *testing.T) {
 	}
 	defer os.RemoveAll(tmpDir)
 
+	// 账号设置了自有仓库目录：创建带工作区的普通仓库
+	workRoot := filepath.Join(tmpDir, "work")
 	svc := &GitService{
 		localRoot: tmpDir,
 		repoRoot:  tmpDir,
+		ownerRoot: workRoot,
 	}
 
 	repo := &models.Repository{
@@ -502,9 +505,12 @@ func TestGitService_InitRepository(t *testing.T) {
 		t.Fatalf("InitRepository() error = %v", err)
 	}
 
-	repoPath := filepath.Join(tmpDir, "test-repo")
+	repoPath := filepath.Join(workRoot, "test-repo")
 	if _, err := os.Stat(repoPath); os.IsNotExist(err) {
 		t.Error("InitRepository() should create the repository directory")
+	}
+	if repo.LocalPath != repoPath {
+		t.Errorf("InitRepository() LocalPath = %q, want %q", repo.LocalPath, repoPath)
 	}
 
 	// 验证 README.md
@@ -521,6 +527,64 @@ func TestGitService_InitRepository(t *testing.T) {
 	gitDir := filepath.Join(repoPath, ".git")
 	if _, err := os.Stat(gitDir); os.IsNotExist(err) {
 		t.Error("InitRepository() should initialize a git repository")
+	}
+}
+
+func TestGitService_InitRepositoryBare(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "gitfolio-init-bare-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// 账号未设置自有仓库目录：落到全局裸仓库目录的账号子目录
+	svc := &GitService{
+		localRoot: tmpDir,
+		repoRoot:  tmpDir,
+	}
+
+	repo := &models.Repository{Name: "test-repo"}
+	if err := svc.InitRepository("testowner", repo); err != nil {
+		t.Fatalf("InitRepository() error = %v", err)
+	}
+
+	want := filepath.Join(tmpDir, "testowner", "test-repo.git")
+	if repo.LocalPath != want {
+		t.Fatalf("InitRepository() LocalPath = %q, want %q", repo.LocalPath, want)
+	}
+	if _, err := os.Stat(filepath.Join(want, "HEAD")); os.IsNotExist(err) {
+		t.Error("InitRepository() should create a bare repository with HEAD")
+	}
+}
+
+func TestResolveRepoLocation(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	owned := models.ResolveRepoLocationUnder(tmpDir, "alice", filepath.Join(tmpDir, "alice-work"), "repo")
+	if owned.Storage != models.RepoStorageWork {
+		t.Errorf("owned storage = %v, want work", owned.Storage)
+	}
+	if want := filepath.Join(tmpDir, "alice-work", "repo"); owned.Path != want {
+		t.Errorf("owned path = %q, want %q", owned.Path, want)
+	}
+
+	shared := models.ResolveRepoLocationUnder(tmpDir, "alice", "", "repo")
+	if shared.Storage != models.RepoStorageBare {
+		t.Errorf("shared storage = %v, want bare", shared.Storage)
+	}
+	if want := filepath.Join(tmpDir, "alice", "repo.git"); shared.Path != want {
+		t.Errorf("shared path = %q, want %q", shared.Path, want)
+	}
+
+	// 相对路径中带上级目录引用的自有目录必须回退到裸仓库布局
+	if escaped := models.ResolveRepoLocationUnder(tmpDir, "alice", "../escape", "repo"); escaped.Storage != models.RepoStorageBare {
+		t.Errorf("escaping repo root should fall back to bare, got %v", escaped.Storage)
+	}
+
+	// 账号名与仓库名中的路径分隔符必须被规整，结果不得逃出全局根目录
+	unsafe := models.ResolveRepoLocationUnder(tmpDir, "../evil", "", "..")
+	if !strings.HasPrefix(unsafe.Path, filepath.Clean(tmpDir)+string(filepath.Separator)) {
+		t.Errorf("unsafe path = %q, should stay under the global root", unsafe.Path)
 	}
 }
 

@@ -36,7 +36,11 @@ type AdminConfig struct {
 }
 
 type RepositoryConfig struct {
-	Root      string
+	// Root 是全局裸仓库根目录。账号未设置自有仓库目录时，
+	// 仓库以裸仓库形式存放在 <Root>/<账号名>/<仓库名>.git。
+	Root string
+	// LocalRoot 是历史遗留的本地仓库平铺目录，仅用于定位迁移前创建的
+	// 老仓库（OwnerID=0 且 LocalPath 指向此处）。新仓库不再使用它。
 	LocalRoot string
 }
 
