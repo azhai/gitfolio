@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/azhai/goent/rename"
 )
@@ -322,6 +323,275 @@ func accountAndRootFor(repo *Repository, users map[int64]*User, groups map[int64
 		return u.Username, u.RepoRoot
 	}
 	return "local", ""
+}
+
+// CleanupDuplicateRepositoryNumbers collapses duplicate issue / pull_request
+// rows that share the same repository and number. It is a one-off repair for
+// databases written by older sync runs that inserted without an existence
+// check: those copies inflate counters, return duplicate list rows and make
+// x-for keys collide in the UI. Comments and labels attached to a removed copy
+// are moved to the row that is kept (the most recently updated one, newest id
+// as tie-breaker), because they carry user-visible content.
+//
+// A unique index would express this invariant better, but goent's PostgreSQL
+// migrator drops any unique index that covers a foreign-key column it does not
+// declare (it mistakes it for an o2o constraint) and its model tags cannot
+// reference repository_id because that field is declared m2o. Uniqueness is
+// therefore enforced by the sync paths (existence check before insert, plus a
+// per-repository "already syncing" guard in the scheduler); this function
+// only repairs data left over from before those guards existed.
+func CleanupDuplicateRepositoryNumbers(db *Database) error {
+	if db == nil || db.DB == nil {
+		return fmt.Errorf("database not initialized")
+	}
+	ctx := context.Background()
+
+	targets := []struct {
+		table  string
+		refs   []string // table.column pairs pointing at the row id
+		dedupe []string // cleanup statements, run after refs are moved
+	}{
+		{
+			table: "issue",
+			refs:  []string{"comment.issue_id", "issue_label.issue_id", "task_issue.issue_id", "commit_reference.target_id"},
+			dedupe: []string{
+				`DELETE FROM comment WHERE issue_id IS NOT NULL AND github_id > 0 AND id NOT IN (SELECT MIN(id) FROM comment WHERE issue_id IS NOT NULL AND github_id > 0 GROUP BY issue_id, github_id)`,
+				`DELETE FROM issue_label WHERE id NOT IN (SELECT MIN(id) FROM issue_label GROUP BY issue_id, label_id)`,
+				`DELETE FROM task_issue WHERE id NOT IN (SELECT MIN(id) FROM task_issue GROUP BY task_id, issue_id)`,
+			},
+		},
+		{
+			table: "pull_request",
+			refs:  []string{"comment.pull_request_id", "pull_request_label.pull_request_id", "task_pull_request.pull_request_id"},
+			dedupe: []string{
+				`DELETE FROM comment WHERE pull_request_id IS NOT NULL AND github_id > 0 AND id NOT IN (SELECT MIN(id) FROM comment WHERE pull_request_id IS NOT NULL AND github_id > 0 GROUP BY pull_request_id, github_id)`,
+				`DELETE FROM pull_request_label WHERE id NOT IN (SELECT MIN(id) FROM pull_request_label GROUP BY pull_request_id, label_id)`,
+				`DELETE FROM task_pull_request WHERE id NOT IN (SELECT MIN(id) FROM task_pull_request GROUP BY task_id, pull_request_id)`,
+			},
+		},
+	}
+
+	for _, target := range targets {
+		tableCreated, err := tableExists(db, target.table)
+		if err != nil {
+			return err
+		}
+		if !tableCreated {
+			// Fresh database: AutoMigrate creates the table after this runs.
+			continue
+		}
+
+		dups, err := duplicateRepositoryNumbers(db, target.table)
+		if err != nil {
+			return err
+		}
+		if len(dups) == 0 {
+			continue
+		}
+		for _, dup := range dups {
+			for _, ref := range target.refs {
+				pieces := strings.SplitN(ref, ".", 2)
+				table, column := pieces[0], pieces[1]
+				// commit_reference only stores issue rows under target_type='issue'.
+				extra := ""
+				if table == "commit_reference" {
+					extra = " AND target_type = 'issue'"
+				}
+				sql := fmt.Sprintf("UPDATE %s SET %s = %d WHERE %s = %d%s",
+					quoteIdent(table), quoteIdent(column), dup.keepID, quoteIdent(column), dup.dupID, extra)
+				if err := db.RawExecContext(ctx, sql); err != nil {
+					return fmt.Errorf("failed to move %s rows from %s %d to %d: %w", ref, target.table, dup.dupID, dup.keepID, err)
+				}
+			}
+			sql := fmt.Sprintf("DELETE FROM %s WHERE id = %d", quoteIdent(target.table), dup.dupID)
+			if err := db.RawExecContext(ctx, sql); err != nil {
+				return fmt.Errorf("failed to delete duplicate %s %d: %w", target.table, dup.dupID, err)
+			}
+		}
+
+		// Moving rows can leave two copies of the same comment (both rows were
+		// synced) or the same label link; keep the oldest of each pair.
+		for _, sql := range target.dedupe {
+			if err := db.RawExecContext(ctx, sql); err != nil {
+				return fmt.Errorf("failed to clean up duplicate %s rows: %w", target.table, err)
+			}
+		}
+
+		if target.table == "issue" {
+			// Cached counters in repository_stats still include the removed rows.
+			if err := db.RawExecContext(ctx, `UPDATE repository_stats SET
+				open_issues_count = COALESCE((SELECT count(*) FROM issue WHERE issue.repository_id = repository_stats.repository_id AND issue.is_closed = false), 0),
+				closed_issues_count = COALESCE((SELECT count(*) FROM issue WHERE issue.repository_id = repository_stats.repository_id AND issue.is_closed = true), 0)`); err != nil {
+				return fmt.Errorf("failed to refresh issue counters: %w", err)
+			}
+		}
+	}
+	return nil
+}
+
+type duplicateNumber struct {
+	dupID  int64
+	keepID int64
+}
+
+// duplicateRepositoryNumbers returns every row that shares its
+// (repository_id, number) pair with a newer row of the same table.
+func duplicateRepositoryNumbers(db *Database, table string) ([]duplicateNumber, error) {
+	ctx := context.Background()
+	rows, err := db.RawQueryContext(ctx,
+		fmt.Sprintf("SELECT id, repository_id, number, updated_at FROM %s ORDER BY repository_id, number, updated_at DESC, id DESC",
+			quoteIdent(table)))
+	if err != nil {
+		return nil, fmt.Errorf("failed to inspect %s: %w", table, err)
+	}
+	defer rows.Close()
+
+	type key struct {
+		repoID int64
+		number int64
+	}
+	seen := make(map[key]int64)
+	var dups []duplicateNumber
+	for rows.Next() {
+		var id, repoID int64
+		var number int64
+		var updatedAt time.Time
+		if err := rows.Scan(&id, &repoID, &number, &updatedAt); err != nil {
+			return nil, fmt.Errorf("failed to scan %s row: %w", table, err)
+		}
+		k := key{repoID: repoID, number: number}
+		if keep, ok := seen[k]; ok {
+			dups = append(dups, duplicateNumber{dupID: id, keepID: keep})
+			continue
+		}
+		seen[k] = id
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to read %s rows: %w", table, err)
+	}
+	return dups, nil
+}
+
+// 需要回填时间戳的表及各自的列。只有部分模型带 updated_at，
+// 枚举清楚可以避免对不存在的列执行更新。
+var timestampBackfillTargets = []struct {
+	table   string
+	columns []string
+}{
+	{"user", []string{"created_at", "updated_at"}},
+	{"group", []string{"created_at", "updated_at"}},
+	{"repository", []string{"created_at", "updated_at"}},
+	{"issue", []string{"created_at", "updated_at"}},
+	{"pull_request", []string{"created_at", "updated_at"}},
+	{"comment", []string{"created_at", "updated_at"}},
+	{"label", []string{"created_at", "updated_at"}},
+	{"milestone", []string{"created_at", "updated_at"}},
+	{"task", []string{"created_at", "updated_at"}},
+	{"snippet", []string{"created_at", "updated_at"}},
+	{"group_member", []string{"created_at"}},
+	{"activity", []string{"created_at"}},
+	{"task_attachment", []string{"created_at"}},
+}
+
+// BackfillTimestamps 把时间戳为零值（0001-01-01）的行改成当前时间。
+//
+// goent 原样写入 created_at/updated_at，早期版本的插入语句没有带时间戳，
+// 这些行在界面上会显示成 0001-01-01。插入路径现在统一走 Stamp()，
+// 这里只修复历史数据，重复执行无副作用。
+func BackfillTimestamps(db *Database) error {
+	if db == nil || db.DB == nil {
+		return fmt.Errorf("database not initialized")
+	}
+	ctx := context.Background()
+	driverName := strings.ToLower(db.Driver().Name())
+	isPG := driverName == "postgres" || driverName == "postgresql"
+
+	now := "datetime('now')"
+	if isPG {
+		now = "CURRENT_TIMESTAMP"
+	}
+
+	for _, target := range timestampBackfillTargets {
+		exists, err := tableExists(db, target.table)
+		if err != nil {
+			return err
+		}
+		if !exists {
+			continue
+		}
+		qualified := quoteIdent(target.table)
+		if isPG {
+			if schema := pgSchemaFor(db, target.table); schema != "" {
+				qualified = quoteIdent(schema) + "." + quoteIdent(target.table)
+			}
+		}
+		for _, column := range target.columns {
+			// 1970 之前的任何值都只可能是未填充的零值时间。
+			sql := fmt.Sprintf("UPDATE %s SET %s = %s WHERE %s IS NULL OR %s < '1970-01-01'",
+				qualified, quoteIdent(column), now, quoteIdent(column), quoteIdent(column))
+			if err := db.RawExecContext(ctx, sql); err != nil {
+				return fmt.Errorf("failed to backfill %s.%s: %w", target.table, column, err)
+			}
+		}
+	}
+	return nil
+}
+
+// EnsureUniqueRepositoryNumbers 给 issue / pull_request 加上
+// (repository_id, number) 唯一索引。
+//
+// 同步逻辑已经不插入重复编号，但唯一索引是最后一道防线：
+// 少了它，一旦某次同步漏判，重复行会悄悄堆积，之后每个依赖
+// "一个编号一行" 的查询都会出错。调用前 CleanupDuplicateRepositoryNumbers
+// 已经把历史重复清干净。
+func EnsureUniqueRepositoryNumbers(db *Database) error {
+	if db == nil || db.DB == nil {
+		return fmt.Errorf("database not initialized")
+	}
+	ctx := context.Background()
+	driverName := strings.ToLower(db.Driver().Name())
+	isPG := driverName == "postgres" || driverName == "postgresql"
+
+	for _, table := range []string{"issue", "pull_request"} {
+		exists, err := tableExists(db, table)
+		if err != nil {
+			return err
+		}
+		if !exists {
+			continue
+		}
+		qualified := quoteIdent(table)
+		if isPG {
+			if schema := pgSchemaFor(db, table); schema != "" {
+				qualified = quoteIdent(schema) + "." + quoteIdent(table)
+			}
+		}
+		sql := fmt.Sprintf("CREATE UNIQUE INDEX IF NOT EXISTS %s ON %s (%s, %s)",
+			quoteIdent("uk_"+table+"_repo_number"), qualified,
+			quoteIdent("repository_id"), quoteIdent("number"))
+		if err := db.RawExecContext(ctx, sql); err != nil {
+			return fmt.Errorf("failed to add unique index on %s(repository_id, number): %w", table, err)
+		}
+	}
+	return nil
+}
+
+func tableExists(db *Database, name string) (bool, error) {
+	ctx := context.Background()
+	driverName := strings.ToLower(db.Driver().Name())
+	var cnt int
+	var err error
+	if driverName == "postgres" || driverName == "postgresql" {
+		err = db.RawQueryRowContext(ctx,
+			"SELECT count(*) FROM information_schema.tables WHERE table_name = '"+name+"'").Scan(&cnt)
+	} else {
+		err = db.RawQueryRowContext(ctx,
+			"SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = '"+name+"'").Scan(&cnt)
+	}
+	if err != nil {
+		return false, fmt.Errorf("failed to inspect table %s: %w", name, err)
+	}
+	return cnt > 0, nil
 }
 
 // EnsureIssueStatusColumn ensures the issue table has a status column.

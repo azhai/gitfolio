@@ -178,7 +178,12 @@ func (s *SyncService) SyncGitHubIssuesGraphQL(ctx context.Context, repoID int64,
 
 	// 加载已存在 Issue 用于去重与 upsert
 	existingIssueMap := make(map[int]*models.Issue)
-	existingIssues, _ := s.db.Issue.Select().Where("repository_id = ?", repoID).All()
+	// 去重依赖这张表：读失败时若当成“没有旧数据”，整轮同步会把每个 number
+	// 再插一遍，于是出现同一仓库下重复编号的行。
+	existingIssues, err := s.db.Issue.Select().Where("repository_id = ?", repoID).All()
+	if err != nil {
+		return result, fmt.Errorf("load existing issues: %w", err)
+	}
 	for _, issue := range existingIssues {
 		existingIssueMap[issue.Number] = issue
 	}
@@ -274,6 +279,14 @@ func (s *SyncService) SyncGitHubIssuesGraphQL(ctx context.Context, repoID int64,
 				CommentsCount: int(node.Comments.TotalCount),
 				CreatedAt:     node.CreatedAt.Time,
 				UpdatedAt:     node.UpdatedAt.Time,
+			}
+			// 另一条同步可能在预加载之后已经插入了同一个 number，
+			// 插入前再确认一次，命中就转为更新。
+			if rows, err := s.db.Issue.Select().
+				Where("repository_id = ? AND number = ?", repoID, issue.Number).All(); err == nil && len(rows) > 0 {
+				existingIssueMap[issue.Number] = rows[0]
+				toUpdate = append(toUpdate, issueNode{node: node, existing: rows[0]})
+				continue
 			}
 			if err := s.db.Issue.Insert().One(issue); err != nil {
 				s.warnf("failed to insert Issue #%d: %v", issue.Number, err)
@@ -446,7 +459,10 @@ func (s *SyncService) SyncGitHubPRsGraphQL(ctx context.Context, repoID int64, ow
 	}
 
 	existingPRMap := make(map[int]*models.PullRequest)
-	existingPRs, _ := s.db.PullRequest.Select().Where("repository_id = ?", repoID).All()
+	existingPRs, err := s.db.PullRequest.Select().Where("repository_id = ?", repoID).All()
+	if err != nil {
+		return result, fmt.Errorf("load existing pull requests: %w", err)
+	}
 	for _, pr := range existingPRs {
 		existingPRMap[pr.Number] = pr
 	}
@@ -546,6 +562,12 @@ func (s *SyncService) SyncGitHubPRsGraphQL(ctx context.Context, repoID int64, ow
 				CommentsCount: int(node.Comments.TotalCount),
 				CreatedAt:     node.CreatedAt.Time,
 				UpdatedAt:     node.UpdatedAt.Time,
+			}
+			if rows, err := s.db.PullRequest.Select().
+				Where("repository_id = ? AND number = ?", repoID, pr.Number).All(); err == nil && len(rows) > 0 {
+				existingPRMap[pr.Number] = rows[0]
+				toUpdate = append(toUpdate, prNode{node: node, existing: rows[0]})
+				continue
 			}
 			if err := s.db.PullRequest.Insert().One(pr); err != nil {
 				s.warnf("failed to insert PR #%d: %v", pr.Number, err)

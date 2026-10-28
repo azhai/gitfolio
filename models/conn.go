@@ -55,6 +55,9 @@ func OpenDB(cfg drivers.DatabaseConfig) (*Database, error) {
 		if err != nil {
 			return nil, fmt.Errorf("Failed to migrate database: %v", err)
 		}
+		if err := CleanupDuplicateRepositoryNumbers(db); err != nil {
+			return nil, fmt.Errorf("Failed to clean up duplicate issues/PRs: %v", err)
+		}
 		if err := EnsureETagTable(db); err != nil {
 			return nil, fmt.Errorf("Failed to ensure etag table: %v", err)
 		}
@@ -75,6 +78,12 @@ func OpenDB(cfg drivers.DatabaseConfig) (*Database, error) {
 		}
 		if err := EnsureRepoRootColumns(db); err != nil {
 			return nil, fmt.Errorf("Failed to ensure repo_root columns: %v", err)
+		}
+		if err := BackfillTimestamps(db); err != nil {
+			return nil, fmt.Errorf("Failed to backfill timestamps: %v", err)
+		}
+		if err := EnsureUniqueRepositoryNumbers(db); err != nil {
+			return nil, fmt.Errorf("Failed to ensure unique issue/PR numbers: %v", err)
 		}
 	}
 	return db, nil

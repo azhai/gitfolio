@@ -555,7 +555,12 @@ func (s *SyncService) SyncGiteaIssues(ctx context.Context, repoID int64, owner, 
 				UpdatedAt:     giteaIssue.UpdatedAt,
 			}
 
-			existingIssues, _ := s.db.Issue.Select().Where("repository_id = ? AND number = ?", repoID, giteaIssue.Number).All()
+			existingIssues, err := s.db.Issue.Select().Where("repository_id = ? AND number = ?", repoID, giteaIssue.Number).All()
+			if err != nil {
+				// 读失败时不能当成“没有旧数据”，否则会插入重复编号的行。
+				s.warnf("skip issue #%d: %v", giteaIssue.Number, err)
+				continue
+			}
 			if len(existingIssues) > 0 {
 				issue = *existingIssues[0]
 				issue.Title = giteaIssue.Title
@@ -669,7 +674,11 @@ func (s *SyncService) SyncGiteaPRs(ctx context.Context, repoID int64, owner, rep
 				UpdatedAt:     giteaPR.UpdatedAt,
 			}
 
-			existingPRs, _ := s.db.PullRequest.Select().Where("repository_id = ? AND number = ?", repoID, giteaPR.Number).All()
+			existingPRs, err := s.db.PullRequest.Select().Where("repository_id = ? AND number = ?", repoID, giteaPR.Number).All()
+			if err != nil {
+				s.warnf("skip pull request #%d: %v", giteaPR.Number, err)
+				continue
+			}
 			if len(existingPRs) > 0 {
 				pr = *existingPRs[0]
 				pr.Title = giteaPR.Title
