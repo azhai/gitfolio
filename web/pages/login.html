@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>GitFolio · 登录</title>
+    <link rel="stylesheet" href="/assets/css/app.css" />
+  </head>
+  <body class="auth-body" data-page="login">
+    <div class="auth-wrap" x-data="loginPage">
+      <div class="auth-box">
+        <div class="auth-top">
+          <a class="text-sm muted" href="/">← <span x-text="t('nav.home')"></span></a>
+          <div class="lang-switch" data-lang="zh" style="width: 110px; height: 34px">
+            <div class="lang-switch__thumb"></div>
+            <button class="is-active" @click="window.__setLang('zh')">中文</button>
+            <button @click="window.__setLang('en')">EN</button>
+          </div>
+        </div>
+
+        <div class="auth-head">
+          <img src="/logo-lagoon.svg" alt="GitFolio" class="auth-logo" />
+          <span class="auth-brand">GitFolio</span>
+        </div>
+        <p class="auth-sub" x-text="t('auth.signInToContinue')"></p>
+
+        <form class="auth-card" @submit.prevent="submit">
+          <div class="field">
+            <label class="label" for="username" x-text="t('auth.username')"></label>
+            <input id="username" class="input" x-model="form.username" autocomplete="username"
+              :placeholder="t('auth.placeholderUsername')" autofocus />
+          </div>
+
+          <div class="field">
+            <label class="label" for="password" x-text="t('auth.password')"></label>
+            <input id="password" class="input" type="password" x-model="form.password"
+              autocomplete="current-password" :placeholder="t('auth.placeholderPassword')" />
+          </div>
+
+          <div class="alert alert--error mb-16" x-show="error" x-cloak x-text="error"></div>
+
+          <button class="btn btn--primary btn--lg btn--block" type="submit" :disabled="loading">
+            <span class="spinner spinner--sm" x-show="loading" x-cloak></span>
+            <span x-text="loading ? t('auth.signingIn') : t('auth.signIn')"></span>
+          </button>
+        </form>
+
+        <p class="auth-foot" x-text="t('auth.forgotPasswordContactAdmin')"></p>
+      </div>
+    </div>
+
+    <script type="module" src="/assets/js/app.js"></script>
+  </body>
+</html>

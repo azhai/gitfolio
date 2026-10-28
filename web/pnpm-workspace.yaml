@@ -3,3 +3,5 @@
 # ERR_PNPM_IGNORED_BUILDS on a fresh machine.
 allowBuilds:
   esbuild: true
+minimumReleaseAgeExclude:
+  - lucide@1.63.0

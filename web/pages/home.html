@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>GitFolio · 仪表盘</title>
+    <link rel="stylesheet" href="/assets/css/app.css" />
+  </head>
+  <body class="app-body" data-page="home">
+    <div id="app-shell"></div>
+
+    <main class="app-main" x-data="dashboard">
+      <div class="loading-box" x-show="loading">
+        <span class="spinner"></span>
+        <span x-text="t('common.loading')"></span>
+      </div>
+
+      <div x-show="!loading" x-cloak>
+        <section class="hero">
+          <div class="hero__title">
+            <img src="/logo-lagoon.svg" alt="" class="hero__logo" />
+            <h1 x-text="t('dashboard.welcome')"></h1>
+          </div>
+          <p class="hero__sub" x-text="t('dashboard.subtitle')"></p>
+        </section>
+
+        <div class="grid grid--4 mb-24">
+          <template x-for="card in cards" :key="card.label">
+            <div class="stat">
+              <div class="stat__label" x-text="card.label"></div>
+              <div class="stat__value" x-text="card.value"></div>
+              <div class="stat__sub" x-text="card.sub"></div>
+            </div>
+          </template>
+        </div>
+
+        <div class="grid grid--3">
+          <section class="card">
+            <div class="card__head">
+              <span class="card__title" x-text="t('dashboard.recentProjects')"></span>
+              <a class="text-xs muted" href="/projects" x-text="t('common.more')"></a>
+            </div>
+            <div class="list">
+              <template x-for="repo in repos" :key="repo.id || repo.name">
+                <a class="list__item" :href="repoUrl(repo)">
+                  <div class="grow">
+                    <div class="row gap-8 mb-4">
+                      <span class="strong green truncate" x-text="repo.name"></span>
+                      <span class="badge" :class="projectTypeClass(repo.project_type)"
+                        x-text="projectTypeLabel(repo.project_type)"></span>
+                    </div>
+                    <div class="text-sm muted truncate"
+                      x-text="repo.description || t('dashboard.noDescription')"></div>
+                  </div>
+                </a>
+              </template>
+              <div class="empty" x-show="!repos.length" x-cloak>
+                <div class="empty__desc" x-text="t('dashboard.noProjects')"></div>
+              </div>
+            </div>
+          </section>
+
+          <section class="card">
+            <div class="card__head">
+              <span class="card__title" x-text="t('dashboard.recentIssues')"></span>
+            </div>
+            <div class="list">
+              <template x-for="issue in issues" :key="issue.id || issue.number">
+                <a class="list__item" :href="'/' + issue.owner + '/' + issue.repo + '/issues/' + issue.number">
+                  <div class="grow">
+                    <div class="row gap-6 mb-4">
+                      <span class="badge" :class="issue.is_closed ? 'badge--red' : 'badge--green'"
+                        x-text="issue.is_closed ? t('common.closed') : t('common.open')"></span>
+                      <span class="truncate strong" x-text="issue.title"></span>
+                    </div>
+                    <div class="text-sm muted">
+                      <span x-text="'#' + issue.number + ' · ' + issue.owner + '/' + issue.repo + ' · '"></span>
+                      <span x-text="timeAgo(issue.created_at)"></span>
+                    </div>
+                  </div>
+                </a>
+              </template>
+              <div class="empty" x-show="!issues.length" x-cloak>
+                <div class="empty__desc" x-text="t('dashboard.noIssues')"></div>
+              </div>
+            </div>
+          </section>
+
+          <section class="card">
+            <div class="card__head">
+              <span class="card__title" x-text="t('dashboard.recentTasks')"></span>
+            </div>
+            <div class="list">
+              <template x-for="task in tasks" :key="task.id">
+                <a class="list__item" :href="'/' + task.owner + '/' + task.repo + '/tasks/' + task.id">
+                  <div class="grow">
+                    <div class="row gap-6 mb-4">
+                      <span class="badge" :style="'background:' + statusOf(task.status).bg + ';color:' + statusOf(task.status).color"
+                        x-text="statusOf(task.status).label"></span>
+                      <span class="truncate strong" x-text="task.title"></span>
+                    </div>
+                    <div class="text-sm muted">
+                      <span x-text="'#' + task.id + ' · ' + task.owner + '/' + task.repo"></span>
+                    </div>
+                  </div>
+                </a>
+              </template>
+              <div class="empty" x-show="!tasks.length" x-cloak>
+                <div class="empty__desc" x-text="t('dashboard.noTasks')"></div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+    </main>
+
+    <div id="app-footer"></div>
+    <script type="module" src="/assets/js/app.js"></script>
+  </body>
+</html>

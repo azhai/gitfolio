@@ -34,10 +34,8 @@ endif
 all: clean one build
 
 front:
-	@echo "Compile frontend ..."
-	cd web && npx vite build --minify --mode production
-	cp web/landing.html web/dist/landing.html
-	cp web/screenshot-1.png web/dist/screenshot-1.png
+	@echo "Copy frontend ..."
+	cd web && node scripts/build.mjs
 
 build: $(BINFILES)
 	@echo "✅ Build success."

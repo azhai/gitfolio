@@ -79,6 +79,36 @@ func main() {
 	}
 }
 
+// pageRoutes maps public URLs to the static HTML file that renders them.
+// Sub-paths (e.g. /snippets/12/edit) share one document; the page script reads
+// the remaining segments from the location.
+var pageRoutes = []struct{ prefix, file string }{
+	{"/login", "login.html"},
+	{"/home", "home.html"},
+	{"/projects", "projects.html"},
+	{"/groups", "groups.html"},
+	{"/activity", "activity.html"},
+	{"/snippets", "snippets.html"},
+	{"/users", "users.html"},
+	{"/admin", "admin.html"},
+	{"/settings", "settings.html"},
+}
+
+// pageFor resolves a request path to a document. Anything with an owner and a
+// repository segment (/owner/repo/...) is served by the project workspace shell.
+func pageFor(path string) string {
+	for _, route := range pageRoutes {
+		if path == route.prefix || strings.HasPrefix(path, route.prefix+"/") {
+			return route.file
+		}
+	}
+	segs := strings.Split(strings.Trim(path, "/"), "/")
+	if len(segs) >= 2 && segs[0] != "" && segs[0] != "api" && segs[0] != "uploads" {
+		return "project.html"
+	}
+	return ""
+}
+
 func CreateApp() *fiber.App {
 	app := fiber.New(fiber.Config{
 		AppName:      "GitFolio",
@@ -86,7 +116,6 @@ func CreateApp() *fiber.App {
 	})
 	app.Use(compress.New(), cors.New(), logger.New())
 
-	spaIndex, _ := fs.ReadFile(distFS, "index.html")
 	landingHTML, _ := fs.ReadFile(distFS, "landing.html")
 
 	distHandler := static.New("", static.Config{FS: distFS})
@@ -107,8 +136,16 @@ func CreateApp() *fiber.App {
 		if strings.HasPrefix(path, "/api/") {
 			return c.Status(404).JSON(fiber.Map{"error": "API endpoint not found"})
 		}
+		file := pageFor(path)
+		if file == "" {
+			return c.Status(fiber.StatusNotFound).SendString("Not found")
+		}
+		body, err := fs.ReadFile(distFS, file)
+		if err != nil {
+			return c.Status(fiber.StatusNotFound).SendString("Page not available: " + file)
+		}
 		c.Set("Content-Type", "text/html; charset=utf-8")
-		return c.Send(spaIndex)
+		return c.Send(body)
 	})
 
 	return app
