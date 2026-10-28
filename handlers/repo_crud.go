@@ -206,6 +206,7 @@ func GetRepository(c fiber.Ctx) error {
 		return err
 	}
 	response := ToRepositoryResponse(result.Repo, result.Owner, result.Group)
+	response.CanManage = helpers.CheckRepoAdminPermission(c, result)
 
 	userID := middleware.GetCurrentUserID(c)
 	if userID > 0 {
@@ -340,6 +341,13 @@ func ListRepositories(c fiber.Ctx) error {
 			}
 		}
 
+		// 每个团队的管理权限只算一次，避免列表里逐行查询。
+		groupManages := make(map[int64]bool, len(groupsMap))
+		for id := range groupsMap {
+			groupManages[id] = helpers.CheckGroupAdminPermission(c, id)
+		}
+		sysAdmin := middleware.GetCurrentUserRole(c) == helpers.SysRoleAdmin
+
 		for _, repo := range repos {
 			var ownerUser *models.User
 			var ownerGroup *models.Group
@@ -354,7 +362,16 @@ func ListRepositories(c fiber.Ctx) error {
 					continue
 				}
 			}
-			response = append(response, ToRepositoryResponse(repo, ownerUser, ownerGroup))
+			item := ToRepositoryResponse(repo, ownerUser, ownerGroup)
+			switch {
+			case sysAdmin:
+				item.CanManage = true
+			case repo.OwnerType == "group":
+				item.CanManage = groupManages[repo.OwnerID]
+			default:
+				item.CanManage = userID != 0 && userID == repo.OwnerID
+			}
+			response = append(response, item)
 		}
 	}
 
@@ -412,12 +429,18 @@ func UpdateRepository(c fiber.Ctx) error {
 	}
 
 	db := models.GetDB()
+	// 老数据可能没有时间戳，保存前补上；已有值不会被覆盖。
+	result.Repo.Stamp()
 	err = db.Repository.Save().One(result.Repo)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update repository"})
 	}
 
-	return c.Status(fiber.StatusOK).JSON(result.Repo)
+	// Same shape as GET, so clients can swap the response straight into the
+	// repository they already hold instead of re-reading it.
+	response := ToRepositoryResponse(result.Repo, result.Owner, result.Group)
+	response.CanManage = helpers.CheckRepoAdminPermission(c, result)
+	return c.Status(fiber.StatusOK).JSON(response)
 }
 
 // DeleteRepository 删除仓库

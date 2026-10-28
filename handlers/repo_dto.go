@@ -61,8 +61,10 @@ type RepositoryResponse struct {
 	ClosedPRsCount    int    `json:"closed_prs_count"`
 	IsStarred         bool   `json:"is_starred"`
 	IsWatched         bool   `json:"is_watched"`
-	MigrateStatus     string `json:"migrate_status"`
-	MigrateError      string `json:"migrate_error"`
+	// CanManage 表示当前登录用户是否可以修改仓库设置（所有者、团队管理员或系统管理员）。
+	CanManage     bool   `json:"can_manage"`
+	MigrateStatus string `json:"migrate_status"`
+	MigrateError  string `json:"migrate_error"`
 }
 
 type ContributorResponse struct {

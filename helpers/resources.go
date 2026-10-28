@@ -47,40 +47,62 @@ func (r *ResourceResult) RepoRoot() string {
 	return ""
 }
 
-// GetOwnerAndRepo 根据用户名或团队名和仓库名查找所有者和仓库
-func GetOwnerAndRepo(c fiber.Ctx, ownerName, repoName string) (*ResourceResult, error) {
+// FindOwnerAndRepo resolves an owner/repo pair without touching the request
+// context. It returns nil when either side is missing, so callers that have no
+// response to write (the page router, background jobs) can test for existence.
+func FindOwnerAndRepo(ownerName, repoName string) *ResourceResult {
 	db := models.GetDB()
+	if db == nil || ownerName == "" || repoName == "" {
+		return nil
+	}
 
+	// 用户名和团队名共享同一个命名空间，但仓库归属不同（owner_type）。
 	ownerUser, _ := db.User.Select().Where("username = ?", ownerName).One()
 	if ownerUser != nil {
 		repo, err := db.Repository.Select().Where("owner_id = ? AND owner_type = 'user' AND name = ?", ownerUser.ID, repoName).One()
-		if err == nil {
-			return &ResourceResult{
-				Owner: ownerUser,
-				Repo:  repo,
-			}, nil
+		if err == nil && repo != nil {
+			return &ResourceResult{Owner: ownerUser, Repo: repo}
 		}
+	} else {
+		ownerUser = nil
 	}
 
 	group, _ := db.Group.Select().Where("name = ?", ownerName).One()
 	if group != nil {
 		repo, err := db.Repository.Select().Where("owner_id = ? AND owner_type = 'group' AND name = ?", group.ID, repoName).One()
-		if err == nil {
-			return &ResourceResult{
-				Group: group,
-				Repo:  repo,
-			}, nil
+		if err == nil && repo != nil {
+			return &ResourceResult{Group: group, Repo: repo}
 		}
 	}
 
-	repo, _ := db.Repository.Select().Where("project_type = 'local' AND name = ?", repoName).One()
-	if repo != nil {
-		return &ResourceResult{
-			Repo: repo,
-		}, nil
+	// 只允许用 "local" 这个展示名访问没有归属的遗留仓库。
+	// 之前这里按仓库名匹配任意 local 项目，导致 /任意用户名/仓库名 能拿到别人的仓库。
+	if ownerName == "local" {
+		repo, err := db.Repository.Select().Where("owner_id = 0 AND project_type = 'local' AND name = ?", repoName).One()
+		if err == nil && repo != nil {
+			return &ResourceResult{Repo: repo}
+		}
+	}
+	return nil
+}
+
+// GetOwnerAndRepo 根据用户名或团队名和仓库名查找所有者和仓库
+func GetOwnerAndRepo(c fiber.Ctx, ownerName, repoName string) (*ResourceResult, error) {
+	if ownerName == "" {
+		return nil, JSONError(c, HTTPStatusNotFound, "Owner not found")
 	}
 
-	return nil, JSONError(c, HTTPStatusNotFound, "Owner not found")
+	if result := FindOwnerAndRepo(ownerName, repoName); result != nil {
+		return result, nil
+	}
+
+	db := models.GetDB()
+	ownerUser, _ := db.User.Select().Where("username = ?", ownerName).One()
+	group, _ := db.Group.Select().Where("name = ?", ownerName).One()
+	if ownerUser == nil && group == nil {
+		return nil, JSONError(c, HTTPStatusNotFound, "Owner not found")
+	}
+	return nil, JSONError(c, HTTPStatusNotFound, "Repository not found")
 }
 
 // GetOwnerAndRepoFromParams 从 URL 路径参数中提取所有者和仓库名并查找
