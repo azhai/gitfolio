@@ -3,6 +3,8 @@ package models
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/azhai/goent/rename"
@@ -101,6 +103,170 @@ func EnsureRepositoryStatsPRColumns(db *Database) error {
 	}
 	closedRen := rename.Column{Table: "repository_stats", OldName: "closed_p_rs_count", NewName: "closed_prs_count"}
 	return closedRen.Apply(db.DB)
+}
+
+// EnsureRepoRootColumns ensures the user and group tables have a repo_root
+// column. Databases created before the "own repository directory" feature do
+// not have it, and AutoMigrate does not add columns to existing tables.
+func EnsureRepoRootColumns(db *Database) error {
+	if db == nil || db.DB == nil {
+		return fmt.Errorf("database not initialized")
+	}
+	for _, table := range []string{"user", "group"} {
+		if err := ensureColumn(db, table, "repo_root", "TEXT"); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// ensureColumn adds a column to a table when it is missing.
+func ensureColumn(db *Database, table, column, colType string) error {
+	ctx := context.Background()
+	driverName := strings.ToLower(db.Driver().Name())
+
+	var cnt int
+	switch driverName {
+	case "postgres", "postgresql":
+		err := db.RawQueryRowContext(ctx,
+			"SELECT count(*) FROM information_schema.columns WHERE table_name = ? AND column_name = ?",
+			table, column).Scan(&cnt)
+		if err != nil {
+			return fmt.Errorf("failed to inspect %s.%s: %w", table, column, err)
+		}
+	default: // sqlite: PRAGMA table_info
+		err := db.RawQueryRowContext(ctx,
+			"SELECT count(*) FROM pragma_table_info(?) WHERE name = ?", table, column).Scan(&cnt)
+		if err != nil {
+			return fmt.Errorf("failed to inspect %s.%s: %w", table, column, err)
+		}
+	}
+	if cnt > 0 {
+		return nil
+	}
+
+	sql := fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s DEFAULT ''", table, column, colType)
+	if err := db.RawExecContext(ctx, sql); err != nil {
+		return fmt.Errorf("failed to add %s.%s column: %w", table, column, err)
+	}
+	// 把 NULL 归一化为默认空字符串，避免读取时出现 NULL 扫描错误。
+	_ = db.RawExecContext(ctx, fmt.Sprintf("UPDATE %s SET %s = '' WHERE %s IS NULL", table, column, column))
+	return nil
+}
+
+// MigrateOrphanRepositories 迁移旧版本的本地仓库：
+//   - OwnerID = 0 的仓库（旧代码创建本地项目时清空了归属）挂到第一个管理员账号；
+//   - LocalPath 为空的仓库按当前存储规则回填落盘路径，已存在的旧目录优先沿用。
+//
+// globalRepoRoot 是全局裸仓库根目录，legacyLocalRoot 是旧版本平铺本地仓库的目录。
+func MigrateOrphanRepositories(db *Database, globalRepoRoot, legacyLocalRoot string) error {
+	if db == nil || db.DB == nil {
+		return fmt.Errorf("database not initialized")
+	}
+
+	repos, err := db.Repository.Select().All()
+	if err != nil {
+		return fmt.Errorf("failed to load repositories: %w", err)
+	}
+	if len(repos) == 0 {
+		return nil
+	}
+
+	orphans := make([]*Repository, 0)
+	for _, repo := range repos {
+		if repo.OwnerID == 0 {
+			orphans = append(orphans, repo)
+		}
+	}
+
+	var fallbackOwnerID int64
+	if len(orphans) > 0 {
+		admin, err := db.User.Select().Where("role = ?", "admin").One()
+		if err != nil || admin == nil {
+			// 没有管理员时退化为第一个用户，避免仓库永远无主。
+			user, err2 := db.User.Select().One()
+			if err2 != nil || user == nil {
+				return fmt.Errorf("no user available to own %d orphan repositories", len(orphans))
+			}
+			fallbackOwnerID = user.ID
+		} else {
+			fallbackOwnerID = admin.ID
+		}
+	}
+
+	users := make(map[int64]*User)
+	groups := make(map[int64]*Group)
+	for _, repo := range repos {
+		switch repo.OwnerType {
+		case "group":
+			if _, ok := groups[repo.OwnerID]; !ok && repo.OwnerID != 0 {
+				if g, err := db.Group.Select().Where("id = ?", repo.OwnerID).One(); err == nil && g != nil {
+					groups[repo.OwnerID] = g
+				}
+			}
+		default:
+			if _, ok := users[repo.OwnerID]; !ok && repo.OwnerID != 0 {
+				if u, err := db.User.Select().Where("id = ?", repo.OwnerID).One(); err == nil && u != nil {
+					users[repo.OwnerID] = u
+				}
+			}
+		}
+	}
+
+	for _, repo := range repos {
+		changed := false
+		if repo.OwnerID == 0 && fallbackOwnerID != 0 {
+			repo.OwnerID = fallbackOwnerID
+			repo.OwnerType = "user"
+			if _, ok := users[fallbackOwnerID]; !ok {
+				if user, err := db.User.Select().Where("id = ?", fallbackOwnerID).One(); err == nil && user != nil {
+					users[fallbackOwnerID] = user
+				}
+			}
+			changed = true
+		}
+
+		account, repoRoot := accountAndRootFor(repo, users, groups)
+		if strings.TrimSpace(repo.LocalPath) == "" {
+			repo.LocalPath = resolveExistingPath(globalRepoRoot, legacyLocalRoot, account, repoRoot, repo.Name)
+			changed = true
+		}
+		if changed {
+			if err := db.Repository.Save().One(repo); err != nil {
+				return fmt.Errorf("failed to migrate repository %d (%s): %w", repo.ID, repo.Name, err)
+			}
+		}
+	}
+
+	return nil
+}
+
+// accountAndRootFor 返回仓库所属账号的名称与自有仓库目录。
+func accountAndRootFor(repo *Repository, users map[int64]*User, groups map[int64]*Group) (string, string) {
+	if repo.OwnerType == "group" {
+		if g, ok := groups[repo.OwnerID]; ok && g != nil {
+			return g.Name, g.RepoRoot
+		}
+	} else if u, ok := users[repo.OwnerID]; ok && u != nil {
+		return u.Username, u.RepoRoot
+	}
+	return "local", ""
+}
+
+// resolveExistingPath 计算迁移时使用的落盘路径：
+// 优先沿用磁盘上已存在的旧目录，否则按当前规则给出目标路径。
+func resolveExistingPath(globalRepoRoot, legacyLocalRoot, account, repoRoot, name string) string {
+	target := ResolveRepoLocationUnder(globalRepoRoot, account, repoRoot, name).Path
+	if _, err := os.Stat(target); err == nil {
+		return target
+	}
+	if legacyLocalRoot != "" {
+		legacy := filepath.Join(legacyLocalRoot, name)
+		if _, err := os.Stat(legacy); err == nil {
+			return legacy
+		}
+	}
+	return target
 }
 
 // EnsureIssueStatusColumn ensures the issue table has a status column.

@@ -73,6 +73,9 @@ func OpenDB(cfg drivers.DatabaseConfig) (*Database, error) {
 		if err := EnsureIssueStatusColumn(db); err != nil {
 			return nil, fmt.Errorf("Failed to ensure issue.status column: %v", err)
 		}
+		if err := EnsureRepoRootColumns(db); err != nil {
+			return nil, fmt.Errorf("Failed to ensure repo_root columns: %v", err)
+		}
 	}
 	return db, nil
 }

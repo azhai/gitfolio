@@ -2,6 +2,7 @@ package models
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -130,5 +131,71 @@ func TestEnsureETagTable_CreatesTable(t *testing.T) {
 	}
 	if count != 1 {
 		t.Fatalf("expected etag table to exist, got count %d", count)
+	}
+}
+
+func TestEnsureRepoRootColumns_AddsColumns(t *testing.T) {
+	db := openTestDB(t)
+	defer CloseDB()
+
+	for _, table := range []string{"user", "group"} {
+		// 模拟旧数据库：SQLite 3.35+ 支持 DROP COLUMN
+		_ = db.RawExecContext(context.Background(), "ALTER TABLE "+table+" DROP COLUMN repo_root")
+
+		if err := EnsureRepoRootColumns(db); err != nil {
+			t.Fatalf("ensure repo_root for %s: %v", table, err)
+		}
+
+		var name string
+		err := db.RawQueryRowContext(context.Background(),
+			"SELECT name FROM pragma_table_info(?) WHERE name = 'repo_root'", table).Scan(&name)
+		if err != nil {
+			t.Fatalf("check repo_root on %s: %v", table, err)
+		}
+		if name != "repo_root" {
+			t.Fatalf("expected repo_root column on %s, got %s", table, name)
+		}
+	}
+}
+
+func TestMigrateOrphanRepositories(t *testing.T) {
+	db := openTestDB(t)
+	defer CloseDB()
+
+	admin := &User{Username: "root-admin", Email: "admin@example.com", Role: "admin"}
+	if err := db.User.Insert().One(admin); err != nil {
+		t.Fatalf("insert admin: %v", err)
+	}
+
+	// 旧版本创建的本地项目：无归属、无落盘记录
+	orphan := &Repository{Name: "legacy-repo", ProjectType: "local"}
+	if err := db.Repository.Insert().One(orphan); err != nil {
+		t.Fatalf("insert orphan repo: %v", err)
+	}
+
+	globalRoot := t.TempDir()
+	legacyRoot := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(legacyRoot, "legacy-repo", ".git"), 0755); err != nil {
+		t.Fatalf("create legacy dir: %v", err)
+	}
+
+	if err := MigrateOrphanRepositories(db, globalRoot, legacyRoot); err != nil {
+		t.Fatalf("migrate orphan repositories: %v", err)
+	}
+
+	got, err := db.Repository.Select().Where("id = ?", orphan.ID).One()
+	if err != nil {
+		t.Fatalf("reload repo: %v", err)
+	}
+	if got.OwnerID != admin.ID {
+		t.Errorf("OwnerID = %d, want admin %d", got.OwnerID, admin.ID)
+	}
+	if got.OwnerType != "user" {
+		t.Errorf("OwnerType = %q, want user", got.OwnerType)
+	}
+	// 磁盘上已存在的旧目录必须被沿用
+	want := filepath.Join(legacyRoot, "legacy-repo")
+	if got.LocalPath != want {
+		t.Errorf("LocalPath = %q, want %q", got.LocalPath, want)
 	}
 }
