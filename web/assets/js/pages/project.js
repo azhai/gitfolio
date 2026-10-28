@@ -111,6 +111,13 @@ Alpine.data('project', function () {
     fileSize: '',
     fileLangClass: '',
     readmeHtml: '',
+    canEditFile: false,
+    editing: false,
+    editContent: '',
+    editMessage: '',
+    savingFile: false,
+    showNewFile: false,
+    newFile: { path: '', message: '', content: '' },
 
     commits: [],
     commitPage: 1,
@@ -217,6 +224,9 @@ Alpine.data('project', function () {
       this.ownerUrl = this.repo.owner_type === 'group' ? '/groups/' + this.owner : '/users/' + this.owner
       this.canCreate = auth.isAuthenticated && !auth.isGuest
       this.canComment = this.canCreate
+      // 编辑文件等同于对仓库直接提交，权限要求与修改设置一致；
+      // 另外必须有工作区，裸仓库只能读。
+      this.canEditFile = this.canManage && !!this.repo.has_work_tree
       this.settings = {
         name: this.repo.name || '',
         description: this.repo.description || '',
@@ -281,6 +291,95 @@ Alpine.data('project', function () {
       this.fileSize = data && data.size ? String(data.size) : ''
       this.entries = []
       this.$nextTick(this.highlight.bind(this))
+    },
+
+    // ---------- editing ----------
+    // Editing writes through git and needs a checked-out working tree; a bare
+    // repository only has objects, so the backend refuses those edits.
+
+    startEdit: function () {
+      this.editContent = this.fileContent
+      this.editMessage = ''
+      this.editing = true
+    },
+
+    cancelEdit: function () {
+      this.editing = false
+    },
+
+    saveFile: async function () {
+      var message = (this.editMessage || '').trim()
+      if (!message) {
+        toast(t('fileViewer.messageRequired'), 'error')
+        return
+      }
+      this.savingFile = true
+      try {
+        await reposAPI.editFile(this.owner, this.repoName, this.filePath, this.editContent, message)
+        this.editing = false
+        toast(t('common.success'))
+        await this.openFile(this.filePath)
+        if (!this.dirPath) await this.loadReadme()
+      } catch (err) {
+        toast(err.message || t('common.failed'), 'error')
+      } finally {
+        this.savingFile = false
+      }
+    },
+
+    startNewFile: function () {
+      this.newFile = {
+        path: this.dirPath ? this.dirPath + '/' : '',
+        message: '',
+        content: '',
+      }
+      this.showNewFile = true
+    },
+
+    createFile: async function () {
+      var path = (this.newFile.path || '').trim().replace(/^\/+/, '')
+      var message = (this.newFile.message || '').trim()
+      if (!path) {
+        toast(t('fileViewer.pathRequired'), 'error')
+        return
+      }
+      if (!message) {
+        toast(t('fileViewer.messageRequired'), 'error')
+        return
+      }
+      this.savingFile = true
+      try {
+        await reposAPI.editFile(this.owner, this.repoName, path, this.newFile.content || '', message)
+        this.showNewFile = false
+        toast(t('common.success'))
+        window.location.href = this.base + '/tree/' + path.split('/').map(encodeURIComponent).join('/')
+      } catch (err) {
+        toast(err.message || t('common.failed'), 'error')
+      } finally {
+        this.savingFile = false
+      }
+    },
+
+    removeFile: async function () {
+      var path = this.filePath
+      var ok = await confirmBox({
+        title: t('fileViewer.deleteTitle'),
+        message: t('fileViewer.deleteBody', { path: path }),
+        danger: true,
+        confirmText: t('common.delete'),
+      })
+      if (!ok) return
+      this.savingFile = true
+      try {
+        await reposAPI.deleteFile(this.owner, this.repoName, path, 'Delete ' + path)
+        toast(t('fileViewer.deleted'))
+        var parent = path.split('/').slice(0, -1).join('/')
+        window.location.href = this.base + (parent ? '/tree/' + parent.split('/').map(encodeURIComponent).join('/') : '')
+      } catch (err) {
+        toast(err.message || t('common.failed'), 'error')
+      } finally {
+        this.savingFile = false
+      }
     },
 
     loadReadme: async function () {

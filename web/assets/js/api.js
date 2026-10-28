@@ -59,8 +59,8 @@ const api = {
     return request(url, { method: 'PUT', body: JSON.stringify(data) })
   },
 
-  del(url) {
-    return request(url, { method: 'DELETE' })
+  del(url, data) {
+    return request(url, { method: 'DELETE', body: data ? JSON.stringify(data) : undefined })
   },
 }
 
@@ -129,6 +129,13 @@ export const reposAPI = {
     var params = { ref: ref }
     if (hex) params.hex = 'true'
     return api.get('/' + owner + '/' + repo + '/file/' + encodedPath, params)
+  },
+  // 编辑与删除都会直接生成一个提交，仓库必须带工作区（裸仓库后端会拒绝）。
+  editFile(owner, repo, path, content, message) {
+    return api.post('/' + owner + '/' + repo + '/edit-file', { path: path, content: content, message: message })
+  },
+  deleteFile(owner, repo, path, message) {
+    return api.del('/' + owner + '/' + repo + '/file', { path: path, message: message })
   },
   rawFile(owner, repo, path, ref) {
     ref = ref || 'HEAD'

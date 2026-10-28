@@ -167,7 +167,28 @@
                 <span class="commit-brief__msg" x-text="lastCommit && lastCommit.message"></span>
                 <span class="text-xs muted-2" x-text="lastCommit && relativeTime(lastCommit.time)"></span>
               </a>
+              <button class="btn btn--sm" x-show="canEditFile" @click="startNewFile"
+                x-text="t('fileViewer.newFile')"></button>
             </div>
+            <div class="card__body" x-show="showNewFile" x-cloak>
+              <div class="form-grid">
+                <label class="label" x-text="t('fileViewer.filePath')"></label>
+                <input class="input mono" x-model="newFile.path" placeholder="src/main.go" />
+                <label class="label" x-text="t('fileViewer.commitMessage')"></label>
+                <input class="input" x-model="newFile.message"
+                  :placeholder="t('fileViewer.commitPlaceholder')" />
+              </div>
+              <textarea class="textarea mono mt-12" rows="12" x-model="newFile.content"></textarea>
+              <div class="row between mt-12">
+                <span class="text-xs muted-2" x-text="t('fileViewer.editHint')"></span>
+                <div class="row gap-8">
+                  <button class="btn btn--sm" @click="showNewFile = false" x-text="t('common.cancel')"></button>
+                  <button class="btn btn--primary btn--sm" :disabled="savingFile" @click="createFile"
+                    x-text="t('common.create')"></button>
+                </div>
+              </div>
+            </div>
+
             <table class="table">
               <tbody>
                 <tr x-show="dirPath">
@@ -204,10 +225,31 @@
             <div class="card">
               <div class="card__head">
                 <span class="card__title mono" x-text="filePath"></span>
-                <span class="text-xs muted-2" x-text="fileSize"></span>
+                <div class="row gap-8">
+                  <span class="text-xs muted-2" x-text="fileSize"></span>
+                  <button class="btn btn--sm" x-show="canEditFile && !editing" @click="startEdit"
+                    x-text="t('fileViewer.edit')"></button>
+                  <button class="btn btn--sm btn--danger-ghost" x-show="canEditFile && !editing" @click="removeFile"
+                    x-text="t('common.delete')"></button>
+                </div>
               </div>
-              <div class="code-block" style="border: 0; border-radius: 0">
+              <div class="code-block" style="border: 0; border-radius: 0" x-show="!editing">
                 <pre><code :class="fileLangClass" x-ref="fileCode" x-text="fileContent"></code></pre>
+              </div>
+              <div class="card__body" x-show="editing" x-cloak>
+                <textarea class="textarea mono" rows="18" x-model="editContent"></textarea>
+                <div class="form-grid mt-16">
+                  <label class="label" x-text="t('fileViewer.commitMessage')"></label>
+                  <input class="input" x-model="editMessage" :placeholder="t('fileViewer.commitPlaceholder')" />
+                </div>
+                <div class="row between mt-16">
+                  <span class="text-xs muted-2" x-text="t('fileViewer.editHint')"></span>
+                  <div class="row gap-8">
+                    <button class="btn btn--sm" @click="cancelEdit" x-text="t('common.cancel')"></button>
+                    <button class="btn btn--primary btn--sm" :disabled="savingFile" @click="saveFile"
+                      x-text="t('common.save')"></button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
