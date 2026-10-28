@@ -26,6 +26,7 @@ const ProjectTags = React.lazy(() => import('./pages/project/ProjectPages').then
 const ProjectReleases = React.lazy(() => import('./pages/project/ProjectPages').then(m => ({ default: m.ProjectReleases })))
 const ProjectTasks = React.lazy(() => import('./pages/project/ProjectPages').then(m => ({ default: m.ProjectTasks })))
 const ProjectSettings = React.lazy(() => import('./pages/project/ProjectPages').then(m => ({ default: m.ProjectSettings })))
+const ProjectSync = React.lazy(() => import('./pages/project/ProjectPages').then(m => ({ default: m.ProjectSync })))
 const ProjectStats = React.lazy(() => import('./pages/project/ProjectPages').then(m => ({ default: m.ProjectStats })))
 const IssueDetail = React.lazy(() => import('./pages/project/ProjectPages').then(m => ({ default: m.IssueDetail })))
 const PRDetail = React.lazy(() => import('./pages/project/ProjectPages').then(m => ({ default: m.PRDetail })))
@@ -86,6 +87,7 @@ function App() {
               <Route path="tasks/new" element={<NewTask />} />
               <Route path="tasks/:id" element={<TaskDetail />} />
               <Route path="stats" element={<ProjectStats />} />
+              <Route path="sync" element={<ProjectSync />} />
               <Route path="settings" element={<ProjectSettings />} />
             </Route>
             <Route

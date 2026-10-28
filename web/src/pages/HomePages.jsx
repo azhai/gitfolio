@@ -1,11 +1,11 @@
 // Merged home pages
 
 import React, { useEffect, useRef, useState } from 'react'
-import { Badge, Box, Button, Flex, HStack, Input, SimpleGrid, Spinner, Switch, Text, Textarea, VStack, useToast } from '@chakra-ui/react'
+import { Badge, Box, Button, Flex, HStack, Image, Input, SimpleGrid, Spinner, Switch, Text, Textarea, VStack, useToast } from '@chakra-ui/react'
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom'
 import { reposAPI, statsAPI } from '../api/index'
 import { t, timeAgo } from '../i18n'
-import { LuEye as Eye, LuGlobe as Globe, LuHardDrive as HardDrive, LuLock as Lock, LuRocket as Rocket, LuSparkles as Sparkles } from 'react-icons/lu'
+import { LuEye as Eye, LuGlobe as Globe, LuHardDrive as HardDrive, LuLock as Lock, LuSparkles as Sparkles } from 'react-icons/lu'
 import { IconMap, NavIcons } from '../components/Icons'
 import { useAuth } from '../contexts/AuthContext'
 
@@ -61,7 +61,8 @@ const Dashboard = () => {
         mb="24px"
       >
         <HStack gap="10px" mb="8px">
-          <Rocket size={28} color="white" />
+          {/* ponytail: CSS filter reuses the green SVG on a green background instead of maintaining a second white asset */}
+          <Image src="/logo-lagoon.svg" alt="GitFolio" boxSize="28px" objectFit="contain" filter="brightness(0) invert(1)" />
           <Text fontSize="28px" fontWeight="bold" color="white">{t('dashboard.welcome')}</Text>
         </HStack>
         <Text fontSize="15px" opacity="0.9">{t('dashboard.subtitle')}</Text>

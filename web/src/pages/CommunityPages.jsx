@@ -1,11 +1,11 @@
 // Merged community pages
 
 import React, { useEffect, useState } from 'react'
-import { Alert, AlertIcon, Badge, Box, Button, Flex, HStack, Input, Link, SimpleGrid, Spinner, Text, Textarea, VStack, useToast } from '@chakra-ui/react'
+import { Alert, AlertIcon, Badge, Box, Button, Flex, HStack, Image, Input, Link, SimpleGrid, Spinner, Text, Textarea, VStack, useToast } from '@chakra-ui/react'
 import { Link as RouterLink, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { groupsAPI, statsAPI } from '../api/index'
-import { LuLink2 as Link2, LuMapPin as MapPin, LuRocket as Rocket, LuUser as User, LuUsers as Users } from 'react-icons/lu'
+import { LuLink2 as Link2, LuMapPin as MapPin, LuUser as User, LuUsers as Users } from 'react-icons/lu'
 import { t, timeAgo } from '../i18n'
 import LanguageSwitcher from '../components/LanguageSwitcher'
 import { IconMap } from '../components/Icons'
@@ -77,7 +77,7 @@ const LoginPage = () => {
             <LanguageSwitcher width="110px" height="34px" />
           </Flex>
           <HStack gap="8px" justifyContent="center">
-            <Rocket size={32} color="#16a34a" />
+            <Image src="/logo-lagoon.svg" alt="GitFolio" boxSize="32px" objectFit="contain" />
             <Text fontSize="32px" fontWeight="bold" color="#16a34a">GitFolio</Text>
           </HStack>
           <Text fontSize="14px" color="#888" mt={2}>

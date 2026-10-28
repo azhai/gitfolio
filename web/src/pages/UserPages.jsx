@@ -4,9 +4,10 @@ import React, { useEffect, useRef, useState } from 'react'
 import { Avatar, Badge, Box, Button, Flex, HStack, Input, Modal, ModalBody, ModalCloseButton, ModalContent, ModalFooter, ModalHeader, ModalOverlay, Select, SimpleGrid, Spinner, Switch, Tab, TabList, TabPanel, TabPanels, Tabs, Text, Textarea, VStack, useColorModeValue, useDisclosure, useToast } from '@chakra-ui/react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { activitiesAPI, adminAPI, usersAPI } from '../api/index'
+import BackupPanel from '../components/settings/BackupPanel'
 import { getLanguage, t, timeAgo } from '../i18n/index'
 import { ActivityIcons, IconMap } from '../components/Icons'
-import { LuCalendar as Calendar, LuCamera as Camera, LuCircleCheck as CheckCircle, LuCircleX as XCircle, LuClock as Clock, LuFileText as FileText, LuGitFork as GitFork, LuKey as Key, LuKeyRound as KeyRound, LuLink2 as Link2, LuMail as Mail, LuMapPin as MapPin, LuPalette as Palette, LuPause as Pause, LuPencil as Pencil, LuPlay as Play, LuPlus as Plus, LuRefreshCw as RefreshCw, LuSettings as Settings, LuShield as Shield, LuStar as Star, LuTimer as Timer, LuUser as User, LuUsers as Users } from 'react-icons/lu'
+import { LuCalendar as Calendar, LuCamera as Camera, LuCircleCheck as CheckCircle, LuCircleX as XCircle, LuClock as Clock, LuDatabase as Database, LuFileText as FileText, LuGitFork as GitFork, LuKey as Key, LuKeyRound as KeyRound, LuLink2 as Link2, LuMail as Mail, LuMapPin as MapPin, LuPalette as Palette, LuPause as Pause, LuPencil as Pencil, LuPlay as Play, LuPlus as Plus, LuRefreshCw as RefreshCw, LuSettings as Settings, LuShield as Shield, LuStar as Star, LuTimer as Timer, LuUser as User, LuUsers as Users } from 'react-icons/lu'
 import { useAuth } from '../contexts/AuthContext'
 import { getAllThemes, getCodeTheme, getThemeStyle, setCodeTheme } from '../codeThemes'
 import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter'
@@ -1219,6 +1220,9 @@ var AdminPage = function() {
           <Tab fontSize="13px" fontWeight={500} _selected={{ color: '#16a34a', borderColor: '#16a34a' }}>
             <HStack gap="5px"><Clock size={14} /><Text>{t('admin.scheduledTasks')}</Text></HStack>
           </Tab>
+          <Tab fontSize="13px" fontWeight={500} _selected={{ color: '#16a34a', borderColor: '#16a34a' }}>
+            <HStack gap="5px"><Database size={14} /><Text>{t('admin.dataBackup')}</Text></HStack>
+          </Tab>
         </TabList>
 
         <TabPanels>
@@ -1227,6 +1231,9 @@ var AdminPage = function() {
           </TabPanel>
           <TabPanel p={0} pb="60px">
             <SyncManagementTab />
+          </TabPanel>
+          <TabPanel p={0} pb="60px">
+            <BackupPanel />
           </TabPanel>
         </TabPanels>
       </Tabs>

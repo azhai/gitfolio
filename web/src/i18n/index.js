@@ -38,6 +38,12 @@ export function t(key, params) {
   return obj
 }
 
+export function formatDuration(ms) {
+  if (!ms || ms <= 0) return '-'
+  if (ms < 1000) return ms + ' ms'
+  return (ms / 1000).toFixed(1) + ' s'
+}
+
 export function timeAgo(dateStr) {
   if (!dateStr) return ''
   var d = new Date(dateStr)

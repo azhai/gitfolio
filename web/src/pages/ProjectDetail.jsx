@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { useParams, Outlet } from 'react-router-dom'
-import { Box, Text, Spinner, HStack, Tabs, TabList, Tab, Badge, Flex, Button } from '@chakra-ui/react'
+import { Box, Text, Spinner, HStack, Tabs, TabList, Tab, Flex, Button } from '@chakra-ui/react'
 import { useNavigate, useLocation, Link as RouterLink } from 'react-router-dom'
+import ProjectTypeBadge from '../components/settings/ProjectTypeBadge'
 import { reposAPI } from '../api/index'
 import { t, timeAgo } from '../i18n/index'
 import { ProjectTabIcons, IconMap } from '../components/Icons'
@@ -13,6 +14,7 @@ const TABS = [
   { key: 'pull_requests', labelKey: 'project.mergeRequests', icon: 'pull_requests' },
   { key: 'issues', labelKey: 'project.issues', icon: 'issues' },
   { key: 'tasks', labelKey: 'project.tasks', icon: 'tasks' },
+  { key: 'sync', labelKey: 'project.sync', icon: 'sync' },
   { key: 'settings', labelKey: 'project.settings', icon: 'settings' },
 ]
 
@@ -95,7 +97,8 @@ const ProjectDetail = () => {
     if (path.startsWith(basePath + '/pull_requests')) return 2
     if (path.startsWith(basePath + '/issues')) return 3
     if (path.startsWith(basePath + '/tasks')) return 4
-    if (path.startsWith(basePath + '/settings')) return 5
+    if (path.startsWith(basePath + '/sync')) return 5
+    if (path.startsWith(basePath + '/settings')) return 6
     return 0
   }
 
@@ -134,30 +137,13 @@ const ProjectDetail = () => {
     <Box>
       <HStack gap="10px" mb="16px" align="center" flexWrap="wrap">
         <Text fontSize="20px" fontWeight="700" color="#333">{info.name || repo}</Text>
-        {info.project_type === 'mirror' && info.mirror_url && (
-            <Box as="a" href={info.mirror_url} target="_blank" rel="noopener noreferrer"
-              fontSize="11px" px="8px" py="2px" bg="#eff6ff" color="#2563eb" fontWeight="600"
-              border="1px solid #bfdbfe" rounded="4px" cursor="pointer"
-              _hover={{ bg: '#dbeafe', borderColor: '#93c5fd', textDecoration: 'none' }}
-              transition="all 0.15s">
-              {t('project.mirror')}
-            </Box>
-        )}
-        {info.project_type === 'mirror' && !info.mirror_url && (
-          <Badge fontSize="11px" px="8px" py="1px" rounded="4px"
-            bg="#eff6ff" color="#2563eb" fontWeight="500">{t('project.mirror')}</Badge>
-        )}
-        {info.project_type === 'public' && (
-          <Badge fontSize="11px" px="8px" py="1px" rounded="4px"
-            bg="#f0fdf4" color="#16a34a" fontWeight="500">{t('project.public')}</Badge>
-        )}
-        {info.project_type === 'private' && (
-          <Badge fontSize="11px" px="8px" py="1px" rounded="4px"
-            bg="#fff7ed" color="#ea580c" fontWeight="500">{t('project.private')}</Badge>
-        )}
-        {info.project_type === 'local' && (
-          <Badge fontSize="11px" px="8px" py="1px" rounded="4px"
-            bg="#f3f4f6" color="#6b7280" fontWeight="500">{t('common.local')}</Badge>
+        {info.project_type === 'mirror' && info.mirror_url ? (
+          <Box as="a" href={info.mirror_url} target="_blank" rel="noopener noreferrer"
+            textDecoration="none">
+            <ProjectTypeBadge type={info.project_type} />
+          </Box>
+        ) : (
+          <ProjectTypeBadge type={info.project_type} />
         )}
         <Text fontSize="13px" color="#666">{info.description || ''}</Text>
       </HStack>

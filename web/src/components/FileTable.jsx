@@ -237,7 +237,6 @@ const FileTable = ({ owner: propOwner, repo: propRepo, workingPanelToggle }) => 
   }, [currentRef, currentPath, loadTree])
 
   function handleRowClick(file) {
-    if (file.isDir) return
     if (file.status === 'D') return
     var refPrefix = currentRef ? currentRef + '/' : ''
     navigate('/' + owner + '/' + repo + '/tree/' + refPrefix + file.path)

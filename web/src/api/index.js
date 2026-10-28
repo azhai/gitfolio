@@ -246,11 +246,23 @@ export const reposAPI = {
   syncIssues(owner, repo) {
     return api.post('/' + owner + '/' + repo + '/sync/issues')
   },
-  syncPush(owner, repo, remoteUrl) {
-    return api.post('/' + owner + '/' + repo + '/sync/push', { remote_url: remoteUrl || '' })
+  syncPush(owner, repo, remoteUrl, remoteName) {
+    return api.post('/' + owner + '/' + repo + '/sync/push', { remote_url: remoteUrl || '', remote_name: remoteName || '' })
   },
   refreshStats(owner, repo) {
     return api.post('/' + owner + '/' + repo + '/refresh-stats')
+  },
+  refreshContributors(owner, repo) {
+    return api.post('/' + owner + '/' + repo + '/refresh-contributors')
+  },
+  getRemotes(owner, repo) {
+    return api.get('/' + owner + '/' + repo + '/remotes')
+  },
+  addRemote(owner, repo, name, url) {
+    return api.post('/' + owner + '/' + repo + '/remotes', { name, url })
+  },
+  removeRemote(owner, repo, name) {
+    return api.del('/' + owner + '/' + repo + '/remotes/' + encodeURIComponent(name))
   },
   retryMigrate(owner, repo) {
     return api.post('/' + owner + '/' + repo + '/retry-migrate')
@@ -263,6 +275,18 @@ export const reposAPI = {
   },
   getSyncLogs(owner, repo) {
     return api.get('/' + owner + '/' + repo + '/sync/logs')
+  },
+}
+
+export const backupsAPI = {
+  list() {
+    return api.get('/system/admin/backups')
+  },
+  create(backupType) {
+    return api.post('/system/admin/backups', { backup_type: backupType, name: '' })
+  },
+  restore(id) {
+    return api.post('/system/admin/backups/' + id + '/restore')
   },
 }
 

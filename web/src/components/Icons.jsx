@@ -91,6 +91,7 @@ export var ProjectTabIcons = {
   pull_requests: GitPullRequest,
   commits: FileDiff,
   tasks: ClipboardList,
+  sync: RefreshCw,
   settings: Settings,
 }
 
