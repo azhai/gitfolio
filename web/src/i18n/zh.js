@@ -504,7 +504,7 @@ var zh = {
     convertSideEffectPublicToPrivate: '转换为 Private 后项目仅对团队成员可见。',
     convertSideEffectPrivateToPublic: '转换为 Public 后项目将对所有人可见。',
     localCannotConvert: '本地项目不能转换为其他类型。',
-    mirrorProjectDesc: '镜像项目：从远程仓库同步，仅所有者/团队成员可见，不可推送远程',
+    mirrorProjectDesc: '镜像项目：从远程仓库同步，仅所有者/团队成员可见，不可推送远程，始终以裸仓库存放',
     publicProjectDesc: '公开项目：从远程仓库同步，所有人可见，可推送远程',
     privateProjectDesc: '私有项目：从远程仓库同步，仅所有者/团队成员可见，可推送远程',
     localProjectDesc: '本地项目：本地创建，可配置远程地址并推送，不支持从 GitHub 同步 Issues/PRs',

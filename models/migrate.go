@@ -263,7 +263,7 @@ func MigrateOrphanRepositories(db *Database, globalRepoRoot string) error {
 
 		account, repoRoot := accountAndRootFor(repo, users, groups)
 		if strings.TrimSpace(repo.LocalPath) == "" {
-			repo.LocalPath = ResolveRepoLocationUnder(globalRepoRoot, account, repoRoot, repo.Name).Path
+			repo.LocalPath = ResolveRepoLocationUnder(globalRepoRoot, account, repoRoot, repo.Name, repo.ProjectType).Path
 			changed = true
 		}
 		if changed {

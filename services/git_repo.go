@@ -16,7 +16,9 @@ import (
 type GitService struct {
 	repoRoot string
 	// ownerRoot 是账号的自有仓库目录，为空表示使用全局裸仓库目录。
-	ownerRoot         string
+	ownerRoot string
+	// projectType 影响落盘布局：镜像项目始终是裸仓库，其余项目在有自有目录时是普通仓库。
+	projectType       string
 	db                *models.Database
 	localPathOverride string
 }
@@ -44,9 +46,15 @@ func (s *GitService) WithOwnerRoot(root string) *GitService {
 	return s
 }
 
+// WithProjectType 设置项目类型，决定镜像项目是否强制使用裸仓库布局。
+func (s *GitService) WithProjectType(projectType string) *GitService {
+	s.projectType = projectType
+	return s
+}
+
 // locationFor 按服务自身的仓库根目录计算仓库落盘位置。
 func (s *GitService) locationFor(owner, name string) RepoLocation {
-	return models.ResolveRepoLocationUnder(s.repoRoot, owner, s.ownerRoot, name)
+	return models.ResolveRepoLocationUnder(s.repoRoot, owner, s.ownerRoot, name, s.projectType)
 }
 
 // getRepoPath 返回仓库的本地磁盘路径。
@@ -71,7 +79,7 @@ func (s *GitService) getRepoPath(owner, name string) string {
 // 账号设置了自有仓库目录时创建普通仓库（带工作区，并生成 README.md 作为首个提交）；
 // 否则创建裸仓库。
 func (s *GitService) InitRepository(owner string, repo *models.Repository) error {
-	loc := s.locationFor(owner, repo.Name)
+	loc := models.ResolveRepoLocationUnder(s.repoRoot, owner, s.ownerRoot, repo.Name, repo.ProjectType)
 
 	if err := os.MkdirAll(filepath.Dir(loc.Path), 0755); err != nil {
 		return fmt.Errorf("failed to create repository directory: %w", err)
@@ -122,23 +130,33 @@ func (s *GitService) DeleteRepository(owner, name string) error {
 	return os.RemoveAll(repoPath)
 }
 
-// CloneRepository 克隆远程仓库到本地，支持裸仓库镜像模式。
+// CloneRepository 克隆远程仓库到本地。
+//
+// 落盘形态：镜像项目（isMirror = true）始终是全局裸仓库目录下的裸仓库；
+// 其余项目在账号设置了自有仓库目录时是带工作区的普通仓库。
 // 实现为可续传的初始化 + fetch：
 //   - 如果目标目录已存在且是 git 仓库，则从 remote 继续 fetch；
 //   - 否则初始化裸仓库并添加 origin，然后 fetch；
 //   - 完整 fetch 失败时按分支逐个 fetch，已 fetch 的分支不会重复下载。
 //
 // 遇到 HTTP/2 错误时自动降级到 HTTP/1.1 重试。
-func (s *GitService) CloneRepository(owner, name, cloneURL string, isMirror bool) (string, error) {
+func (s *GitService) CloneRepository(owner, name, cloneURL, projectType string) (string, error) {
 	reposDir := s.repoRoot
 	if _, err := os.Stat(reposDir); os.IsNotExist(err) {
 		os.MkdirAll(reposDir, 0755)
 	}
 
-	localPath := s.getRepoPath(owner, name)
-	// 存储形态决定克隆出来的仓库是否带工作区：自有目录下为普通仓库，
-	// 全局目录下为裸仓库。isMirror 只影响调用方的语义标注。
-	bare := s.locationFor(owner, name).IsBare()
+	// 镜像项目始终落在全局裸仓库目录；其余项目在有自有目录时是普通仓库。
+	if projectType == "" {
+		projectType = s.projectType
+	}
+	loc := models.ResolveRepoLocationUnder(s.repoRoot, owner, s.ownerRoot, name, projectType)
+	localPath := loc.Path
+	if s.localPathOverride != "" {
+		localPath = s.localPathOverride
+		loc = RepoLocation{Path: localPath, Storage: models.StorageOfPath(localPath)}
+	}
+	bare := loc.IsBare()
 
 	var lastErr error
 	for attempt := 0; attempt < 2; attempt++ {

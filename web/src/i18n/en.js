@@ -503,7 +503,7 @@ var en = {
     convertSideEffectPublicToPrivate: 'After converting to Private, the project will only be visible to team members.',
     convertSideEffectPrivateToPublic: 'After converting to Public, the project will be visible to everyone.',
     localCannotConvert: 'Local projects cannot be converted to other types.',
-    mirrorProjectDesc: 'Mirror project: synced from remote, visible to owner/team members only, cannot push to remote',
+    mirrorProjectDesc: 'Mirror project: synced from remote, visible to owner/team members only, cannot push to remote, always stored as a bare repository',
     localProjectDesc: 'Local project: created locally, supports remote URL and push, does not sync Issues/PRs from GitHub',
     saveChanges: 'Save Changes',
     settingsSaved: 'Settings saved',

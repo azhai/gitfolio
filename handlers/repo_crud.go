@@ -101,7 +101,7 @@ func CreateRepository(c fiber.Ctx) error {
 	if repo.MigrateStatus == "cloning" {
 		go func() {
 			gitSvc := services.NewGitServiceWithDB(db).WithOwnerRoot(ownerUser.RepoRoot)
-			localPath, cloneErr := gitSvc.CloneRepository(ownerUser.Username, repo.Name, repo.MirrorURL, true)
+			localPath, cloneErr := gitSvc.CloneRepository(ownerUser.Username, repo.Name, repo.MirrorURL, repo.ProjectType)
 
 			refreshedRepo, findErr := db.Repository.Select().Where("id = ?", repo.ID).One()
 			if findErr != nil {
@@ -149,7 +149,7 @@ func RetryMigrate(c fiber.Ctx) error {
 
 	go func() {
 		gitSvc := services.NewGitServiceWithDB(db).WithOwnerRoot(result.RepoRoot())
-		localPath, cloneErr := gitSvc.CloneRepository(result.OwnerName(), repo.Name, repo.MirrorURL, true)
+		localPath, cloneErr := gitSvc.CloneRepository(result.OwnerName(), repo.Name, repo.MirrorURL, repo.ProjectType)
 
 		refreshedRepo, findErr := db.Repository.Select().Where("id = ?", repo.ID).One()
 		if findErr != nil {

@@ -554,10 +554,34 @@ func TestGitService_InitRepositoryBare(t *testing.T) {
 	}
 }
 
+func TestGitService_InitRepositoryMirrorIgnoresOwnRoot(t *testing.T) {
+	tmpDir := t.TempDir()
+	workRoot := filepath.Join(tmpDir, "work")
+
+	// 账号设置了自有仓库目录，但镜像项目仍必须是全局裸仓库目录下的裸仓库
+	svc := &GitService{repoRoot: tmpDir, ownerRoot: workRoot}
+
+	repo := &models.Repository{Name: "mirror-repo", ProjectType: "mirror"}
+	if err := svc.InitRepository("testowner", repo); err != nil {
+		t.Fatalf("InitRepository() error = %v", err)
+	}
+
+	want := filepath.Join(tmpDir, "testowner", "mirror-repo.git")
+	if repo.LocalPath != want {
+		t.Fatalf("InitRepository() LocalPath = %q, want %q", repo.LocalPath, want)
+	}
+	if _, err := os.Stat(filepath.Join(want, "HEAD")); os.IsNotExist(err) {
+		t.Error("mirror repository should be bare")
+	}
+	if _, err := os.Stat(filepath.Join(workRoot, "mirror-repo")); err == nil {
+		t.Error("mirror repository must not be created under the owned directory")
+	}
+}
+
 func TestResolveRepoLocation(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	owned := models.ResolveRepoLocationUnder(tmpDir, "alice", filepath.Join(tmpDir, "alice-work"), "repo")
+	owned := models.ResolveRepoLocationUnder(tmpDir, "alice", filepath.Join(tmpDir, "alice-work"), "repo", "local")
 	if owned.Storage != models.RepoStorageWork {
 		t.Errorf("owned storage = %v, want work", owned.Storage)
 	}
@@ -565,7 +589,7 @@ func TestResolveRepoLocation(t *testing.T) {
 		t.Errorf("owned path = %q, want %q", owned.Path, want)
 	}
 
-	shared := models.ResolveRepoLocationUnder(tmpDir, "alice", "", "repo")
+	shared := models.ResolveRepoLocationUnder(tmpDir, "alice", "", "repo", "local")
 	if shared.Storage != models.RepoStorageBare {
 		t.Errorf("shared storage = %v, want bare", shared.Storage)
 	}
@@ -573,13 +597,22 @@ func TestResolveRepoLocation(t *testing.T) {
 		t.Errorf("shared path = %q, want %q", shared.Path, want)
 	}
 
+	// 镜像项目即使所有者设置了自有目录，也必须是全局裸仓库目录下的裸仓库
+	mirror := models.ResolveRepoLocationUnder(tmpDir, "alice", filepath.Join(tmpDir, "alice-work"), "repo", "mirror")
+	if mirror.Storage != models.RepoStorageBare {
+		t.Errorf("mirror storage = %v, want bare", mirror.Storage)
+	}
+	if want := filepath.Join(tmpDir, "alice", "repo.git"); mirror.Path != want {
+		t.Errorf("mirror path = %q, want %q", mirror.Path, want)
+	}
+
 	// 相对路径中带上级目录引用的自有目录必须回退到裸仓库布局
-	if escaped := models.ResolveRepoLocationUnder(tmpDir, "alice", "../escape", "repo"); escaped.Storage != models.RepoStorageBare {
+	if escaped := models.ResolveRepoLocationUnder(tmpDir, "alice", "../escape", "repo", "local"); escaped.Storage != models.RepoStorageBare {
 		t.Errorf("escaping repo root should fall back to bare, got %v", escaped.Storage)
 	}
 
 	// 账号名与仓库名中的路径分隔符必须被规整，结果不得逃出全局根目录
-	unsafe := models.ResolveRepoLocationUnder(tmpDir, "../evil", "", "..")
+	unsafe := models.ResolveRepoLocationUnder(tmpDir, "../evil", "", "..", "")
 	if !strings.HasPrefix(unsafe.Path, filepath.Clean(tmpDir)+string(filepath.Separator)) {
 		t.Errorf("unsafe path = %q, should stay under the global root", unsafe.Path)
 	}

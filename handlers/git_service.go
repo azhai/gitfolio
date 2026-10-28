@@ -13,6 +13,7 @@ import (
 func gitSvcFor(result *helpers.ResourceResult) *services.GitService {
 	return services.NewGitService().
 		WithOwnerRoot(result.RepoRoot()).
+		WithProjectType(result.Repo.ProjectType).
 		WithLocalPath(result.Repo.LocalPath)
 }
 
@@ -20,6 +21,7 @@ func gitSvcFor(result *helpers.ResourceResult) *services.GitService {
 func gitSvcForRepo(db *models.Database, result *helpers.ResourceResult) *services.GitService {
 	return services.NewGitServiceWithDB(db).
 		WithOwnerRoot(result.RepoRoot()).
+		WithProjectType(result.Repo.ProjectType).
 		WithLocalPath(result.Repo.LocalPath)
 }
 

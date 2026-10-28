@@ -236,7 +236,7 @@ func CreateMirror(c fiber.Ctx) error {
 
 	if req.SyncCode {
 		gitSvc := services.NewGitService().WithOwnerRoot(resolveRepoRootByAccount(db, req.Owner))
-		localPath, err := gitSvc.CloneRepository(req.Owner, req.Repo, req.CloneURL, true)
+		localPath, err := gitSvc.CloneRepository(req.Owner, req.Repo, req.CloneURL, string(models.ProjectTypeMirror))
 		if err != nil {
 			result["clone_error"] = err.Error()
 		} else {
@@ -402,7 +402,7 @@ func ImportFromRemote(c fiber.Ctx) error {
 	if req.CloneRepo && repository.LocalPath == "" {
 		gitSvc := services.NewGitService().WithOwnerRoot(resolveRepoRootByAccount(db, req.Owner))
 		cloneURL := fmt.Sprintf("https://%s.com/%s/%s.git", req.Platform, req.Owner, req.Repo)
-		localPath, cloneErr := gitSvc.CloneRepository(req.Owner, req.Repo, cloneURL, true)
+		localPath, cloneErr := gitSvc.CloneRepository(req.Owner, req.Repo, cloneURL, string(models.ProjectTypeMirror))
 		if cloneErr != nil {
 			result["clone_error"] = cloneErr.Error()
 		} else {
