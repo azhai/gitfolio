@@ -35,6 +35,10 @@ docs/superpowers/
 projs/
 repos/
 uploads/
+backups/
+
+# WorkBuddy workspace data
+.workbuddy/
 
 # IDE
 .arts/

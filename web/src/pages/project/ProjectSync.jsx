@@ -25,7 +25,7 @@ import SyncLogsPanel from '../../components/settings/SyncLogsPanel'
 export default function ProjectSync() {
   const { owner, repo } = useParams()
   const toast = useToast()
-  const { isGuest, user } = useAuth()
+  const { isGuest, isAdmin, user } = useAuth()
   const [repoInfo, setRepoInfo] = useState(null)
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState({ pull: false, issues: false, push: {} })
@@ -54,7 +54,8 @@ export default function ProjectSync() {
   const isRemote = ['mirror', 'public', 'private'].includes(projectType)
   const canPushRemote = ['public', 'private', 'local'].includes(projectType)
   const isRepoOwner = user && repoInfo && repoInfo.owner_id === user.id
-  const canManage = projectType === 'local' ? !isGuest : (isRepoOwner || !isGuest)
+  // 与后端一致：管理员、所有者可管理；未迁移的无主仓库允许登录用户管理。
+  const canManage = !isGuest && (isAdmin || isRepoOwner || !repoInfo.owner_id)
 
   useEffect(() => {
     if (!repoInfo) return

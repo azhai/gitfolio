@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"strconv"
+	"strings"
 
 	"github.com/azhai/gitfolio/config"
 	"github.com/azhai/gitfolio/middleware"
@@ -21,6 +22,8 @@ type UpdateUserRequest struct {
 	Bio      string `json:"bio"`
 	Website  string `json:"website"`
 	Location string `json:"location"`
+	// RepoRoot 是自有仓库目录，用指针以便显式清空（清空后回退到全局裸仓库目录）。
+	RepoRoot *string `json:"repo_root"`
 }
 
 // UserResponse 用户信息响应
@@ -36,6 +39,8 @@ type UserResponse struct {
 	Location  string `json:"location"`
 	IsActive  bool   `json:"is_active"`
 	Role      string `json:"role"`
+	// RepoRoot 是自有仓库目录，为空表示使用全局裸仓库目录。
+	RepoRoot  string `json:"repo_root"`
 	CreatedAt string `json:"created_at"`
 	UpdatedAt string `json:"updated_at"`
 }
@@ -58,6 +63,7 @@ func ToUserResponse(user *models.User) *UserResponse {
 		Location:  user.Location,
 		IsActive:  user.IsActive,
 		Role:      user.Role,
+		RepoRoot:  user.RepoRoot,
 		CreatedAt: user.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		UpdatedAt: user.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 	}
@@ -155,6 +161,13 @@ func UpdateUser(c fiber.Ctx) error {
 	if req.Location != "" {
 		userModel.Location = req.Location
 	}
+	if req.RepoRoot != nil {
+		root, ok := models.CleanRepoRoot(*req.RepoRoot)
+		if !ok && strings.TrimSpace(*req.RepoRoot) != "" {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid repo_root: must not contain parent directory references"})
+		}
+		userModel.RepoRoot = root
+	}
 
 	err = db.User.Save().One(userModel)
 	if err != nil {
@@ -178,6 +191,7 @@ func UpdateUserByUsername(c fiber.Ctx) error {
 		IsActive *bool  `json:"is_active"`
 		Role     string `json:"role"`
 		Password string `json:"password"`
+		RepoRoot *string `json:"repo_root"`
 	}
 
 	if err := c.Bind().JSON(&req); err != nil {
@@ -220,6 +234,13 @@ func UpdateUserByUsername(c fiber.Ctx) error {
 	}
 	if req.Role != "" {
 		targetUser.Role = req.Role
+	}
+	if req.RepoRoot != nil {
+		root, ok := models.CleanRepoRoot(*req.RepoRoot)
+		if !ok && strings.TrimSpace(*req.RepoRoot) != "" {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid repo_root: must not contain parent directory references"})
+		}
+		targetUser.RepoRoot = root
 	}
 	if req.Password != "" {
 		if len(req.Password) < 6 {

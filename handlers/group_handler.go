@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/azhai/gitfolio/helpers"
@@ -20,6 +21,8 @@ type GroupResponse struct {
 	Website      string `json:"website"`
 	Location     string `json:"location"`
 	OwnerID      int64  `json:"owner_id"`
+	// RepoRoot 是团队的自有仓库目录，为空表示使用全局裸仓库目录。
+	RepoRoot     string `json:"repo_root"`
 	MembersCount int    `json:"members_count"`
 	CreatedAt    string `json:"created_at"`
 }
@@ -34,6 +37,7 @@ func ToGroupResponse(group *models.Group, membersCount int) *GroupResponse {
 		Website:      group.Website,
 		Location:     group.Location,
 		OwnerID:      group.OwnerID,
+		RepoRoot:     group.RepoRoot,
 		MembersCount: membersCount,
 		CreatedAt:    group.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 	}
@@ -139,6 +143,7 @@ func CreateGroup(c fiber.Ctx) error {
 		Description string `json:"description"`
 		Website     string `json:"website"`
 		Location    string `json:"location"`
+		RepoRoot    string `json:"repo_root"`
 	}
 
 	if err := c.Bind().JSON(&req); err != nil {
@@ -152,6 +157,11 @@ func CreateGroup(c fiber.Ctx) error {
 		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "Group name already exists"})
 	}
 
+	repoRoot, ok := models.CleanRepoRoot(req.RepoRoot)
+	if !ok && strings.TrimSpace(req.RepoRoot) != "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid repo_root: must not contain parent directory references"})
+	}
+
 	group := &models.Group{
 		Name:        req.Name,
 		DisplayName: req.DisplayName,
@@ -159,6 +169,7 @@ func CreateGroup(c fiber.Ctx) error {
 		Website:     req.Website,
 		Location:    req.Location,
 		OwnerID:     userID,
+		RepoRoot:    repoRoot,
 	}
 
 	err := db.Group.Insert().One(group)
@@ -186,6 +197,7 @@ func UpdateGroup(c fiber.Ctx) error {
 		Website     string `json:"website"`
 		Location    string `json:"location"`
 		Avatar      string `json:"avatar"`
+		RepoRoot    *string `json:"repo_root"`
 	}
 
 	if err := c.Bind().JSON(&req); err != nil {
@@ -217,6 +229,13 @@ func UpdateGroup(c fiber.Ctx) error {
 	}
 	if req.Avatar != "" {
 		group.Avatar = req.Avatar
+	}
+	if req.RepoRoot != nil {
+		root, ok := models.CleanRepoRoot(*req.RepoRoot)
+		if !ok && strings.TrimSpace(*req.RepoRoot) != "" {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid repo_root: must not contain parent directory references"})
+		}
+		group.RepoRoot = root
 	}
 
 	err = db.Group.Save().One(group)

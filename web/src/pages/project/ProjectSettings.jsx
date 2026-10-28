@@ -8,6 +8,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogOverlay,
+  Badge,
   Box,
   Button,
   Flex,
@@ -131,8 +132,10 @@ export default function ProjectSettings() {
   }
 
   const projectType = repoInfo.project_type || 'local'
+  const hasWorkTree = repoInfo.storage_kind === 'work'
   const isRepoOwner = user && repoInfo.owner_id === user.id
-  const canManage = projectType === 'local' ? !isGuest : (isAdmin || isUser || isRepoOwner)
+  // 与后端一致：管理员、所有者可管理；未迁移的无主仓库允许登录用户管理。
+  const canManage = !isGuest && (isAdmin || isRepoOwner || !repoInfo.owner_id)
 
   return (
     <>
@@ -180,6 +183,24 @@ export default function ProjectSettings() {
 
         <SettingSection title={t('projectSettings.projectType')} description={t(`projectSettings.${projectType}ProjectDesc`)}>
           <ProjectTypeSelector currentType={projectType} onChange={handleTypeChange} disabled={!canManage || saving} />
+        </SettingSection>
+
+        <SettingSection
+          title={t('storage.title')}
+          description={repoInfo.storage_kind === 'work' ? t('storage.workDesc') : t('storage.bareDesc')}
+        >
+          <HStack gap="8px" mb="8px">
+            <Badge px="8px" py="2px" rounded="full" fontSize="11.5px" fontWeight="600"
+              bg={hasWorkTree ? '#dcfce7' : '#e0e7ff'} color={hasWorkTree ? '#15803d' : '#4338ca'}>
+              {hasWorkTree ? t('storage.work') : t('storage.bare')}
+            </Badge>
+          </HStack>
+          {repoInfo.local_path && (
+            <Box bg="#f9fafb" border="1px solid" borderColor="#e5e7eb" rounded="6px" px="10px" py="8px">
+              <Text fontSize="12px" color="#888" mb="2px">{t('storage.path')}</Text>
+              <Text fontSize="12.5px" color="#333" fontFamily="mono" wordBreak="break-all">{repoInfo.local_path}</Text>
+            </Box>
+          )}
         </SettingSection>
       </SettingCard>
 

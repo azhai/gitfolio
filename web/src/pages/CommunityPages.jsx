@@ -234,7 +234,7 @@ const NewGroup = () => {
   const navigate = useNavigate()
   const toast = useToast()
   const [submitting, setSubmitting] = useState(false)
-  const [form, setForm] = useState({ name: '', display_name: '', description: '', website: '', location: '' })
+  const [form, setForm] = useState({ name: '', display_name: '', description: '', website: '', location: '', repo_root: '' })
 
   function updateField(key) {
     return function(e) {
@@ -279,10 +279,16 @@ const NewGroup = () => {
           <Input value={form.website} onChange={updateField('website')} placeholder="https://example.com" h="40px" fontSize="14px" borderRadius="8px" borderColor="#d1d5db"
             _focus={{ borderColor: '#22c55e', boxShadow: '0 0 0 3px rgba(34,197,94,0.1)' }} />
         </Box>
-        <Box mb="24px">
+        <Box mb="18px">
           <Text fontSize="13.5px" fontWeight="600" color="#555" mb="6px">{t('group.location')}</Text>
           <Input value={form.location} onChange={updateField('location')} placeholder={t('group.locationPlaceholder')} h="40px" fontSize="14px" borderRadius="8px" borderColor="#d1d5db"
             _focus={{ borderColor: '#22c55e', boxShadow: '0 0 0 3px rgba(34,197,94,0.1)' }} />
+        </Box>
+        <Box mb="24px">
+          <Text fontSize="13.5px" fontWeight="600" color="#555" mb="6px">{t('userSettings.repoRoot')}</Text>
+          <Input value={form.repo_root} onChange={updateField('repo_root')} placeholder={t('userSettings.repoRootPlaceholder')} h="40px" fontSize="14px" borderRadius="8px" borderColor="#d1d5db"
+            _focus={{ borderColor: '#22c55e', boxShadow: '0 0 0 3px rgba(34,197,94,0.1)' }} />
+          <Text fontSize="12px" color="#888" mt="6px" lineHeight="1.6">{t('userSettings.repoRootHint')}</Text>
         </Box>
         <Flex justify="flex-end" gap="10px">
           <Button h="36px" px="16px" fontSize="13px" rounded="6px" variant="outline" borderColor="#d1d5db" color="#666" onClick={function() { navigate(-1) }}>{t('common.cancel')}</Button>

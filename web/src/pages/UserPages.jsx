@@ -252,6 +252,7 @@ const UserSettings = () => {
     bio: '',
     website: '',
     location: '',
+    repo_root: '',
   })
   const [passwords, setPasswords] = useState({
     old_password: '',
@@ -282,6 +283,7 @@ const UserSettings = () => {
         bio: data.bio || '',
         website: data.website || '',
         location: data.location || '',
+        repo_root: data.repo_root || '',
       })
       if (data.avatar_url) setAvatarUrl(data.avatar_url)
       if (data.avatar) setAvatarUrl(data.avatar)
@@ -447,6 +449,15 @@ const UserSettings = () => {
                   placeholder={t('userSettings.locationPlaceholder')} h="38px" fontSize="14px" borderRadius="8px" borderColor="#d1d5db"
                   isReadOnly={isGuest}
                   _focus={{ borderColor: '#22c55e', boxShadow: '0 0 0 3px rgba(34,197,94,0.1)' }} />
+              </Box>
+
+              <Box mb="8px">
+                <Text fontSize="13px" fontWeight="600" color="#555" mb="6px">{t('userSettings.repoRoot')}</Text>
+                <Input value={profile.repo_root} onChange={function(e) { setProfile(function(p) { return Object.assign({}, p, { repo_root: e.target.value }) }) }}
+                  placeholder={t('userSettings.repoRootPlaceholder')} h="38px" fontSize="14px" borderRadius="8px" borderColor="#d1d5db"
+                  isReadOnly={isGuest}
+                  _focus={{ borderColor: '#22c55e', boxShadow: '0 0 0 3px rgba(34,197,94,0.1)' }} />
+                <Text fontSize="12px" color="#888" mt="6px" lineHeight="1.6">{t('userSettings.repoRootHint')}</Text>
               </Box>
 
               <Flex justify="flex-end" gap="10px">
