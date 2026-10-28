@@ -3,11 +3,23 @@
 package models
 
 import (
+	"embed"
 	"fmt"
 
 	"github.com/azhai/goent"
 	"github.com/azhai/goent/drivers"
+	"github.com/azhai/goent/utils"
 )
+
+//go:embed goent-abbrs.json
+var abbrsFS embed.FS
+
+func init() {
+	data, err := abbrsFS.ReadFile("goent-abbrs.json")
+	if err == nil {
+		_ = utils.LoadAbbreviationsFromData(data)
+	}
+}
 
 var (
 	db     *Database
@@ -40,9 +52,27 @@ func OpenDB(cfg drivers.DatabaseConfig) (*Database, error) {
 	}
 	if initDb {
 		err = goent.AutoMigrate(db)
-	}
-	if err != nil {
-		return nil, fmt.Errorf("Failed to migrate database: %v", err)
+		if err != nil {
+			return nil, fmt.Errorf("Failed to migrate database: %v", err)
+		}
+		if err := EnsureETagTable(db); err != nil {
+			return nil, fmt.Errorf("Failed to ensure etag table: %v", err)
+		}
+		if err := EnsureSyncPointETagColumn(db); err != nil {
+			return nil, fmt.Errorf("Failed to ensure sync_point.last_etag column: %v", err)
+		}
+		if err := EnsureContributorGitHubIDColumn(db); err != nil {
+			return nil, fmt.Errorf("Failed to ensure contributor.github_id column: %v", err)
+		}
+		if err := EnsureCommentGitHubIDColumn(db); err != nil {
+			return nil, fmt.Errorf("Failed to ensure comment.github_id column: %v", err)
+		}
+		if err := EnsureRepositoryStatsPRColumns(db); err != nil {
+			return nil, fmt.Errorf("Failed to ensure repository_stats PR columns: %v", err)
+		}
+		if err := EnsureIssueStatusColumn(db); err != nil {
+			return nil, fmt.Errorf("Failed to ensure issue.status column: %v", err)
+		}
 	}
 	return db, nil
 }

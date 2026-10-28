@@ -244,7 +244,7 @@ func ListRepositories(c fiber.Ctx) error {
 		if len(groupIDs) > 0 {
 			query = query.Filter(
 				goent.Or(
-					goent.In(db.Repository.Field("project_type"), []interface{}{"local", "public", "mirror"}),
+					goent.In(db.Repository.Field("project_type"), []any{"local", "public", "mirror"}),
 					goent.And(
 						goent.Equals(db.Repository.Field("project_type"), "private"),
 						goent.Or(
@@ -263,7 +263,7 @@ func ListRepositories(c fiber.Ctx) error {
 		} else {
 			query = query.Filter(
 				goent.Or(
-					goent.In(db.Repository.Field("project_type"), []interface{}{"local", "public", "mirror"}),
+					goent.In(db.Repository.Field("project_type"), []any{"local", "public", "mirror"}),
 					goent.And(
 						goent.Equals(db.Repository.Field("project_type"), "private"),
 						goent.Equals(db.Repository.Field("owner_type"), "user"),
@@ -467,9 +467,15 @@ func DeleteRepository(c fiber.Ctx) error {
 		db.TaskTimeLog.Delete().Where("task_id IN ?", taskIDs).Exec()
 	}
 
-	db.Comment.Delete().Where("issue_id IN ?", issueIDs).Exec()
-	db.Comment.Delete().Where("pull_request_id IN ?", prIDs).Exec()
-	db.Comment.Delete().Where("task_id IN ?", taskIDs).Exec()
+	if len(issueIDs) > 0 {
+		db.Comment.Delete().Where("issue_id IN ?", issueIDs).Exec()
+	}
+	if len(prIDs) > 0 {
+		db.Comment.Delete().Where("pull_request_id IN ?", prIDs).Exec()
+	}
+	if len(taskIDs) > 0 {
+		db.Comment.Delete().Where("task_id IN ?", taskIDs).Exec()
+	}
 
 	syncPoints, _ := db.SyncPoint.Select("id").Where("repository_id = ?", repo.ID).All()
 	syncPointIDs := make([]int64, len(syncPoints))
@@ -492,6 +498,7 @@ func DeleteRepository(c fiber.Ctx) error {
 	db.Watch.Delete().Where("repository_id = ?", repo.ID).Exec()
 	db.RepositoryStats.Delete().Where("repository_id = ?", repo.ID).Exec()
 	db.RemoteRepository.Delete().Where("repository_id = ?", repo.ID).Exec()
+	db.SyncToken.Delete().Where("repository_id = ?", repo.ID).Exec()
 	db.SyncPoint.Delete().Where("repository_id = ?", repo.ID).Exec()
 	db.GitCommandLog.Delete().Where("repository_id = ?", repo.ID).Exec()
 	db.Activity.Delete().Where("repository_id = ?", repo.ID).Exec()

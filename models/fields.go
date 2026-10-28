@@ -59,6 +59,62 @@ func FetchActivity() goent.FetchFunc {
 }
 
 // ------------------------------
+// Backup
+// ------------------------------
+
+// implement goent.Entity interface GetID for Backup
+func (t *Backup) GetID() int64 {
+	return t.ID
+}
+
+// implement goent.Entity interface SetID for Backup
+func (t *Backup) SetID(id int64) {
+	t.ID = id
+}
+
+// UpdatePairs returns a slice of Pair for updating non-primary key fields.
+func (t *Backup) UpdatePairs() []goent.Pair {
+	return []goent.Pair{
+		{Key: "created_at", Value: t.CreatedAt},
+		{Key: "updated_at", Value: t.UpdatedAt},
+		{Key: "name", Value: t.Name},
+		{Key: "backup_type", Value: t.BackupType},
+		{Key: "base_backup_id", Value: t.BaseBackupID},
+		{Key: "status", Value: t.Status},
+		{Key: "size", Value: t.Size},
+		{Key: "path", Value: t.Path},
+		{Key: "error", Value: t.Error},
+		{Key: "started_at", Value: t.StartedAt},
+		{Key: "completed_at", Value: t.CompletedAt},
+	}
+}
+
+// ScanDest returns a slice of pointers to Backup fields for database scanning.
+func (t *Backup) ScanDest() []any {
+	return []any{
+		&t.ID,
+		&t.CreatedAt,
+		&t.UpdatedAt,
+		&t.Name,
+		&t.BackupType,
+		&t.BaseBackupID,
+		&t.Status,
+		&t.Size,
+		&t.Path,
+		&t.Error,
+		&t.StartedAt,
+		&t.CompletedAt,
+	}
+}
+
+// FetchBackup creates a FetchFunc for Backup.
+func FetchBackup() goent.FetchFunc {
+	return func(target any) []any {
+		return target.(*Backup).ScanDest()
+	}
+}
+
+// ------------------------------
 // Branch
 // ------------------------------
 
@@ -129,6 +185,7 @@ func (t *Comment) UpdatePairs() []goent.Pair {
 		{Key: "pull_request_id", Value: t.PullRequestID},
 		{Key: "task_id", Value: t.TaskID},
 		{Key: "author_id", Value: t.AuthorID},
+		{Key: "author_name", Value: t.AuthorName},
 	}
 }
 
@@ -144,6 +201,7 @@ func (t *Comment) ScanDest() []any {
 		&t.PullRequestID,
 		&t.TaskID,
 		&t.AuthorID,
+		&t.AuthorName,
 	}
 }
 
@@ -222,6 +280,7 @@ func (t *Contributor) UpdatePairs() []goent.Pair {
 		{Key: "name", Value: t.Name},
 		{Key: "email", Value: t.Email},
 		{Key: "avatar", Value: t.Avatar},
+		{Key: "github_id", Value: t.GitHubID},
 		{Key: "repository_id", Value: t.RepositoryID},
 		{Key: "commits_count", Value: t.CommitsCount},
 	}
@@ -236,6 +295,7 @@ func (t *Contributor) ScanDest() []any {
 		&t.Name,
 		&t.Email,
 		&t.Avatar,
+		&t.GitHubID,
 		&t.RepositoryID,
 		&t.CommitsCount,
 	}
@@ -245,6 +305,48 @@ func (t *Contributor) ScanDest() []any {
 func FetchContributor() goent.FetchFunc {
 	return func(target any) []any {
 		return target.(*Contributor).ScanDest()
+	}
+}
+
+// ------------------------------
+// ETag
+// ------------------------------
+
+// implement goent.Entity interface GetID for ETag
+func (t *ETag) GetID() int64 {
+	return t.ID
+}
+
+// implement goent.Entity interface SetID for ETag
+func (t *ETag) SetID(id int64) {
+	t.ID = id
+}
+
+// UpdatePairs returns a slice of Pair for updating non-primary key fields.
+func (t *ETag) UpdatePairs() []goent.Pair {
+	return []goent.Pair{
+		{Key: "created_at", Value: t.CreatedAt},
+		{Key: "updated_at", Value: t.UpdatedAt},
+		{Key: "url", Value: t.URL},
+		{Key: "etag", Value: t.ETag},
+	}
+}
+
+// ScanDest returns a slice of pointers to ETag fields for database scanning.
+func (t *ETag) ScanDest() []any {
+	return []any{
+		&t.ID,
+		&t.CreatedAt,
+		&t.UpdatedAt,
+		&t.URL,
+		&t.ETag,
+	}
+}
+
+// FetchETag creates a FetchFunc for ETag.
+func FetchETag() goent.FetchFunc {
+	return func(target any) []any {
+		return target.(*ETag).ScanDest()
 	}
 }
 
@@ -422,9 +524,11 @@ func (t *Issue) UpdatePairs() []goent.Pair {
 		{Key: "number", Value: t.Number},
 		{Key: "repository_id", Value: t.RepositoryID},
 		{Key: "author_id", Value: t.AuthorID},
+		{Key: "author_name", Value: t.AuthorName},
 		{Key: "assignee_id", Value: t.AssigneeID},
 		{Key: "is_closed", Value: t.IsClosed},
 		{Key: "is_locked", Value: t.IsLocked},
+		{Key: "comments_count", Value: t.CommentsCount},
 	}
 }
 
@@ -439,9 +543,11 @@ func (t *Issue) ScanDest() []any {
 		&t.Number,
 		&t.RepositoryID,
 		&t.AuthorID,
+		&t.AuthorName,
 		&t.AssigneeID,
 		&t.IsClosed,
 		&t.IsLocked,
+		&t.CommentsCount,
 	}
 }
 
@@ -651,7 +757,7 @@ func (t *PlatformAccount) UpdatePairs() []goent.Pair {
 		{Key: "username", Value: t.Username},
 		{Key: "email", Value: t.Email},
 		{Key: "avatar_url", Value: t.AvatarURL},
-		{Key: "apiurl", Value: t.APIURL},
+		{Key: "api_url", Value: t.APIURL},
 		{Key: "is_active", Value: t.IsActive},
 		{Key: "user_id", Value: t.UserID},
 	}
@@ -704,6 +810,7 @@ func (t *PullRequest) UpdatePairs() []goent.Pair {
 		{Key: "number", Value: t.Number},
 		{Key: "repository_id", Value: t.RepositoryID},
 		{Key: "author_id", Value: t.AuthorID},
+		{Key: "author_name", Value: t.AuthorName},
 		{Key: "source_branch", Value: t.SourceBranch},
 		{Key: "target_branch", Value: t.TargetBranch},
 		{Key: "assignee_id", Value: t.AssigneeID},
@@ -711,6 +818,7 @@ func (t *PullRequest) UpdatePairs() []goent.Pair {
 		{Key: "is_merged", Value: t.IsMerged},
 		{Key: "is_closed", Value: t.IsClosed},
 		{Key: "is_locked", Value: t.IsLocked},
+		{Key: "comments_count", Value: t.CommentsCount},
 	}
 }
 
@@ -725,6 +833,7 @@ func (t *PullRequest) ScanDest() []any {
 		&t.Number,
 		&t.RepositoryID,
 		&t.AuthorID,
+		&t.AuthorName,
 		&t.SourceBranch,
 		&t.TargetBranch,
 		&t.AssigneeID,
@@ -732,6 +841,7 @@ func (t *PullRequest) ScanDest() []any {
 		&t.IsMerged,
 		&t.IsClosed,
 		&t.IsLocked,
+		&t.CommentsCount,
 	}
 }
 
@@ -857,8 +967,8 @@ func (t *RemoteRepository) UpdatePairs() []goent.Pair {
 		{Key: "owner", Value: t.Owner},
 		{Key: "repo_name", Value: t.RepoName},
 		{Key: "clone_url", Value: t.CloneURL},
-		{Key: "sshurl", Value: t.SSHURL},
-		{Key: "apiurl", Value: t.APIURL},
+		{Key: "ssh_url", Value: t.SSHURL},
+		{Key: "api_url", Value: t.APIURL},
 		{Key: "web_url", Value: t.WebURL},
 		{Key: "repository_id", Value: t.RepositoryID},
 		{Key: "account_id", Value: t.AccountID},
@@ -1207,7 +1317,7 @@ func (t *SyncPoint) UpdatePairs() []goent.Pair {
 		{Key: "last_pr_number", Value: t.LastPRNumber},
 		{Key: "last_issue_sync_at", Value: t.LastIssueSyncAt},
 		{Key: "last_pr_sync_at", Value: t.LastPRSyncAt},
-		{Key: "last_e_tag", Value: t.LastETag},
+		{Key: "last_etag", Value: t.LastETag},
 		{Key: "last_modified", Value: t.LastModified},
 		{Key: "next_sync_at", Value: t.NextSyncAt},
 		{Key: "sync_interval", Value: t.SyncInterval},

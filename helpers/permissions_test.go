@@ -22,7 +22,7 @@ func (m *mockCtx) Locals(key any, value ...any) any {
 }
 
 func createTestCtx(role string, userID int64) *mockCtx {
-	c := &mockCtx{locals: make(map[string]interface{})}
+	c := &mockCtx{locals: make(map[string]any)}
 	if role != "" {
 		c.Locals("role", role)
 	}

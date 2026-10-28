@@ -5,12 +5,21 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math/rand"
 	"sync"
 	"time"
 
-	"github.com/azhai/gitfolio/config"
 	"github.com/azhai/gitfolio/models"
 )
+
+// Minimum interval between scheduled syncs (10 minutes).
+const minSyncInterval = 600
+
+// alignToNext10Min rounds the time up to the next 10-minute boundary.
+// e.g. 07:18 -> 07:20, 07:23 -> 07:30.
+func alignToNext10Min(t time.Time) time.Time {
+	return t.Truncate(10 * time.Minute).Add(10 * time.Minute)
+}
 
 type SchedulerService struct {
 	db      *models.Database
@@ -135,24 +144,6 @@ func (s *SchedulerService) checkMirrorSync(repo *models.Repository, now time.Tim
 		return
 	}
 
-	ownerName := s.getOwnerName(repo.OwnerID)
-	syncSvc := NewSyncService(s.db)
-	remoteRepo, _ := syncSvc.GetRemoteRepoInfo(repo.ID)
-	if remoteRepo == nil {
-		return
-	}
-
-	token := ""
-	if remoteRepo.AccountID != nil {
-		t, err := syncSvc.GetSyncToken(*remoteRepo.AccountID)
-		if err == nil && t != nil {
-			token = t.AccessToken
-		}
-	}
-	if token == "" {
-		_, token = config.GetUserToken()
-	}
-
 	s.updateNextSyncAt(sp, now)
 
 	if !TryLockSync(repo.ID) {
@@ -163,49 +154,83 @@ func (s *SchedulerService) checkMirrorSync(repo *models.Repository, now time.Tim
 		go func() {
 			defer func() { <-s.sem }()
 			defer UnlockSync(repo.ID)
-
-			log.Printf("[Scheduler] Syncing mirror repo %s/%s", ownerName, repo.Name)
-			startTime := time.Now()
-			ctx := context.Background()
-			syncResult, err := syncSvc.SyncRepositoryData(ctx, repo.ID, remoteRepo.Platform, remoteRepo.Owner, remoteRepo.RepoName, token, sp.LastIssueSyncAt, sp.LastPRSyncAt, sp.LastIssueNumber, sp.LastPRNumber)
-			duration := time.Since(startTime).Milliseconds()
-
-			if err != nil {
-				log.Printf("[Scheduler] Sync failed for %s/%s: %v", ownerName, repo.Name, err)
-				syncSvc.UpdateSyncPoint(sp.ID, false, err.Error())
-				syncSvc.LogSync(sp.ID, "mirror", "failure", err.Error(), duration, 0, 0, "")
-
-				var rlErr *RateLimitError
-				if errors.As(err, &rlErr) {
-					resetTime := rlErr.ResetAt.Add(1 * time.Minute)
-					sp.NextSyncAt = &resetTime
-					s.db.SyncPoint.Save().One(sp)
-					log.Printf("[Scheduler] Rate limited for %s/%s, next sync at %v", ownerName, repo.Name, resetTime.Format(time.RFC3339))
-				}
-			} else {
-				log.Printf("[Scheduler] Sync succeeded for %s/%s", ownerName, repo.Name)
-				syncSvc.UpdateSyncPoint(sp.ID, true, "")
-				syncSvc.LogSync(sp.ID, "mirror", "success", "", duration, syncResult.IssuesInserted+syncResult.IssuesUpdated+syncResult.PRsInserted+syncResult.PRsUpdated, 0, "")
-
-				if syncResult.MaxIssueNumber > sp.LastIssueNumber {
-					sp.LastIssueNumber = syncResult.MaxIssueNumber
-				}
-				if syncResult.MaxPRNumber > sp.LastPRNumber {
-					sp.LastPRNumber = syncResult.MaxPRNumber
-				}
-				now := time.Now().UTC()
-				sp.LastIssueSyncAt = &now
-				sp.LastPRSyncAt = &now
-				s.db.SyncPoint.Save().One(sp)
-
-				if repo.LocalPath != "" {
-					syncSvc.SyncPullRepository(repo.LocalPath)
-				}
-			}
+			s.executeMirrorSync(repo, sp)
 		}()
 	default:
 		UnlockSync(repo.ID)
-		log.Printf("[Scheduler] Sync queue full, skipping %s/%s", ownerName, repo.Name)
+		log.Printf("[Scheduler] Sync queue full, skipping %s/%s", s.getOwnerName(repo.OwnerID), repo.Name)
+	}
+}
+
+// executeMirrorSync performs the actual mirror sync for a repository.
+func (s *SchedulerService) executeMirrorSync(repo *models.Repository, sp *models.SyncPoint) {
+	ownerName := s.getOwnerName(repo.OwnerID)
+	syncSvc := NewSyncService(s.db)
+	remoteRepo, _ := syncSvc.GetRemoteRepoInfo(repo.ID)
+	if remoteRepo == nil {
+		return
+	}
+
+	token := syncSvc.ResolveSyncToken(remoteRepo.Platform, remoteRepo.AccountID)
+
+	log.Printf("[Scheduler] Syncing mirror repo %s/%s", ownerName, repo.Name)
+	startTime := time.Now()
+	ctx := context.Background()
+	saveProgress := func(issueNumber, prNumber int, issueSince, prSince *time.Time) error {
+		if issueNumber > sp.LastIssueNumber {
+			sp.LastIssueNumber = issueNumber
+		}
+		if issueSince != nil {
+			sp.LastIssueSyncAt = issueSince
+		}
+		if prNumber > sp.LastPRNumber {
+			sp.LastPRNumber = prNumber
+		}
+		if prSince != nil {
+			sp.LastPRSyncAt = prSince
+		}
+		return s.db.SyncPoint.Save().One(sp)
+	}
+	syncResult, err := syncSvc.SyncRepositoryData(ctx, repo.ID, remoteRepo.Platform, remoteRepo.Owner, remoteRepo.RepoName, token, sp.LastIssueSyncAt, sp.LastPRSyncAt, sp.LastIssueNumber, sp.LastPRNumber, saveProgress)
+	duration := time.Since(startTime).Milliseconds()
+
+	if err != nil {
+		log.Printf("[Scheduler] Sync failed for %s/%s: %v", ownerName, repo.Name, err)
+		syncSvc.UpdateSyncPoint(sp.ID, false, err.Error())
+		syncSvc.LogSync(sp.ID, "mirror", "failure", err.Error(), duration, 0, 0, "")
+
+		var rlErr *RateLimitError
+		if errors.As(err, &rlErr) {
+			resetTime := rlErr.ResetAt.Add(1 * time.Minute)
+			sp.NextSyncAt = &resetTime
+			s.db.SyncPoint.Save().One(sp)
+			log.Printf("[Scheduler] Rate limited for %s/%s, next sync at %v", ownerName, repo.Name, resetTime.Format(time.RFC3339))
+		}
+	} else {
+		log.Printf("[Scheduler] Sync succeeded for %s/%s", ownerName, repo.Name)
+		syncSvc.UpdateSyncPoint(sp.ID, true, "")
+		syncSvc.LogSync(sp.ID, "mirror", "success", "", duration, syncResult.IssuesInserted+syncResult.IssuesUpdated+syncResult.PRsInserted+syncResult.PRsUpdated, 0, "")
+
+		if syncResult.MaxIssueNumber > sp.LastIssueNumber {
+			sp.LastIssueNumber = syncResult.MaxIssueNumber
+		}
+		if syncResult.MaxPRNumber > sp.LastPRNumber {
+			sp.LastPRNumber = syncResult.MaxPRNumber
+		}
+		// Advance the watermark to the latest updated_at among synced items.
+		// If nothing was synced, keep the previous watermark so the next run
+		// retries the same window instead of skipping it.
+		if syncResult.MaxIssueUpdatedAt != nil {
+			sp.LastIssueSyncAt = syncResult.MaxIssueUpdatedAt
+		}
+		if syncResult.MaxPRUpdatedAt != nil {
+			sp.LastPRSyncAt = syncResult.MaxPRUpdatedAt
+		}
+		s.db.SyncPoint.Save().One(sp)
+
+		if repo.LocalPath != "" {
+			syncSvc.SyncPullRepository(repo.LocalPath)
+		}
 	}
 }
 
@@ -223,13 +248,19 @@ func (s *SchedulerService) checkStatsRefresh(repo *models.Repository, now time.T
 		return
 	}
 
+	s.updateNextSyncAt(sp, now)
+	s.executeStatsRefresh(repo, sp)
+}
+
+// executeStatsRefresh performs the actual stats refresh for a repository.
+func (s *SchedulerService) executeStatsRefresh(repo *models.Repository, sp *models.SyncPoint) {
 	ownerName := s.getOwnerName(repo.OwnerID)
 
 	log.Printf("[Scheduler] Refreshing stats for %s/%s", ownerName, repo.Name)
 
 	statsSvc := NewStatsService(s.db)
 	startTime := time.Now()
-	err = statsSvc.UpdateRepositoryStats(repo.ID, ownerName, repo.Name)
+	err := statsSvc.UpdateRepositoryStats(repo.ID, ownerName, repo.Name)
 	duration := time.Since(startTime).Milliseconds()
 
 	if err != nil {
@@ -242,8 +273,64 @@ func (s *SchedulerService) checkStatsRefresh(repo *models.Repository, now time.T
 		syncSvc.UpdateSyncPoint(sp.ID, true, "")
 		syncSvc.LogSync(sp.ID, "stats", "success", "", duration, 0, 0, "")
 	}
+}
 
-	s.updateNextSyncAt(sp, now)
+// RunCronTick is designed to be invoked by an external system cron every 10 minutes.
+// It finds all sync points whose NextSyncAt is due at or before now, updates their
+// next run time to a 10-minute boundary, then executes the jobs concurrently.
+// A random 0-60 second delay is applied per repository to avoid thundering herd.
+// Returns the number of jobs scheduled.
+func (s *SchedulerService) RunCronTick(now time.Time, maxConcurrency int) (int, error) {
+	syncPoints, err := s.db.SyncPoint.Select().
+		Where("is_paused = ? AND sync_interval > 0 AND (next_sync_at IS NULL OR next_sync_at <= ?)", false, now).
+		All()
+	if err != nil {
+		return 0, err
+	}
+
+	sem := make(chan struct{}, maxConcurrency)
+	var wg sync.WaitGroup
+	scheduled := 0
+
+	for _, sp := range syncPoints {
+		repo, err := s.db.Repository.Select().Where("id = ?", sp.RepositoryID).One()
+		if err != nil || repo == nil {
+			continue
+		}
+		if IsSyncing(repo.ID) {
+			continue
+		}
+
+		// Update the next run time before launching so cron overlapping calls
+		// don't pick up the same job twice.
+		s.updateNextSyncAt(sp, now)
+		scheduled++
+
+		wg.Add(1)
+		go func(repo *models.Repository, sp *models.SyncPoint) {
+			defer wg.Done()
+
+			// Random per-repo delay up to 60 seconds to spread load.
+			delay := time.Duration(rand.Intn(60)) * time.Second
+			time.Sleep(delay)
+
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			if repo.IsRemote() && sp.SyncType == "mirror" {
+				if !TryLockSync(repo.ID) {
+					return
+				}
+				defer UnlockSync(repo.ID)
+				s.executeMirrorSync(repo, sp)
+			} else if !repo.IsRemote() && sp.SyncType == "stats" {
+				s.executeStatsRefresh(repo, sp)
+			}
+		}(repo, sp)
+	}
+
+	wg.Wait()
+	return scheduled, nil
 }
 
 func (s *SchedulerService) updateNextSyncAt(sp *models.SyncPoint, now time.Time) {
@@ -254,7 +341,11 @@ func (s *SchedulerService) updateNextSyncAt(sp *models.SyncPoint, now time.Time)
 		}
 		return
 	}
-	next := now.Add(time.Duration(sp.SyncInterval) * time.Second)
+	interval := sp.SyncInterval
+	if interval < minSyncInterval {
+		interval = minSyncInterval
+	}
+	next := alignToNext10Min(now.Add(time.Duration(interval) * time.Second))
 	sp.NextSyncAt = &next
 	if err := s.db.SyncPoint.Save().One(sp); err != nil {
 		log.Printf("[Scheduler] Error updating next sync time: %v", err)
@@ -291,11 +382,15 @@ func (s *SchedulerService) UpdateSyncConfig(repoID int64, syncType string, inter
 		return nil, err
 	}
 
+	if interval > 0 && interval < minSyncInterval {
+		interval = minSyncInterval
+	}
+
 	now := time.Now().UTC()
 	sp.SyncInterval = interval
 	sp.IsPaused = paused
 	if !paused && interval > 0 {
-		nextSync := now.Add(time.Duration(interval) * time.Second)
+		nextSync := alignToNext10Min(now.Add(time.Duration(interval) * time.Second))
 		sp.NextSyncAt = &nextSync
 	} else if interval <= 0 {
 		sp.NextSyncAt = nil

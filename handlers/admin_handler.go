@@ -247,18 +247,50 @@ func CreateMirror(c fiber.Ctx) error {
 	}
 
 	if req.SyncIssues || req.SyncPRs {
-		token := ""
-		tokens, _ := db.SyncToken.Select().Where("platform = ? AND is_active = ?", req.Platform, true).All()
-		if len(tokens) > 0 {
-			token = tokens[0].AccessToken
+		token := syncSvc.ResolveSyncToken(req.Platform, nil)
+
+		// 读取续传点，避免每次都全量同步
+		syncPoints, _ := db.SyncPoint.Select().Where("repository_id = ? AND sync_type = ?", repo.ID, "mirror").All()
+		var lastIssueSyncAt, lastPRSyncAt *time.Time
+		var lastIssueNumber, lastPRNumber int
+		var syncPointID int64
+		if len(syncPoints) > 0 {
+			sp := syncPoints[0]
+			syncPointID = sp.ID
+			lastIssueSyncAt = sp.LastIssueSyncAt
+			lastPRSyncAt = sp.LastPRSyncAt
+			lastIssueNumber = sp.LastIssueNumber
+			lastPRNumber = sp.LastPRNumber
 		}
 
 		if services.TryLockSync(repo.ID) {
 			go func() {
 				defer services.UnlockSync(repo.ID)
 				ctx := context.Background()
-				if _, err := syncSvc.SyncRepositoryData(ctx, repo.ID, req.Platform, req.Owner, req.Repo, token, nil, nil, 0, 0); err != nil {
+				syncResult, err := syncSvc.SyncRepositoryData(ctx, repo.ID, req.Platform, req.Owner, req.Repo, token, lastIssueSyncAt, lastPRSyncAt, lastIssueNumber, lastPRNumber, nil)
+				if err != nil {
 					fmt.Printf("Warning: async sync failed for %s/%s: %v\n", req.Owner, req.Repo, err)
+					return
+				}
+
+				// 保存续传点
+				if syncPointID > 0 {
+					now := time.Now().UTC()
+					sp := syncPoints[0]
+					sp.LastSyncAt = &now
+					if syncResult.MaxIssueUpdatedAt != nil {
+						sp.LastIssueSyncAt = syncResult.MaxIssueUpdatedAt
+					} else {
+						sp.LastIssueSyncAt = &now
+					}
+					if syncResult.MaxPRUpdatedAt != nil {
+						sp.LastPRSyncAt = syncResult.MaxPRUpdatedAt
+					} else {
+						sp.LastPRSyncAt = &now
+					}
+					sp.LastIssueNumber = syncResult.MaxIssueNumber
+					sp.LastPRNumber = syncResult.MaxPRNumber
+					db.SyncPoint.Save().One(sp)
 				}
 			}()
 			result["synced"] = true
@@ -273,15 +305,14 @@ func CreateMirror(c fiber.Ctx) error {
 
 func ImportFromRemote(c fiber.Ctx) error {
 	var req struct {
-		Platform           string `json:"platform"`
-		Owner              string `json:"owner"`
-		Repo               string `json:"repo"`
-		Token              string `json:"token"`
-		CleanData          bool   `json:"clean_data"`
-		CloneRepo          bool   `json:"clone_repo"`
-		ImportIssues       bool   `json:"import_issues"`
-		ImportPRs          bool   `json:"import_prs"`
-		ImportContributors bool   `json:"import_contributors"`
+		Platform     string `json:"platform"`
+		Owner        string `json:"owner"`
+		Repo         string `json:"repo"`
+		Token        string `json:"token"`
+		CleanData    bool   `json:"clean_data"`
+		CloneRepo    bool   `json:"clone_repo"`
+		ImportIssues bool   `json:"import_issues"`
+		ImportPRs    bool   `json:"import_prs"`
 	}
 	if err := c.Bind().JSON(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
@@ -381,13 +412,13 @@ func ImportFromRemote(c fiber.Ctx) error {
 		}
 	}
 
-	if req.ImportIssues || req.ImportPRs || req.ImportContributors {
+	if req.ImportIssues || req.ImportPRs {
 		go func() {
 			ctx := context.Background()
 			if req.ImportIssues {
 				switch req.Platform {
 				case "github":
-					syncSvc.SyncGitHubIssues(ctx, repository.ID, req.Owner, req.Repo, req.Token, nil, 0)
+					syncSvc.SyncGitHubIssuesGraphQL(ctx, repository.ID, req.Owner, req.Repo, req.Token, nil, 0, nil)
 				case "gitea":
 					syncSvc.SyncGiteaIssues(ctx, repository.ID, req.Owner, req.Repo, req.Token)
 				}
@@ -395,18 +426,14 @@ func ImportFromRemote(c fiber.Ctx) error {
 			if req.ImportPRs {
 				switch req.Platform {
 				case "github":
-					syncSvc.SyncGitHubPRs(ctx, repository.ID, req.Owner, req.Repo, req.Token, nil, 0)
+					syncSvc.SyncGitHubPRsGraphQL(ctx, repository.ID, req.Owner, req.Repo, req.Token, nil, 0, nil)
 				case "gitea":
 					syncSvc.SyncGiteaPRs(ctx, repository.ID, req.Owner, req.Repo, req.Token)
 				}
 			}
-			if req.ImportContributors {
-				syncSvc.SyncGitHubContributors(ctx, repository.ID, req.Owner, req.Repo, req.Token)
-			}
 		}()
 		result["issues_synced"] = req.ImportIssues
 		result["prs_synced"] = req.ImportPRs
-		result["contributors_synced"] = req.ImportContributors
 	}
 
 	return c.Status(fiber.StatusOK).JSON(result)

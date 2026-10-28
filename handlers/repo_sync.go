@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/azhai/gitfolio/config"
 	"github.com/azhai/gitfolio/helpers"
 	"github.com/azhai/gitfolio/models"
 	"github.com/azhai/gitfolio/services"
@@ -94,16 +93,7 @@ func SyncIssuesData(c fiber.Ctx) error {
 		})
 	}
 
-	token := ""
-	if remoteRepo.AccountID != nil {
-		t, err := syncSvc.GetSyncToken(*remoteRepo.AccountID)
-		if err == nil && t != nil {
-			token = t.AccessToken
-		}
-	}
-	if token == "" {
-		_, token = config.GetUserToken()
-	}
+	token := syncSvc.ResolveSyncToken(remoteRepo.Platform, remoteRepo.AccountID)
 
 	syncPoints, _ := db.SyncPoint.Select().Where("repository_id = ? AND sync_type = ?", result.Repo.ID, "mirror").All()
 	var syncPointID int64
@@ -145,7 +135,7 @@ func SyncIssuesData(c fiber.Ctx) error {
 
 		ctx := context.Background()
 		startTime := time.Now()
-		syncResult, err := syncSvc.SyncRepositoryData(ctx, repoID, platform, remoteOwner, remoteRepoName, token, lastIssueSyncAt, lastPRSyncAt, lastIssueNumber, lastPRNumber)
+		syncResult, err := syncSvc.SyncRepositoryData(ctx, repoID, platform, remoteOwner, remoteRepoName, token, lastIssueSyncAt, lastPRSyncAt, lastIssueNumber, lastPRNumber, nil)
 		duration := time.Since(startTime).Milliseconds()
 
 		if err != nil {
@@ -173,10 +163,18 @@ func SyncIssuesData(c fiber.Ctx) error {
 		if syncPointID > 0 {
 			sp := syncPoints[0]
 			sp.LastSyncAt = &now
-			sp.LastIssueSyncAt = &now
-			sp.LastPRSyncAt = &now
-			sp.LastIssueNumber = syncResult.IssuesInserted + syncResult.IssuesUpdated
-			sp.LastPRNumber = syncResult.PRsInserted + syncResult.PRsUpdated
+			if syncResult.MaxIssueUpdatedAt != nil {
+				sp.LastIssueSyncAt = syncResult.MaxIssueUpdatedAt
+			} else {
+				sp.LastIssueSyncAt = &now
+			}
+			if syncResult.MaxPRUpdatedAt != nil {
+				sp.LastPRSyncAt = syncResult.MaxPRUpdatedAt
+			} else {
+				sp.LastPRSyncAt = &now
+			}
+			sp.LastIssueNumber = syncResult.MaxIssueNumber
+			sp.LastPRNumber = syncResult.MaxPRNumber
 			db.SyncPoint.Save().One(sp)
 		}
 	}()
@@ -188,7 +186,8 @@ func SyncIssuesData(c fiber.Ctx) error {
 
 func SyncPushRepository(c fiber.Ctx) error {
 	var req struct {
-		RemoteURL string `json:"remote_url"`
+		RemoteURL  string `json:"remote_url"`
+		RemoteName string `json:"remote_name"`
 	}
 	if err := c.Bind().JSON(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
@@ -200,7 +199,7 @@ func SyncPushRepository(c fiber.Ctx) error {
 	}
 
 	if !result.Repo.CanPushRemote() {
-		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Only public or private projects can push to remote"})
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Only public, private or local projects can push to remote"})
 	}
 
 	db := models.GetDB()
@@ -219,7 +218,12 @@ func SyncPushRepository(c fiber.Ctx) error {
 	}
 
 	syncSvc := services.NewSyncService(db)
-	if err := syncSvc.PushRepository(result.Repo.LocalPath, req.RemoteURL); err != nil {
+	if req.RemoteName != "" {
+		err = syncSvc.PushRepositoryByName(result.Repo.LocalPath, req.RemoteName)
+	} else {
+		err = syncSvc.PushRepository(result.Repo.LocalPath, req.RemoteURL)
+	}
+	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
 

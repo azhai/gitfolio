@@ -150,8 +150,8 @@ func TestRepository_CanPushRemote(t *testing.T) {
 	}{
 		{"public can push", "public", true},
 		{"private can push", "private", true},
+		{"local can push", "local", true},
 		{"mirror cannot push", "mirror", false},
-		{"local cannot push", "local", false},
 	}
 
 	for _, tt := range tests {

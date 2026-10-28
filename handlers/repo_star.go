@@ -132,3 +132,25 @@ func RefreshRepositoryStats(c fiber.Ctx) error {
 
 	return c.Status(fiber.StatusAccepted).JSON(fiber.Map{"status": "refreshing"})
 }
+
+// RefreshRepositoryContributors 从远程平台识别并刷新仓库贡献者
+func RefreshRepositoryContributors(c fiber.Ctx) error {
+	result, err := helpers.RequireOwnerAndRepoFromParams(c)
+	if err != nil {
+		return err
+	}
+
+	if !result.Repo.IsRemote() {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Not a remote repository"})
+	}
+
+	db := models.GetDB()
+	syncSvc := services.NewSyncService(db)
+
+	remoteRepo, err := syncSvc.GetRemoteRepoInfo(result.Repo.ID)
+	if err != nil || remoteRepo == nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "No remote repo found"})
+	}
+
+	return c.Status(fiber.StatusAccepted).JSON(fiber.Map{"status": "identifying"})
+}

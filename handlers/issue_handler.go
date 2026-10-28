@@ -57,13 +57,21 @@ type IssueResponse struct {
 }
 
 func ToIssueResponse(issue *models.Issue, author *models.Contributor, assignee *models.Contributor, labels []helpers.LabelInfo, commentsCount int) *IssueResponse {
+	authorName := issue.AuthorName
+	if authorName == "" && author != nil {
+		authorName = author.Name
+	}
+	if authorName == "" {
+		authorName = "Unknown"
+	}
+
 	response := &IssueResponse{
 		ID:            issue.ID,
 		Number:        issue.Number,
 		Title:         issue.Title,
 		Body:          issue.Body,
 		RepositoryID:  issue.RepositoryID,
-		Author:        author.Name,
+		Author:        authorName,
 		AuthorID:      issue.AuthorID,
 		AssigneeID:    issue.AssigneeID,
 		Labels:        labels,
@@ -209,6 +217,10 @@ func ListIssues(c fiber.Ctx) error {
 	_ = helpers.EnsureDefaultLabels(db, result.Repo.ID)
 
 	conds := []goent.Condition{goent.Equals(db.Issue.Field("repository_id"), result.Repo.ID)}
+	// 默认排除 hidden 状态（被删除的 issue）
+	if state != "hidden" {
+		conds = append(conds, goent.NotEquals(db.Issue.Field("status"), "hidden"))
+	}
 	if state == "open" {
 		conds = append(conds, goent.Equals(db.Issue.Field("is_closed"), false))
 	} else if state == "closed" {
@@ -400,11 +412,19 @@ func CreateComment(c fiber.Ctx) error {
 		authorContrib = helpers.FindOrCreateContributor(db, result.Repo.ID, authorUser.Username, authorUser.Email, authorUser.Avatar)
 	}
 
+	authorName := ""
+	if authorContrib != nil {
+		authorName = authorContrib.Name
+	} else if authorUser != nil {
+		authorName = authorUser.Username
+	}
+
 	issueID := issueModel.ID
 	commentModel := &models.Comment{
-		Body:     req.Body,
-		IssueID:  &issueID,
-		AuthorID: authorContrib.ID,
+		Body:       req.Body,
+		IssueID:    &issueID,
+		AuthorID:   authorContrib.ID,
+		AuthorName: authorName,
 	}
 
 	err = db.Comment.Insert().One(commentModel)
@@ -415,7 +435,7 @@ func CreateComment(c fiber.Ctx) error {
 	return c.Status(fiber.StatusCreated).JSON(&CommentResponse{
 		ID:        commentModel.ID,
 		Body:      commentModel.Body,
-		Author:    authorContrib.Name,
+		Author:    authorName,
 		AuthorID:  commentModel.AuthorID,
 		CreatedAt: commentModel.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		UpdatedAt: commentModel.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
@@ -452,8 +472,8 @@ func GetComments(c fiber.Ctx) error {
 	var response []*CommentResponse
 	response = make([]*CommentResponse, 0)
 	for _, comment := range comments {
-		authorName := ""
-		if comment.Author != nil {
+		authorName := comment.AuthorName
+		if authorName == "" && comment.Author != nil {
 			authorName = comment.Author.Name
 		}
 		response = append(response, &CommentResponse{

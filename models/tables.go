@@ -9,9 +9,11 @@ import (
 
 type FolioSchema struct {
 	Activity         *goent.Table[Activity]
+	Backup           *goent.Table[Backup]
 	Branch           *goent.Table[Branch]
 	Comment          *goent.Table[Comment]
 	Contributor      *goent.Table[Contributor]
+	ETag             *goent.Table[ETag]
 	GitCommandLog    *goent.Table[GitCommandLog]
 	Group            *goent.Table[Group]
 	GroupMember      *goent.Table[GroupMember]
@@ -120,7 +122,7 @@ func (r *Repository) IsRemote() bool {
 }
 
 func (r *Repository) CanPushRemote() bool {
-	return r.ProjectType == "public" || r.ProjectType == "private"
+	return r.ProjectType == "public" || r.ProjectType == "private" || r.ProjectType == "local"
 }
 
 func (r *Repository) IsGroupOwned() bool {
@@ -180,12 +182,14 @@ type Issue struct {
 
 	RepositoryID int64 `goe:"index;m2o"`
 
-	AuthorID int64 `goe:"index;m2o"`
-
+	AuthorID   int64  `goe:"index;m2o"`
 	AssigneeID *int64 `goe:"m2o"`
 
-	IsClosed bool `goe:"default:false;index"`
-	IsLocked bool `goe:"default:false"`
+	IsClosed      bool   `goe:"default:false;index"`
+	IsLocked      bool   `goe:"default:false"`
+	CommentsCount int    `goe:"default:0"`
+	AuthorName    string `goe:"column:author_name"`
+	Status        string `goe:"default:'open';index"` // open/closed/hidden
 
 	// With 预加载挂载字段
 	Repository *Repository   `goe:"-"`
@@ -214,12 +218,13 @@ type Comment struct {
 
 	Body string
 
-	GitHubID      *int64 `goe:"index"`
+	GitHubID      *int64 `goe:"column:github_id;index"`
 	IssueID       *int64 `goe:"index;m2o"`
 	PullRequestID *int64 `goe:"index;m2o"`
 	TaskID        *int64 `goe:"index;m2o"`
 
-	AuthorID int64 `goe:"index;m2o"`
+	AuthorID   int64  `goe:"index;m2o"`
+	AuthorName string `goe:"column:author_name"`
 
 	// With 预加载挂载字段
 	Issue       *Issue       `goe:"-"`
@@ -272,7 +277,8 @@ type PullRequest struct {
 
 	RepositoryID int64 `goe:"index;m2o"`
 
-	AuthorID int64 `goe:"index;m2o"`
+	AuthorID   int64  `goe:"index;m2o"`
+	AuthorName string `goe:"column:author_name"`
 
 	SourceBranch string
 	TargetBranch string `goe:"default:'main'"`
@@ -284,6 +290,8 @@ type PullRequest struct {
 	IsMerged bool `goe:"default:false"`
 	IsClosed bool `goe:"default:false"`
 	IsLocked bool `goe:"default:false"`
+
+	CommentsCount int `goe:"default:0"`
 
 	// With 预加载挂载字段
 	Repository *Repository  `goe:"-"`
@@ -417,7 +425,7 @@ type SyncPoint struct {
 	LastPRNumber    int
 	LastIssueSyncAt *time.Time
 	LastPRSyncAt    *time.Time
-	LastETag        string
+	LastETag        string `goe:"column:last_etag"`
 	LastModified    string
 	NextSyncAt      *time.Time
 	SyncInterval    int `goe:"default:3600"`
@@ -532,8 +540,34 @@ type Contributor struct {
 	Name         string `goe:"index"`
 	Email        string `goe:"index"`
 	Avatar       string
+	GitHubID     int64 `goe:"column:github_id;index"`
 	RepositoryID int64 `goe:"index"`
 	CommitsCount int   `goe:"default:0"`
+}
+
+type ETag struct {
+	ID        int64     `goe:"pk"`
+	CreatedAt time.Time `goe:"default:current_timestamp"`
+	UpdatedAt time.Time
+
+	URL  string `goe:"unique"`
+	ETag string `goe:"column:etag"`
+}
+
+type Backup struct {
+	ID        int64 `goe:"pk"`
+	CreatedAt time.Time
+	UpdatedAt time.Time
+
+	Name         string `goe:"index"`
+	BackupType   string `goe:"index"` // full or incremental
+	BaseBackupID *int64 `goe:"index"` // for incremental: the full backup it is based on
+	Status       string `goe:"default:'running';index"`
+	Size         int64
+	Path         string
+	Error        string
+	StartedAt    *time.Time
+	CompletedAt  *time.Time
 }
 
 type Task struct {

@@ -811,7 +811,7 @@ func GetTaskTransitions(c fiber.Ctx) error {
 
 	transitions, err := db.TaskTransition.Select().With("user_id").Where("task_id = ?", task.ID).OrderBy("created_at DESC").All()
 	if err != nil {
-		return c.Status(fiber.StatusOK).JSON([]interface{}{})
+		return c.Status(fiber.StatusOK).JSON([]any{})
 	}
 
 	type TransitionResponse struct {
@@ -861,7 +861,7 @@ func GetTaskComments(c fiber.Ctx) error {
 
 	comments, err := db.Comment.Select().With("author_id").Where("task_id = ?", task.ID).OrderBy("created_at ASC").All()
 	if err != nil {
-		return c.Status(fiber.StatusOK).JSON([]interface{}{})
+		return c.Status(fiber.StatusOK).JSON([]any{})
 	}
 
 	type CommentResponse struct {
@@ -875,8 +875,8 @@ func GetTaskComments(c fiber.Ctx) error {
 
 	var response []CommentResponse
 	for _, c := range comments {
-		author := ""
-		if c.Author != nil {
+		author := c.AuthorName
+		if author == "" && c.Author != nil {
 			author = c.Author.Name
 		}
 		response = append(response, CommentResponse{
@@ -1036,7 +1036,7 @@ func GetTaskPullRequests(c fiber.Ctx) error {
 
 	links, err := db.TaskPullRequest.Select().Where("task_id = ?", task.ID).All()
 	if err != nil {
-		return c.Status(fiber.StatusOK).JSON([]interface{}{})
+		return c.Status(fiber.StatusOK).JSON([]any{})
 	}
 
 	var prIDs []int64
@@ -1096,7 +1096,7 @@ func GetTaskCommits(c fiber.Ctx) error {
 
 	refs, err := db.CommitReference.Select().Where("target_type = ? AND target_id = ?", "task", task.ID).All()
 	if err != nil {
-		return c.Status(fiber.StatusOK).JSON([]interface{}{})
+		return c.Status(fiber.StatusOK).JSON([]any{})
 	}
 
 	gitSvc := services.NewGitService()
@@ -1235,7 +1235,7 @@ func GetTaskTimeLogs(c fiber.Ctx) error {
 
 	logs, err := db.TaskTimeLog.Select().With("user_id").Where("task_id = ?", task.ID).OrderBy("created_at DESC").All()
 	if err != nil {
-		return c.Status(fiber.StatusOK).JSON([]interface{}{})
+		return c.Status(fiber.StatusOK).JSON([]any{})
 	}
 
 	type TimeLogResponse struct {

@@ -83,13 +83,13 @@ func TestMatchesDatePattern(t *testing.T) {
 		want bool
 	}{
 		{"2024-06-15", true},
-		{"2024-1-05", false},    // month must be 2 digits
-		{"24-06-15", false},     // year must be 4 digits
-		{"2024/06/15", false},   // wrong separator
-		{"2024-06-15x", false},  // too long
+		{"2024-1-05", false},   // month must be 2 digits
+		{"24-06-15", false},    // year must be 4 digits
+		{"2024/06/15", false},  // wrong separator
+		{"2024-06-15x", false}, // too long
 		{"hello", false},
 		{"", false},
-		{"2024-13-01", true},    // valid format, invalid date (not our job to validate)
+		{"2024-13-01", true}, // valid format, invalid date (not our job to validate)
 	}
 
 	for _, tt := range tests {
@@ -110,7 +110,7 @@ func TestIsNumstatLine(t *testing.T) {
 		{"-\t-\tbinary.png", true},
 		{"0\t0\tfile.txt", true},
 		{"just text", false},
-		{"10\tfile.txt", false}, // only 2 fields
+		{"10\tfile.txt", false},     // only 2 fields
 		{"abc\t5\tfile.txt", false}, // non-numeric first field
 		{"", false},
 	}

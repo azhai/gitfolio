@@ -62,12 +62,12 @@ func JSONError(c fiber.Ctx, status int, message string) error {
 }
 
 // JSONSuccess 返回 JSON 格式的成功响应（200）
-func JSONSuccess(c fiber.Ctx, data interface{}) error {
+func JSONSuccess(c fiber.Ctx, data any) error {
 	return c.Status(HTTPStatusOK).JSON(data)
 }
 
 // JSONCreated 返回 JSON 格式的创建成功响应（201）
-func JSONCreated(c fiber.Ctx, data interface{}) error {
+func JSONCreated(c fiber.Ctx, data any) error {
 	return c.Status(HTTPStatusCreated).JSON(data)
 }
 
@@ -83,19 +83,19 @@ func ParseIntParam(c fiber.Ctx, param string) (int, error) {
 
 // Response 通用 API 响应结构
 type Response struct {
-	Data    interface{} `json:"data"`
-	Page    int         `json:"page,omitempty"`
-	PerPage int         `json:"per_page,omitempty"`
-	Total   int64       `json:"total,omitempty"`
+	Data    any   `json:"data"`
+	Page    int   `json:"page,omitempty"`
+	PerPage int   `json:"per_page,omitempty"`
+	Total   int64 `json:"total,omitempty"`
 }
 
 // NewResponse 创建不含分页信息的响应
-func NewResponse(data interface{}) *Response {
+func NewResponse(data any) *Response {
 	return &Response{Data: data}
 }
 
 // NewPaginatedResponse 创建含分页信息的响应
-func NewPaginatedResponse(data interface{}, page, perPage int, total int64) *Response {
+func NewPaginatedResponse(data any, page, perPage int, total int64) *Response {
 	return &Response{
 		Data:    data,
 		Page:    page,

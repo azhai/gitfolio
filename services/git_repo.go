@@ -106,8 +106,13 @@ func (s *GitService) DeleteRepository(owner, name string) error {
 	return os.RemoveAll(repoPath)
 }
 
-// CloneRepository 克隆远程仓库到本地，支持裸仓库镜像模式
-// 遇到 HTTP/2 错误时自动降级到 HTTP/1.1 重试
+// CloneRepository 克隆远程仓库到本地，支持裸仓库镜像模式。
+// 实现为可续传的初始化 + fetch：
+//   - 如果目标目录已存在且是 git 仓库，则从 remote 继续 fetch；
+//   - 否则初始化裸仓库并添加 origin，然后 fetch；
+//   - 完整 fetch 失败时按分支逐个 fetch，已 fetch 的分支不会重复下载。
+//
+// 遇到 HTTP/2 错误时自动降级到 HTTP/1.1 重试。
 func (s *GitService) CloneRepository(owner, name, cloneURL string, isMirror bool) (string, error) {
 	reposDir := s.repoRoot
 	if _, err := os.Stat(reposDir); os.IsNotExist(err) {
@@ -125,52 +130,161 @@ func (s *GitService) CloneRepository(owner, name, cloneURL string, isMirror bool
 			}
 		}
 
-		var cmdArgs []string
-		if isMirror {
-			cmdArgs = []string{"clone", "--bare", "--progress", cloneURL, localPath}
-		} else {
-			cmdArgs = []string{"clone", "--progress", cloneURL, localPath}
+		resuming := s.isGitRepo(localPath)
+		if !resuming {
+			if err := os.MkdirAll(filepath.Dir(localPath), 0755); err != nil {
+				lastErr = fmt.Errorf("failed to create repo parent dir: %w", err)
+				break
+			}
+			if isMirror {
+				if _, err := s.runGitCommand([]string{"init", "--bare", localPath}, "", nil); err != nil {
+					lastErr = fmt.Errorf("failed to init bare repo: %w", err)
+					break
+				}
+			} else {
+				if _, err := s.runGitCommand([]string{"init", localPath}, "", nil); err != nil {
+					lastErr = fmt.Errorf("failed to init repo: %w", err)
+					break
+				}
+			}
+			if _, err := s.runGitCommand([]string{"-C", localPath, "remote", "add", "origin", cloneURL}, "", nil); err != nil {
+				lastErr = fmt.Errorf("failed to add remote: %w", err)
+				break
+			}
 		}
 
-		cmdStr := fmt.Sprintf("git %s", strings.Join(cmdArgs, " "))
-		startTime := time.Now()
-
-		cmd := exec.Command("git", cmdArgs...)
-		cmd.Env = append(os.Environ(),
-			"GIT_HTTP_MAX_REQUESTS=1",
-			"GIT_HTTP_LOW_SPEED_LIMIT=1000",
-			"GIT_HTTP_LOW_SPEED_TIME=300",
-		)
-
-		output, err := cmd.CombinedOutput()
-		durationMs := time.Since(startTime).Milliseconds()
-		outputStr := strings.TrimSpace(string(output))
-
-		if err == nil {
-			if s.db != nil {
-				LogGitCommand(s.db, cmdStr, "", outputStr, "success", 0, durationMs, nil, "")
-			}
+		fetchErr := s.resumableFetch(localPath, cloneURL, resuming)
+		if fetchErr == nil {
 			return localPath, nil
 		}
+		lastErr = fetchErr
 
-		lastErr = fmt.Errorf("failed to clone repository: %s", outputStr)
-
-		exitCode := 0
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			exitCode = exitErr.ExitCode()
-		}
-		if s.db != nil {
-			LogGitCommand(s.db, cmdStr, "", outputStr, "failed", exitCode, durationMs, nil, err.Error())
-		}
-
-		if strings.Contains(string(output), "HTTP2") || strings.Contains(string(output), "HTTP/2") {
+		output := fetchErr.Error()
+		if strings.Contains(output, "HTTP2") || strings.Contains(output, "HTTP/2") {
 			continue
 		}
-
 		break
 	}
 
 	return "", lastErr
+}
+
+// resumableFetch 先尝试一次性 fetch 所有分支和标签；失败时按分支逐个 fetch，
+// 利用 git 的对象复用机制实现断点续传。
+func (s *GitService) resumableFetch(localPath, cloneURL string, resuming bool) error {
+	action := "initial fetch"
+	if resuming {
+		action = "resume fetch"
+	}
+	fmt.Printf("[GIT] Starting %s for %s\n", action, cloneURL)
+
+	allRefs := []string{
+		"+refs/heads/*:refs/heads/*",
+		"+refs/tags/*:refs/tags/*",
+	}
+	if _, err := s.runGitCommand(append([]string{"-C", localPath, "fetch", "origin"}, allRefs...), "", nil); err == nil {
+		fmt.Printf("[GIT] Full fetch completed for %s\n", cloneURL)
+		return nil
+	} else {
+		fmt.Printf("[GIT] Full fetch failed, falling back to branch-by-branch fetch: %v\n", err)
+	}
+
+	branches, err := s.listRemoteBranches(localPath)
+	if err != nil {
+		return fmt.Errorf("failed to list remote branches: %w", err)
+	}
+
+	var branchErr error
+	fetched := 0
+	for _, branch := range branches {
+		if branch == "" || branch == "HEAD" {
+			continue
+		}
+		ref := fmt.Sprintf("+refs/heads/%s:refs/heads/%s", branch, branch)
+		if _, err := s.runGitCommand([]string{"-C", localPath, "fetch", "origin", ref}, "", nil); err != nil {
+			branchErr = err
+			fmt.Printf("[GIT] Warning: failed to fetch branch %s: %v\n", branch, err)
+		} else {
+			fetched++
+		}
+	}
+	fmt.Printf("[GIT] Branch-by-branch fetch done: %d/%d branches fetched\n", fetched, len(branches))
+
+	if _, err := s.runGitCommand([]string{"-C", localPath, "fetch", "origin", "+refs/tags/*:refs/tags/*"}, "", nil); err != nil {
+		fmt.Printf("[GIT] Warning: failed to fetch tags: %v\n", err)
+	}
+
+	if branchErr != nil {
+		return branchErr
+	}
+	return nil
+}
+
+// listRemoteBranches 返回 origin 上的分支名称列表。
+func (s *GitService) listRemoteBranches(localPath string) ([]string, error) {
+	out, err := s.runGitCommand([]string{"-C", localPath, "ls-remote", "--heads", "origin"}, "", nil)
+	if err != nil {
+		return nil, err
+	}
+	var branches []string
+	for _, line := range strings.Split(out, "\n") {
+		parts := strings.Fields(line)
+		if len(parts) < 2 {
+			continue
+		}
+		ref := parts[1]
+		branch := strings.TrimPrefix(ref, "refs/heads/")
+		if branch != ref {
+			branches = append(branches, branch)
+		}
+	}
+	return branches, nil
+}
+
+// isGitRepo 检查路径是否为一个 git 仓库。
+func (s *GitService) isGitRepo(path string) bool {
+	cmd := exec.Command("git", "-C", path, "rev-parse", "--git-dir")
+	cmd.Env = os.Environ()
+	err := cmd.Run()
+	return err == nil
+}
+
+// runGitCommand 执行 git 命令，并在有数据库时记录日志。
+func (s *GitService) runGitCommand(args []string, workingDir string, repoID *int64) (string, error) {
+	cmdStr := fmt.Sprintf("git %s", strings.Join(args, " "))
+	startTime := time.Now()
+
+	cmd := exec.Command("git", args...)
+	cmd.Env = append(os.Environ(),
+		"GIT_HTTP_MAX_REQUESTS=1",
+		"GIT_HTTP_LOW_SPEED_LIMIT=1000",
+		"GIT_HTTP_LOW_SPEED_TIME=300",
+	)
+	if workingDir != "" {
+		cmd.Dir = workingDir
+	}
+
+	output, err := cmd.CombinedOutput()
+	durationMs := time.Since(startTime).Milliseconds()
+	outputStr := strings.TrimSpace(string(output))
+
+	exitCode := 0
+	errMsg := ""
+	status := "success"
+	if err != nil {
+		status = "failed"
+		errMsg = err.Error()
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			exitCode = exitErr.ExitCode()
+		}
+	}
+	if s.db != nil {
+		LogGitCommand(s.db, cmdStr, workingDir, outputStr, status, exitCode, durationMs, repoID, errMsg)
+	}
+	if err != nil {
+		return outputStr, fmt.Errorf("%s: %s", errMsg, outputStr)
+	}
+	return outputStr, nil
 }
 
 // configureGitHTTPVersion 设置 Git 使用 HTTP/1.1 并增大缓冲区，同时配置代理
@@ -548,9 +662,9 @@ func (s *GitService) AbortOperation(owner, name, opType string) error {
 }
 
 // GetRepoStatus 获取仓库当前状态（是否在 rebase/revert/merge 中）
-func (s *GitService) GetRepoStatus(owner, name string) map[string]interface{} {
+func (s *GitService) GetRepoStatus(owner, name string) map[string]any {
 	repoPath := s.getRepoPath(owner, name)
-	status := map[string]interface{}{
+	status := map[string]any{
 		"rebasing":       false,
 		"reverting":      false,
 		"merging":        false,

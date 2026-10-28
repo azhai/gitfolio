@@ -52,12 +52,21 @@ type PRResponse struct {
 }
 
 func ToPRResponse(mr *models.PullRequest, author *models.Contributor, assignee *models.Contributor, commentsCount, filesCount int) *PRResponse {
+	authorName := mr.AuthorName
+	if authorName == "" && author != nil {
+		authorName = author.Name
+	}
+	if authorName == "" {
+		authorName = "Unknown"
+	}
+
 	response := &PRResponse{
 		ID:            mr.ID,
 		Number:        mr.Number,
 		Title:         mr.Title,
 		Body:          mr.Body,
 		RepositoryID:  mr.RepositoryID,
+		Author:        authorName,
 		AuthorID:      mr.AuthorID,
 		SourceBranch:  mr.SourceBranch,
 		TargetBranch:  mr.TargetBranch,
@@ -69,9 +78,6 @@ func ToPRResponse(mr *models.PullRequest, author *models.Contributor, assignee *
 		FilesCount:    filesCount,
 		CreatedAt:     mr.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		UpdatedAt:     mr.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
-	}
-	if author != nil {
-		response.Author = author.Name
 	}
 	if assignee != nil {
 		response.Assignee = assignee.Name
@@ -218,6 +224,10 @@ func ListPullRequests(c fiber.Ctx) error {
 	db := models.GetDB()
 
 	conds := []goent.Condition{goent.Equals(db.PullRequest.Field("repository_id"), result.Repo.ID)}
+	// 默认排除 hidden 状态（被删除的 PR）
+	if state != "hidden" {
+		conds = append(conds, goent.NotEquals(db.PullRequest.Field("status"), "hidden"))
+	}
 	if state == "open" {
 		conds = append(conds, goent.Equals(db.PullRequest.Field("is_closed"), false))
 	} else if state == "closed" {
@@ -467,7 +477,7 @@ func GetPRCommits(c fiber.Ctx) error {
 
 	if mr.SourceBranch == "" || mr.TargetBranch == "" {
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{
-			"commits":  []interface{}{},
+			"commits":  []any{},
 			"total":    0,
 			"page":     page,
 			"per_page": perPage,
@@ -509,7 +519,7 @@ func GetPRFiles(c fiber.Ctx) error {
 
 	if mr.SourceBranch == "" || mr.TargetBranch == "" {
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{
-			"files":           []interface{}{},
+			"files":           []any{},
 			"total_additions": 0,
 			"total_deletions": 0,
 		})

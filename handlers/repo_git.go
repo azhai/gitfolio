@@ -39,7 +39,7 @@ func GetRepositoryTree(c fiber.Ctx) error {
 	entries, err := gitSvc.GetTreeWithSize(result.OwnerName(), result.Repo.Name, ref, path)
 	if err != nil {
 		// 仓库无提交时返回空列表而非错误
-		return c.Status(fiber.StatusOK).JSON(fiber.Map{"path": path, "ref": ref, "entries": []interface{}{}})
+		return c.Status(fiber.StatusOK).JSON(fiber.Map{"path": path, "ref": ref, "entries": []any{}})
 	}
 
 	sort.Slice(entries, func(i, j int) bool {
@@ -238,7 +238,7 @@ func GetRepositoryCommits(c fiber.Ctx) error {
 		return err
 	}
 
-	empty := fiber.Map{"commits": []interface{}{}, "total": 0, "page": 1, "per_page": 30}
+	empty := fiber.Map{"commits": []any{}, "total": 0, "page": 1, "per_page": 30}
 	if result.Repo.LocalPath == "" {
 		return c.Status(fiber.StatusOK).JSON(empty)
 	}
@@ -257,7 +257,7 @@ func GetRepositoryCommits(c fiber.Ctx) error {
 
 	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
 
-	var commits interface{}
+	var commits any
 	var total int
 
 	if allBranches {
@@ -290,7 +290,7 @@ func GetRepositoryContributors(c fiber.Ctx) error {
 		Where("repository_id = ?", result.Repo.ID).
 		OrderBy("commits_count DESC").All()
 	if err != nil {
-		return c.Status(fiber.StatusOK).JSON([]interface{}{})
+		return c.Status(fiber.StatusOK).JSON([]any{})
 	}
 
 	responses := make([]*ContributorResponse, len(contributors))
@@ -1164,7 +1164,7 @@ func ListRemotes(c fiber.Ctx) error {
 	}
 
 	if result.Repo.LocalPath == "" {
-		return c.Status(fiber.StatusOK).JSON(fiber.Map{"remotes": []interface{}{}})
+		return c.Status(fiber.StatusOK).JSON(fiber.Map{"remotes": []any{}})
 	}
 
 	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
@@ -1518,13 +1518,13 @@ func GetStashList(c fiber.Ctx) error {
 	}
 
 	if result.Repo.LocalPath == "" {
-		return c.Status(fiber.StatusOK).JSON(fiber.Map{"stashes": []interface{}{}})
+		return c.Status(fiber.StatusOK).JSON(fiber.Map{"stashes": []any{}})
 	}
 
 	gitSvc := services.NewGitService().WithLocalPath(result.Repo.LocalPath)
 	entries, err := gitSvc.GetStashList(result.OwnerName(), result.Repo.Name)
 	if err != nil {
-		return c.Status(fiber.StatusOK).JSON(fiber.Map{"stashes": []interface{}{}})
+		return c.Status(fiber.StatusOK).JSON(fiber.Map{"stashes": []any{}})
 	}
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"stashes": entries})
