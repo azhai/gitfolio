@@ -55,8 +55,6 @@
                   </span>
                   <span class="badge" :class="projectTypeClass(repo.project_type)"
                     x-text="projectTypeLabel(repo.project_type)"></span>
-                  <span class="badge badge--gray" x-show="repo.storage_kind === 'bare'"
-                    x-text="t('storage.bare')"></span>
                 </div>
                 <p class="text-sm muted" style="flex: 1; margin-bottom: 12px"
                   x-text="repo.description || t('dashboard.noDescription')"></p>

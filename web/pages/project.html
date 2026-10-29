@@ -20,29 +20,35 @@
         <!-- header -->
         <div class="repo-head">
           <div class="row between gap-16 wrap">
-            <div>
+            <div class="min-w-0">
               <h1 class="repo-title">
                 <span class="muted"><a :href="ownerUrl" x-text="owner"></a> / </span>
                 <a :href="base" x-text="repo && repo.name"></a>
-              </h1>
-              <div class="row gap-8 mt-8 wrap">
-                <span class="badge" :class="projectTypeClass(repo && repo.project_type)"
+                <span class="badge repo-title__badge" :class="projectTypeClass(repo && repo.project_type)"
                   x-text="projectTypeLabel(repo && repo.project_type)"></span>
-                <span class="badge badge--gray" x-show="repo && repo.storage_kind === 'bare'"
-                  x-text="t('storage.bare')"></span>
-                <span class="text-sm muted" x-show="repo && repo.default_branch"
-                  x-text="repo && repo.default_branch"></span>
-              </div>
+              </h1>
             </div>
-            <div class="btn-group">
-              <button class="btn btn--sm" @click="toggleStar">
-                <span x-icon="{ name: 'star', size: 14 }"></span>
-                <span x-text="(repo && repo.stars_count) || 0"></span>
-              </button>
-              <button class="btn btn--sm" @click="copyClone">
-                <span x-icon="{ name: 'link-2', size: 14 }"></span>
-                <span x-text="t('project.copyClone')"></span>
-              </button>
+            <div class="row gap-8 wrap">
+              <!-- 当前分支 + 切换：能管理且有工作区才出现 -->
+              <div class="branch-switch" x-show="canManage && repo && repo.has_work_tree && branches.length"
+                x-cloak>
+                <span x-icon="{ name: 'git-branch', size: 14, color: '#9ca3af' }"></span>
+                <select class="select select--sm" x-model="branchDraft" @change="switchBranch">
+                  <template x-for="b in branches" :key="'hb-' + b">
+                    <option :value="b" x-text="b"></option>
+                  </template>
+                </select>
+              </div>
+              <div class="btn-group">
+                <button class="btn btn--sm" @click="toggleStar">
+                  <span x-icon="{ name: 'star', size: 14 }"></span>
+                  <span x-text="(repo && repo.stars_count) || 0"></span>
+                </button>
+                <button class="btn btn--sm" @click="copyClone">
+                  <span x-icon="{ name: 'link-2', size: 14 }"></span>
+                  <span x-text="t('project.copyClone')"></span>
+                </button>
+              </div>
             </div>
           </div>
           <p class="text-sm muted mt-12" x-show="repo && repo.description"
@@ -242,6 +248,8 @@
             <div class="card__head">
               <span class="card__title" x-text="t('project.commits')"></span>
               <div class="row gap-8">
+                <button class="btn btn--sm" @click="toggleGraph"
+                  x-text="showGraph ? t('projectCommits.hideGraph') : t('projectCommits.showGraph')"></button>
                 <button class="btn btn--sm" x-show="repo && repo.has_work_tree"
                   :class="rangeMode ? 'btn--primary' : ''" @click="toggleRangeMode"
                   x-text="t('gitWorkflow.selectForDelete')"></button>
@@ -250,6 +258,7 @@
             <table class="table">
               <thead>
                 <tr>
+                  <th class="commit-graph-cell" x-show="showGraph"></th>
                   <th x-text="t('admin.messageCol')"></th>
                   <th style="width: 160px" x-text="t('commit.author')"></th>
                   <th style="width: 90px" x-text="t('project.hash')"></th>
@@ -260,6 +269,7 @@
                 <template x-for="(c, i) in commits" :key="c.hash">
                   <tr :class="inRange(i) ? 'row--picked' : ''"
                     :style="rangeMode ? 'cursor: pointer' : ''" @click="rangeMode && pickRange(i)">
+                    <td class="commit-graph-cell" x-show="showGraph" x-html="graphSvg(i)"></td>
                     <td class="truncate" style="max-width: 460px">
                       <template x-if="!rangeMode">
                         <a :href="base + '/commits/' + c.hash" x-text="c.message"></a>
@@ -1324,7 +1334,7 @@
               <div class="card__body" style="padding: 24px">
                 <h2 class="section-title" x-text="t('task.schedules')"></h2>
                 <div class="list mt-12">
-                  <template x-for="s in task.schedules" :key="s.id">
+                  <template x-for="s in (task && task.schedules) || []" :key="s.id">
                     <div class="list__item">
                       <span class="badge badge--blue" x-text="s.schedule_type || t('task.schedule')"></span>
                       <span class="text-sm muted" x-text="(s.plan_start_date || t('common.pending')) + ' ~ ' + (s.plan_end_date || t('common.pending'))"></span>

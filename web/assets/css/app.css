@@ -358,6 +358,8 @@ hr {
   border-radius: var(--radius-full);
   box-shadow: 0 1px 3px rgba(34, 197, 94, 0.3);
   transition: transform 0.25s var(--ease);
+  /* 纯装饰，不能挡住下面两个按钮的点击 */
+  pointer-events: none;
 }
 
 .lang-switch[data-lang="en"] .lang-switch__thumb {
@@ -926,6 +928,20 @@ hr {
 
 .table tbody tr:hover {
   background: #fcfcfc;
+}
+
+/* 提交图：行高由 SVG 固定为 42px，单元格不留内边距，线条才能跨行接上。
+   列宽必须由 SVG 的固有宽度撑开，设为 1% 会让内边距吃掉整列导致宽度为 0。 */
+.table .commit-graph-cell {
+  width: auto;
+  padding: 0 10px 0 14px;
+  white-space: nowrap;
+}
+
+.commit-graph-svg {
+  display: block;
+  /* 覆盖全局 svg { max-width: 100% }，否则窄列里会被压扁。 */
+  max-width: none;
 }
 
 .table--fixed {
@@ -1596,6 +1612,32 @@ hr {
 .hljs-deletion {
   color: #b31d28;
   background-color: #ffeef0;
+}
+
+/* ---------- repo head ---------- */
+.repo-title {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.35;
+  min-width: 0;
+}
+
+/* 类型徽标（镜像/私有/本地）紧跟仓库名，基线对齐。 */
+.repo-title__badge {
+  margin-left: 8px;
+  vertical-align: 3px;
+  white-space: nowrap;
+}
+
+.branch-switch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.min-w-0 {
+  min-width: 0;
 }
 
 /* ---------- git workflow ---------- */
@@ -2292,5 +2334,107 @@ hr {
   }
   .app-main--with-sidebar {
     margin-left: auto;
+  }
+}
+
+/* ---------- small screens ---------- */
+/* 顶栏两行：第一行品牌 + 操作（语言/通知/头像/登录），第二行横向滚动的导航。
+   app-main 的 margin-top 用 --nav-h，所以这里同步调大它。 */
+@media (max-width: 760px) {
+  :root {
+    --nav-h: 96px;
+  }
+
+  .topnav__inner {
+    flex-wrap: wrap;
+    align-content: center;
+    padding: 6px 12px;
+    row-gap: 2px;
+  }
+
+  .brand {
+    margin-right: 8px;
+  }
+
+  .brand__name {
+    font-size: 16px;
+  }
+
+  .nav-actions {
+    gap: 10px;
+    margin-left: auto;
+  }
+
+  /* 小屏上铃铛和用户名纯占地方，只留头像/登录按钮和语言切换。 */
+  .nav-icon-btn {
+    display: none;
+  }
+
+  .user-menu__name {
+    display: none;
+  }
+
+  .lang-switch button {
+    padding: 3px 8px;
+    font-size: 12px;
+  }
+
+  .nav-links {
+    order: 10;
+    flex-basis: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .nav-links::-webkit-scrollbar {
+    display: none;
+  }
+
+  .nav-link {
+    padding: 6px 10px;
+    font-size: 13px;
+  }
+
+  /* 仓库头部：标题可换行，操作组换行不溢出。 */
+  .repo-title {
+    font-size: 18px;
+  }
+
+  .repo-title__badge {
+    display: inline-block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    vertical-align: 2px;
+  }
+
+  .branch-switch .select--sm {
+    max-width: 150px;
+  }
+
+  /* 变更行按钮多，允许换行。 */
+  .change-row {
+    flex-wrap: wrap;
+  }
+
+  /* 表格在窄屏上横向滚动，而不是把卡片撑破。 */
+  .table {
+    display: block;
+    overflow-x: auto;
+  }
+
+  .tabs {
+    overflow-x: auto;
+    scrollbar-width: none;
+    flex-wrap: nowrap;
+  }
+
+  .tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .modal {
+    max-width: calc(100vw - 24px);
   }
 }

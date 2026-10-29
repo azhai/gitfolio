@@ -101,6 +101,200 @@ function languageClassFor(path) {
   return 'language-' + lang
 }
 
+// ---------- 提交图 ----------
+// 每个提交行画一小段 SVG 连线：从上一行底部接到本行节点，再从节点接到下一行。
+// 行高固定，保证相邻两行的线条能接上。
+var GRAPH_COLORS = [
+  '#e74c3c', '#2ecc71', '#3498db', '#f39c12', '#9b59b6', '#1abc9c',
+  '#e67e22', '#e91e63', '#00bcd4', '#8bc34a', '#ff5722', '#607d8b',
+  '#795548', '#cddc39', '#ff9800', '#673ab7',
+]
+var GRAPH_ROW_H = 42
+var GRAPH_LANE_W = 18
+
+// 根据提交的 parents 计算每条提交落在哪条泳道，以及和上下的连线关系。
+function computeGraphLayout(commits) {
+  if (!commits || !commits.length) return null
+
+  var commitLanes = {}
+  var commitFlows = {}
+  var hashToLane = {}
+  var activeLanes = []
+  var lanesAbove = []
+  var lanesBelow = []
+  var maxLane = 0
+
+  function findLaneForHash(hash) {
+    return hash in hashToLane ? hashToLane[hash] : -1
+  }
+
+  function findAvailableLane() {
+    for (var i = 0; i < activeLanes.length; i++) {
+      if (activeLanes[i] === null) return i
+    }
+    activeLanes.push(null)
+    maxLane = Math.max(maxLane, activeLanes.length - 1)
+    return activeLanes.length - 1
+  }
+
+  function setLane(lane, hash) {
+    while (activeLanes.length <= lane) {
+      activeLanes.push(null)
+      maxLane = Math.max(maxLane, activeLanes.length - 1)
+    }
+    if (hash in hashToLane && hashToLane[hash] !== lane) {
+      var oldLane = hashToLane[hash]
+      if (oldLane < activeLanes.length && activeLanes[oldLane] === hash) {
+        activeLanes[oldLane] = null
+      }
+    }
+    activeLanes[lane] = hash
+    hashToLane[hash] = lane
+  }
+
+  function clearLane(lane) {
+    if (lane < activeLanes.length && activeLanes[lane] !== null) {
+      var oldHash = activeLanes[lane]
+      if (hashToLane[oldHash] === lane) delete hashToLane[oldHash]
+      activeLanes[lane] = null
+    }
+  }
+
+  function snapshotActive() {
+    var seen = {}
+    for (var i = 0; i < activeLanes.length; i++) {
+      if (activeLanes[i] !== null) seen[i] = true
+    }
+    return seen
+  }
+
+  for (var i = 0; i < commits.length; i++) {
+    lanesAbove[i] = snapshotActive()
+
+    var commit = commits[i]
+    var hash = commit.hash
+    var parents = commit.parents || []
+
+    var myLane = findLaneForHash(hash)
+    if (myLane === -1) myLane = findAvailableLane()
+    commitLanes[hash] = myLane
+
+    var flows = []
+    if (!parents.length) {
+      clearLane(myLane)
+      commitFlows[hash] = flows
+      lanesBelow[i] = snapshotActive()
+      continue
+    }
+
+    setLane(myLane, parents[0])
+    flows.push({ fromLane: myLane, toLane: myLane, type: 'straight' })
+
+    for (var p = 1; p < parents.length; p++) {
+      var parentHash = parents[p]
+      var existingLane = findLaneForHash(parentHash)
+      if (existingLane !== -1) {
+        flows.push({ fromLane: myLane, toLane: existingLane, type: 'merge' })
+      } else {
+        var newLane = findAvailableLane()
+        setLane(newLane, parentHash)
+        flows.push({ fromLane: myLane, toLane: newLane, type: 'branch' })
+      }
+    }
+
+    commitFlows[hash] = flows
+    lanesBelow[i] = snapshotActive()
+  }
+
+  var laneCount = maxLane + 1
+  var laneColors = {}
+  for (var l = 0; l < laneCount; l++) laneColors[l] = GRAPH_COLORS[l % GRAPH_COLORS.length]
+
+  return {
+    commitLanes: commitLanes,
+    commitFlows: commitFlows,
+    laneCount: laneCount,
+    laneColors: laneColors,
+    lanesAbove: lanesAbove,
+    lanesBelow: lanesBelow,
+  }
+}
+
+function renderCommitGraphSvg(layout, commits, index) {
+  var commit = commits[index]
+  if (!layout || !commit) return ''
+
+  var rowH = GRAPH_ROW_H
+  var laneW = GRAPH_LANE_W
+  var nodeR = 3.5
+  var padX = 6
+  var lineW = 1.8
+  var width = Math.max(layout.laneCount, 1) * laneW + padX * 2
+
+  var myLane = layout.commitLanes[commit.hash] || 0
+  var myX = myLane * laneW + laneW / 2 + padX
+  var myY = rowH / 2
+  var color = layout.laneColors[myLane]
+  var above = layout.lanesAbove[index] || {}
+  var below = layout.lanesBelow[index] || {}
+  var parts = []
+
+  function drawPath(d, stroke) {
+    parts.push(
+      '<path d="' + d + '" stroke="' + stroke + '" stroke-width="' + lineW +
+        '" fill="none" stroke-linecap="round"></path>'
+    )
+  }
+
+  if (above[myLane]) {
+    drawPath('M ' + myX + ' 0 L ' + myX + ' ' + (myY - nodeR), color)
+  }
+
+  var handled = {}
+  handled[myLane] = true
+  var flows = layout.commitFlows[commit.hash] || []
+  for (var i = 0; i < flows.length; i++) {
+    var flow = flows[i]
+    var toX = flow.toLane * laneW + laneW / 2 + padX
+    var toColor = layout.laneColors[flow.toLane]
+    handled[flow.toLane] = true
+    if (flow.type === 'straight') {
+      drawPath('M ' + myX + ' ' + (myY + nodeR) + ' L ' + myX + ' ' + rowH, toColor)
+    } else {
+      var cp1y = myY + (rowH - myY) * 0.4
+      var cp2y = rowH - (rowH - myY) * 0.4
+      drawPath(
+        'M ' + myX + ' ' + (myY + nodeR) + ' C ' + myX + ' ' + cp1y + ', ' +
+          toX + ' ' + cp2y + ', ' + toX + ' ' + rowH,
+        toColor
+      )
+    }
+  }
+
+  for (var laneKey in above) {
+    var lane = Number(laneKey)
+    if (handled[lane]) continue
+    var lx = lane * laneW + laneW / 2 + padX
+    var lColor = layout.laneColors[lane]
+    var topY = myY - nodeR
+    if (below[lane]) {
+      drawPath('M ' + lx + ' 0 L ' + lx + ' ' + rowH, lColor)
+    } else {
+      drawPath('M ' + lx + ' 0 L ' + lx + ' ' + topY, lColor)
+      var cpY = topY + (myY - topY) * 0.5
+      drawPath('M ' + lx + ' ' + topY + ' C ' + lx + ' ' + cpY + ', ' + myX + ' ' + (topY - 2) + ', ' + myX + ' ' + topY, lColor)
+    }
+  }
+
+  parts.push(
+    '<circle cx="' + myX + '" cy="' + myY + '" r="' + nodeR + '" fill="' + color +
+      '" stroke="#fff" stroke-width="1.2"></circle>'
+  )
+
+  return '<svg class="commit-graph-svg" width="' + width + '" height="' + rowH +
+    '" viewBox="0 0 ' + width + ' ' + rowH + '">' + parts.join('') + '</svg>'
+}
+
 // Only rewrite repo-relative URLs. Absolute, protocol-relative and pure
 // fragment links already point somewhere meaningful.
 function isRelativeHref(href) {
@@ -191,6 +385,8 @@ Alpine.data('project', function () {
     commits: [],
     commitPage: 1,
     commitPages: 1,
+    showGraph: true,
+    graphLayout: null,
     branches: [],
 
     issues: [],
@@ -354,6 +550,15 @@ Alpine.data('project', function () {
         default_branch: this.repo.default_branch || '',
       }
       this.pushUrl = this.repo.mirror_url || ''
+      // 头部的分支切换需要分支列表和当前分支；异步取，不阻塞首屏。
+      if (this.canManage && this.repo.has_work_tree) {
+        var self = this
+        this.loadBranches().catch(function () {})
+        reposAPI.getGitStatus(this.owner, this.repoName).then(function (st) {
+          self.gitBranch = (st && st.current_branch) || ''
+          if (!self.branchDraft) self.branchDraft = self.gitBranch
+        }).catch(function () {})
+      }
       try {
         if (this.tab === 'tree') await this.loadTree()
         else if (this.tab === 'commits') await this.loadCommits(1)
@@ -535,11 +740,24 @@ Alpine.data('project', function () {
     // ---------- commits / branches ----------
 
     loadCommits: async function (page) {
-      var data = await reposAPI.commits(this.owner, this.repoName, { page: page, per_page: PER_PAGE })
+      var params = { page: page, per_page: PER_PAGE }
+      // all=true 走后端 GetCommitGraph，返回带 parents 的全分支提交。
+      if (this.showGraph) params.all = 'true'
+      var data = await reposAPI.commits(this.owner, this.repoName, params)
       this.commits = (data && data.commits) || []
       var total = (data && data.total) || this.commits.length
       this.commitPage = page
       this.commitPages = Math.max(1, Math.ceil(total / PER_PAGE))
+      this.graphLayout = this.showGraph ? computeGraphLayout(this.commits) : null
+    },
+
+    toggleGraph: async function () {
+      this.showGraph = !this.showGraph
+      await this.loadCommits(this.commitPage)
+    },
+
+    graphSvg: function (index) {
+      return renderCommitGraphSvg(this.graphLayout, this.commits, index)
     },
 
     goCommitPage: async function (page) {
@@ -1714,17 +1932,18 @@ Alpine.data('project', function () {
       }
     },
 
+    // 头部和工作流页共用：切换会改变整页内容（文件树、提交列表都跟着变），
+    // 成功后直接整页重载，比在各标签页里逐个刷新可靠。
     switchBranch: async function () {
       var branch = this.branchDraft
       if (!branch || branch === this.gitBranch) return
       try {
         await reposAPI.checkout(this.owner, this.repoName, branch)
         toast(t('gitWorkflow.switchSuccess', { branch: branch }))
-        this.diffResult = null
-        this.diffPath = ''
-        await this.loadGitStatus()
+        setTimeout(function () { window.location.reload() }, 300)
       } catch (err) {
         toast(err.message || t('gitWorkflow.switchFailed'), 'error')
+        this.branchDraft = this.gitBranch
       }
     },
 
