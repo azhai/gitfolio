@@ -450,6 +450,9 @@ Alpine.data('project', function () {
     newTaskIssueIds: [],
     showNewTaskIssuePicker: false,
 
+    // 裸仓库查看的分支（?ref=），有工作区的仓库用 checkout，不用这个。
+    viewRef: '',
+    queryPage: 1,
     // git 工作流：工作区、暂存区与 stash
     gitStatus: null,
     gitStaged: [],
@@ -512,7 +515,11 @@ Alpine.data('project', function () {
       this.sha = r.sha
       this.dirPath = r.sub
       this.base = '/' + r.owner + '/' + r.repo
-      this.sourceView = new URLSearchParams(window.location.search).get('source') === '1'
+      var qs = new URLSearchParams(window.location.search)
+      this.sourceView = qs.get('source') === '1'
+      // ref 是裸仓库（镜像等）的"当前查看分支"，page 让翻页在刷新后保持。
+      this.viewRef = qs.get('ref') || ''
+      this.queryPage = parseInt(qs.get('page'), 10) || 1
       this.ownerUrl = '/users/' + r.owner
       this.emptyMessage = t('project.emptyTree')
       this.updateCrumbs()
@@ -566,10 +573,15 @@ Alpine.data('project', function () {
           self.gitBranch = (st && st.current_branch) || ''
           if (!self.branchDraft) self.branchDraft = self.gitBranch
         }).catch(function () {})
+      } else if (!this.repo.has_work_tree) {
+        // 裸仓库（镜像、全局裸仓库）不能 checkout，但查看哪个分支照样能选。
+        this.gitBranch = this.viewRef || this.repo.default_branch || ''
+        this.branchDraft = this.gitBranch
+        this.loadBranches().catch(function () {})
       }
       try {
         if (this.tab === 'tree') await this.loadTree()
-        else if (this.tab === 'commits') await this.loadCommits(1)
+        else if (this.tab === 'commits') await this.loadCommits(this.queryPage || 1)
         else if (this.tab === 'commit') await this.loadCommit()
         else if (this.tab === 'branches') await this.loadBranches()
         else if (this.tab === 'tags') await this.loadTags()
@@ -578,9 +590,9 @@ Alpine.data('project', function () {
         else if (this.tab === 'tasks') await this.loadTasks()
         else if (this.tab === 'task') await this.loadTask()
         else if (this.tab === 'task-new') await this.loadOpenIssues()
-        else if (this.tab === 'issues') await this.loadIssues()
+        else if (this.tab === 'issues') await this.loadIssues(this.queryPage || 1)
         else if (this.tab === 'issue') await this.loadIssue()
-        else if (this.tab === 'prs') await this.loadPRs()
+        else if (this.tab === 'prs') await this.loadPRs(this.queryPage || 1)
         else if (this.tab === 'pr') await this.loadPR()
         else if (this.tab === 'pr-new') await this.loadBranches()
         else if (this.tab === 'changes') await this.loadGitStatus()
@@ -599,12 +611,27 @@ Alpine.data('project', function () {
 
     // ---------- files ----------
 
+    // 文件树内跳转的链接都要带上当前查看的分支，裸仓库切换才不会丢。
+    treeUrl: function (path) {
+      return this.base + '/tree/' + path +
+        (this.viewRef ? '?ref=' + encodeURIComponent(this.viewRef) : '')
+    },
+
+    setQueryParam: function (key, value) {
+      var p = new URLSearchParams(window.location.search)
+      if (value === 1 || value === '' || value == null) p.delete(key)
+      else p.set(key, value)
+      var qsStr = p.toString()
+      window.history.replaceState(null, '', window.location.pathname + (qsStr ? '?' + qsStr : ''))
+    },
+
     loadTree: async function () {
+      var ref = this.viewRef || 'HEAD'
       // 三个请求互不依赖，并行发出；串行时整页 spinner 会白白多等两轮往返。
-      var commitPromise = reposAPI.lastCommit(this.owner, this.repoName).catch(function () {
+      var commitPromise = reposAPI.lastCommit(this.owner, this.repoName, ref).catch(function () {
         return null
       })
-      var treePromise = reposAPI.tree(this.owner, this.repoName, this.dirPath)
+      var treePromise = reposAPI.tree(this.owner, this.repoName, this.dirPath, ref)
       var readmePromise = this.dirPath ? null : this.loadReadme()
       this.lastCommit = await commitPromise
       try {
@@ -625,7 +652,7 @@ Alpine.data('project', function () {
     openFile: async function (path) {
       this.filePath = path || ''
       this.fileLangClass = languageClassFor(path)
-      var data = await reposAPI.file(this.owner, this.repoName, path)
+      var data = await reposAPI.file(this.owner, this.repoName, path, this.viewRef)
       this.file = data || {}
       this.fileContent = (data && (data.content || data.raw)) || ''
       this.fileSize = data && data.size ? String(data.size) : ''
@@ -733,7 +760,7 @@ Alpine.data('project', function () {
       this.readmePath = ''
       for (var i = 0; i < names.length; i++) {
         try {
-          var file = await reposAPI.file(this.owner, this.repoName, names[i])
+          var file = await reposAPI.file(this.owner, this.repoName, names[i], this.viewRef)
           if (file && file.content) {
             this.readmePath = names[i]
             this.readmeHtml = this.markdownHtml(file.content, '')
@@ -751,6 +778,8 @@ Alpine.data('project', function () {
       var params = { page: page, per_page: PER_PAGE }
       // all=true 走后端 GetCommitGraph，返回带 parents 的全分支提交。
       if (this.showGraph) params.all = 'true'
+      // 裸仓库查看非默认分支时，提交列表跟着 ?ref= 走。
+      else if (this.viewRef) params.ref = this.viewRef
       var data = await reposAPI.commits(this.owner, this.repoName, params)
       this.commits = (data && data.commits) || []
       var total = (data && data.total) || this.commits.length
@@ -772,6 +801,7 @@ Alpine.data('project', function () {
     goCommitPage: async function (page) {
       if (page < 1 || page > this.commitPages) return
       await this.loadCommits(page)
+      this.setQueryParam('page', page)
     },
 
     // ---------- 高级翻页 ----------
@@ -808,11 +838,13 @@ Alpine.data('project', function () {
     goIssuePage: async function (page) {
       if (page < 1 || page > this.issuePages) return
       await this.loadIssues(page)
+      this.setQueryParam('page', page)
     },
 
     goPrPage: async function (page) {
       if (page < 1 || page > this.prPages) return
       await this.loadPRs(page)
+      this.setQueryParam('page', page)
     },
 
     loadBranches: async function () {
@@ -1992,9 +2024,19 @@ Alpine.data('project', function () {
 
     // 头部和工作流页共用：切换会改变整页内容（文件树、提交列表都跟着变），
     // 成功后直接整页重载，比在各标签页里逐个刷新可靠。
+    // 裸仓库没有工作区，不能 checkout——切换的是"查看哪个分支"，
+    // 用 ?ref= 记住（提交、文件、README 都按它读取）。
     switchBranch: async function () {
       var branch = this.branchDraft
       if (!branch || branch === this.gitBranch) return
+      if (this.repo && !this.repo.has_work_tree) {
+        var p = new URLSearchParams(window.location.search)
+        if (branch === (this.repo.default_branch || '')) p.delete('ref')
+        else p.set('ref', branch)
+        p.delete('page')
+        window.location.search = p.toString()
+        return
+      }
       try {
         await reposAPI.checkout(this.owner, this.repoName, branch)
         toast(t('gitWorkflow.switchSuccess', { branch: branch }))

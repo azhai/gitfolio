@@ -30,7 +30,9 @@
             </div>
             <div class="row gap-8 wrap">
               <!-- 当前分支 + 切换：能管理且有工作区才出现 -->
-              <div class="branch-switch" x-show="canManage && repo && repo.has_work_tree && branches.length"
+              <!-- 有工作区：切换 = checkout（需管理权）；裸仓库：切换 = 改变查看分支（?ref=） -->
+              <div class="branch-switch"
+                x-show="repo && branches.length && (repo.has_work_tree ? canManage : true)"
                 x-cloak>
                 <span x-icon="{ name: 'git-branch', size: 14, color: '#9ca3af' }"></span>
                 <select class="select select--sm" x-model="branchDraft" @change="switchBranch">
@@ -125,7 +127,7 @@
                 <template x-for="(seg, i) in crumbSegs" :key="i">
                   <span class="row gap-6">
                     <span class="muted-2">/</span>
-                    <a :href="base + '/tree/' + crumbSegs.slice(0, i + 1).join('/')" x-text="seg"></a>
+                    <a :href="treeUrl(crumbSegs.slice(0, i + 1).join('/'))" x-text="seg"></a>
                   </span>
                 </template>
               </div>
@@ -161,7 +163,7 @@
               <tbody>
                 <tr x-show="dirPath">
                   <td colspan="2">
-                    <a class="row gap-8 muted" :href="parentUrl">
+                    <a class="row gap-8 muted" :href="crumbSegs.length ? treeUrl(crumbSegs.slice(0, -1).join('/')) : base">
                       <span x-icon="{ name: 'chevron-left', size: 14 }"></span>
                       <span x-text="'..'"></span>
                     </a>
@@ -173,7 +175,7 @@
                       <span x-html="icon(iconFor(entry).icon, { size: 15, color: iconFor(entry).color })"></span>
                     </td>
                     <td>
-                      <a :href="base + '/tree/' + entry.path" x-text="entry.name"></a>
+                      <a :href="treeUrl(entry.path)" x-text="entry.name"></a>
                     </td>
                     <td class="muted text-xs truncate" style="max-width: 320px"
                       x-text="entry.last_commit_message || ''"></td>
