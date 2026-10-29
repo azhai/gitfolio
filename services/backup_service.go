@@ -40,6 +40,8 @@ type BackupService struct {
 
 // NewBackupService creates a new backup service.
 func NewBackupService(db *models.Database) *BackupService {
+	// 备份引擎要用 pg_dump/psql；启动方路径不完整时先补齐，避免第一次备份就失败。
+	EnsurePgTools()
 	cfg := backup.Config{
 		Dir:                     backupDir(),
 		DSN:                     libpqBackupDSN(config.GetConfig().Database.DSN),

@@ -361,6 +361,64 @@
             </div>
           </div>
 
+          <!-- 四步流程：新手照着走即可，当前步骤高亮 -->
+          <div class="card mb-16" x-show="repo && repo.has_work_tree" x-cloak>
+            <div class="card__body" style="padding: 16px 18px">
+              <div class="row between wrap gap-8">
+                <span class="card__title">
+                  <span x-icon="{ name: 'rocket', size: 15 }"></span>
+                  <span x-text="t('gitWorkflow.guideTitle')"></span>
+                </span>
+                <button class="btn btn--sm btn--ghost" @click="toggleGitGuide">
+                  <span x-icon="{ name: gitGuideOpen ? 'chevron-down' : 'chevron-right', size: 14 }"></span>
+                  <span x-text="gitGuideOpen ? t('gitWorkflow.guideDismiss') : t('gitWorkflow.guideShow')"></span>
+                </button>
+              </div>
+
+              <div class="git-steps mt-12">
+                <template x-for="step in gitSteps()" :key="'gs-' + step.n">
+                  <div class="git-step" :class="step.state">
+                    <span class="git-step__num">
+                      <span x-show="step.state !== 'is-done'" x-text="step.n"></span>
+                      <span x-show="step.state === 'is-done'" x-icon="{ name: 'check', size: 14 }"></span>
+                    </span>
+                    <span class="git-step__body">
+                      <span class="git-step__title">
+                        <span x-icon="{ name: step.icon, size: 13 }"></span>
+                        <span x-text="step.title"></span>
+                      </span>
+                      <span class="git-step__desc" x-text="step.desc"></span>
+                    </span>
+                  </div>
+                </template>
+              </div>
+
+              <div class="git-hint">
+                <span x-icon="{ name: 'info', size: 14 }"></span>
+                <span x-text="gitHint()"></span>
+              </div>
+
+              <div class="git-guide" x-show="gitGuideOpen" x-cloak>
+                <div class="git-guide__item">
+                  <span x-icon="{ name: 'circle-check', size: 13, color: '#16a34a' }"></span>
+                  <span x-text="t('gitWorkflow.guideIntro')"></span>
+                </div>
+                <div class="git-guide__item">
+                  <span x-icon="{ name: 'info', size: 13, color: '#2563eb' }"></span>
+                  <span x-text="t('gitWorkflow.guideStaged')"></span>
+                </div>
+                <div class="git-guide__item">
+                  <span x-icon="{ name: 'pencil', size: 13, color: '#7c3aed' }"></span>
+                  <span x-text="t('gitWorkflow.guideCommitTip')"></span>
+                </div>
+                <div class="git-guide__item">
+                  <span x-icon="{ name: 'refresh-cw', size: 13, color: '#b45309' }"></span>
+                  <span x-text="t('gitWorkflow.guideUndo')"></span>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div class="alert alert--warn mb-16" x-show="gitBusy" x-cloak>
             <span class="grow" x-text="t('gitWorkflow.conflictHint')"></span>
             <span class="mono text-xs" x-show="gitOperation" x-text="gitOperation"></span>
@@ -389,21 +447,28 @@
           <div class="card mb-16" x-show="gitStaged.length">
             <div class="card__head">
               <span class="card__title">
+                <span x-icon="{ name: 'circle-check-big', size: 15, color: '#16a34a' }"></span>
                 <span x-text="t('gitWorkflow.staged')"></span>
                 <span class="muted-2" x-text="' · ' + gitStaged.length"></span>
               </span>
-              <button class="btn btn--sm" :disabled="staging" @click="unstageAll"
-                x-text="t('gitWorkflow.unstageAll')"></button>
+              <button class="btn btn--sm" :disabled="staging" @click="unstageAll">
+                <span x-icon="{ name: 'x', size: 13 }"></span>
+                <span x-text="t('gitWorkflow.unstageAll')"></span>
+              </button>
             </div>
             <div class="list">
               <template x-for="f in gitStaged" :key="'s-' + f.path">
                 <div class="list__item change-row">
                   <span class="badge badge--green" x-text="f.status"></span>
                   <span class="mono grow truncate" x-text="f.path"></span>
-                  <button class="btn btn--sm btn--ghost" @click="openDiff(f, true)"
-                    x-text="t('gitWorkflow.viewDiff')"></button>
-                  <button class="btn btn--sm" :disabled="staging" @click="unstageFiles([f])"
-                    x-text="t('gitWorkflow.unstage')"></button>
+                  <button class="btn btn--sm btn--ghost" @click="openDiff(f, true)">
+                    <span x-icon="{ name: 'file-diff', size: 13 }"></span>
+                    <span x-text="t('gitWorkflow.viewDiff')"></span>
+                  </button>
+                  <button class="btn btn--sm" :disabled="staging" @click="unstageFiles([f])">
+                    <span x-icon="{ name: 'x', size: 13 }"></span>
+                    <span x-text="t('gitWorkflow.unstage')"></span>
+                  </button>
                 </div>
               </template>
             </div>
@@ -413,23 +478,32 @@
           <div class="card mb-16" x-show="gitUnstaged.length">
             <div class="card__head">
               <span class="card__title">
+                <span x-icon="{ name: 'pencil', size: 15, color: '#f59e0b' }"></span>
                 <span x-text="t('gitWorkflow.unstaged')"></span>
                 <span class="muted-2" x-text="' · ' + gitUnstaged.length"></span>
               </span>
-              <button class="btn btn--sm" :disabled="staging" @click="stageAll"
-                x-text="t('gitWorkflow.stageAll')"></button>
+              <button class="btn btn--sm" :disabled="staging" @click="stageAll">
+                <span x-icon="{ name: 'plus', size: 13 }"></span>
+                <span x-text="t('gitWorkflow.stageAll')"></span>
+              </button>
             </div>
             <div class="list">
               <template x-for="f in gitUnstaged" :key="'u-' + f.path">
                 <div class="list__item change-row">
                   <span class="badge badge--amber" x-text="f.status"></span>
                   <span class="mono grow truncate" x-text="f.path"></span>
-                  <button class="btn btn--sm btn--ghost" @click="openDiff(f, false)"
-                    x-text="t('gitWorkflow.viewDiff')"></button>
-                  <button class="btn btn--sm btn--danger-ghost" @click="discardFile(f, false)"
-                    x-text="t('gitWorkflow.discard')"></button>
-                  <button class="btn btn--sm" :disabled="staging" @click="stageFiles([f])"
-                    x-text="t('gitWorkflow.stage')"></button>
+                  <button class="btn btn--sm btn--ghost" @click="openDiff(f, false)">
+                    <span x-icon="{ name: 'file-diff', size: 13 }"></span>
+                    <span x-text="t('gitWorkflow.viewDiff')"></span>
+                  </button>
+                  <button class="btn btn--sm btn--danger-ghost" @click="discardFile(f, false)">
+                    <span x-icon="{ name: 'trash-2', size: 13 }"></span>
+                    <span x-text="t('gitWorkflow.discard')"></span>
+                  </button>
+                  <button class="btn btn--sm" :disabled="staging" @click="stageFiles([f])">
+                    <span x-icon="{ name: 'plus', size: 13 }"></span>
+                    <span x-text="t('gitWorkflow.stage')"></span>
+                  </button>
                 </div>
               </template>
             </div>
@@ -439,6 +513,7 @@
           <div class="card mb-16" x-show="gitUntracked.length">
             <div class="card__head">
               <span class="card__title">
+                <span x-icon="{ name: 'file-pen', size: 15, color: '#6b7280' }"></span>
                 <span x-text="t('gitWorkflow.untracked')"></span>
                 <span class="muted-2" x-text="' · ' + gitUntracked.length"></span>
               </span>
@@ -448,10 +523,14 @@
                 <div class="list__item change-row">
                   <span class="badge badge--gray" x-text="f.status"></span>
                   <span class="mono grow truncate" x-text="f.path"></span>
-                  <button class="btn btn--sm btn--danger-ghost" @click="discardFile(f, true)"
-                    x-text="t('gitWorkflow.discard')"></button>
-                  <button class="btn btn--sm" :disabled="staging" @click="stageFiles([f])"
-                    x-text="t('gitWorkflow.stage')"></button>
+                  <button class="btn btn--sm btn--danger-ghost" @click="discardFile(f, true)">
+                    <span x-icon="{ name: 'trash-2', size: 13 }"></span>
+                    <span x-text="t('gitWorkflow.discard')"></span>
+                  </button>
+                  <button class="btn btn--sm" :disabled="staging" @click="stageFiles([f])">
+                    <span x-icon="{ name: 'plus', size: 13 }"></span>
+                    <span x-text="t('gitWorkflow.stage')"></span>
+                  </button>
                 </div>
               </template>
             </div>
@@ -466,7 +545,7 @@
           <!-- selected file diff -->
           <div class="card mb-16" x-show="diffPath" x-cloak>
             <div class="card__head">
-              <span class="card__title mono truncate" x-text="diffPath"></span>
+              <span class="card__title mono truncate" style="display: block" x-text="diffPath"></span>
               <div class="row gap-8">
                 <span class="badge" x-show="diffResult && !diffResult.is_binary"
                   x-text="'+' + ((diffResult && diffResult.additions) || 0)"></span>
@@ -513,7 +592,10 @@
           <!-- commit -->
           <div class="card mb-16" x-show="repo && repo.has_work_tree">
             <div class="card__head">
-              <span class="card__title" x-text="t('gitWorkflow.commit')"></span>
+              <span class="card__title">
+                <span x-icon="{ name: 'git-commit-vertical', size: 15 }"></span>
+                <span x-text="t('gitWorkflow.commit')"></span>
+              </span>
             </div>
             <div class="card__body" style="padding: 20px">
               <textarea class="textarea" rows="3" x-model="commitMessage"
@@ -523,7 +605,10 @@
                   x-text="gitStaged.length ? gitStaged.length + ' · ' + t('gitWorkflow.staged') : t('gitWorkflow.noStagedFiles')"></span>
                 <button class="btn btn--primary btn--sm"
                   :disabled="committing || gitBusy || !gitStaged.length || !commitMessage.trim()"
-                  @click="commitStaged" x-text="t('gitWorkflow.commit')"></button>
+                  @click="commitStaged">
+                  <span x-icon="{ name: 'check', size: 14 }"></span>
+                  <span x-text="t('gitWorkflow.commit')"></span>
+                </button>
               </div>
             </div>
           </div>
@@ -531,7 +616,10 @@
           <!-- branches -->
           <div class="card mb-16" x-show="repo && repo.has_work_tree">
             <div class="card__head">
-              <span class="card__title" x-text="t('gitWorkflow.branchOps')"></span>
+              <span class="card__title">
+                <span x-icon="{ name: 'git-branch', size: 15 }"></span>
+                <span x-text="t('gitWorkflow.branchOps')"></span>
+              </span>
             </div>
             <div class="card__body" style="padding: 20px">
               <div class="row gap-8 wrap">
@@ -541,11 +629,16 @@
                   </template>
                 </select>
                 <button class="btn btn--sm" :disabled="gitBusy || !branchDraft || branchDraft === gitBranch"
-                  @click="switchBranch" x-text="t('gitWorkflow.switchTo')"></button>
+                  @click="switchBranch">
+                  <span x-icon="{ name: 'git-branch', size: 13 }"></span>
+                  <span x-text="t('gitWorkflow.switchTo')"></span>
+                </button>
                 <input class="input" x-model="newBranch" :placeholder="t('gitWorkflow.branchNamePlaceholder')"
                   style="max-width: 200px" />
-                <button class="btn btn--sm" @click="createBranchFrom"
-                  x-text="t('gitWorkflow.createBranch')"></button>
+                <button class="btn btn--sm" @click="createBranchFrom">
+                  <span x-icon="{ name: 'plus', size: 13 }"></span>
+                  <span x-text="t('gitWorkflow.createBranch')"></span>
+                </button>
               </div>
               <div class="row gap-8 wrap mt-12">
                 <select class="select" x-model="mergeSource" style="max-width: 220px">
@@ -555,15 +648,28 @@
                   </template>
                 </select>
                 <button class="btn btn--sm" :disabled="gitBusy || !mergeSource"
-                  @click="mergeInto(mergeSource)" x-text="t('gitWorkflow.mergeBranch')"></button>
+                  @click="mergeInto(mergeSource)">
+                  <span x-icon="{ name: 'git-merge', size: 13 }"></span>
+                  <span x-text="t('gitWorkflow.mergeBranch')"></span>
+                </button>
               </div>
             </div>
+          </div>
+
+          <div class="git-section-title" x-show="repo && repo.has_work_tree">
+            <span x-icon="{ name: 'layers', size: 14 }"></span>
+            <span x-text="t('gitWorkflow.advanced')"></span>
+            <span class="muted-2" style="font-weight:500; text-transform:none; letter-spacing:0"
+              x-text="'· ' + t('gitWorkflow.advancedHint')"></span>
           </div>
 
           <!-- interactive rebase -->
           <div class="card mb-16" x-show="repo && repo.has_work_tree">
             <div class="card__head">
-              <span class="card__title" x-text="t('gitWorkflow.rebaseEditorTitle')"></span>
+              <span class="card__title">
+                <span x-icon="{ name: 'git-fork', size: 15 }"></span>
+                <span x-text="t('gitWorkflow.rebaseEditorTitle')"></span>
+              </span>
             </div>
             <div class="card__body" style="padding: 20px">
               <div class="row gap-8 wrap">
@@ -573,10 +679,15 @@
                     <option :value="c.hash" x-text="c.short_hash + '  ' + c.message"></option>
                   </template>
                 </select>
-                <button class="btn btn--sm" :disabled="!rebaseBase" @click="buildRebase"
-                  x-text="t('gitWorkflow.rebaseLoad')"></button>
+                <button class="btn btn--sm" :disabled="!rebaseBase" @click="buildRebase">
+                  <span x-icon="{ name: 'download', size: 13 }"></span>
+                  <span x-text="t('gitWorkflow.rebaseLoad')"></span>
+                </button>
                 <button class="btn btn--sm btn--primary" :disabled="rebasing || !rebaseTodos.length"
-                  @click="runRebase" x-text="t('gitWorkflow.executeRebase')"></button>
+                  @click="runRebase">
+                  <span x-icon="{ name: 'check', size: 13 }"></span>
+                  <span x-text="t('gitWorkflow.executeRebase')"></span>
+                </button>
               </div>
               <div class="text-xs muted-2 mt-8" x-text="t('gitWorkflow.rebaseBaseHint')"></div>
 
@@ -606,15 +717,21 @@
           </div>
 
           <!-- stash -->
-          <div class="card" x-show="repo && repo.has_work_tree">
+          <div class="card mb-16" x-show="repo && repo.has_work_tree">
             <div class="card__head">
-              <span class="card__title" x-text="t('gitWorkflow.stashManagement')"></span>
+              <span class="card__title">
+                <span x-icon="{ name: 'package', size: 15 }"></span>
+                <span x-text="t('gitWorkflow.stashManagement')"></span>
+              </span>
             </div>
             <div class="card__body" style="padding: 20px">
               <div class="row gap-8 wrap">
                 <input class="input grow" x-model="stashMessage"
                   :placeholder="t('gitWorkflow.stashMsgPlaceholder')" style="min-width: 200px" />
-                <button class="btn btn--sm" @click="saveStash" x-text="t('gitWorkflow.stashSave')"></button>
+                <button class="btn btn--sm" @click="saveStash">
+                  <span x-icon="{ name: 'package', size: 13 }"></span>
+                  <span x-text="t('gitWorkflow.stashSave')"></span>
+                </button>
               </div>
               <div class="list mt-12">
                 <template x-for="s in stashes" :key="'st-' + s.index">
@@ -622,12 +739,18 @@
                     <span class="mono muted-2 text-xs" x-text="'stash@{' + s.index + '}'"></span>
                     <span class="grow truncate" x-text="s.message"></span>
                     <span class="text-xs muted-2" x-text="s.date"></span>
-                    <button class="btn btn--sm btn--ghost" @click="stashAction('pop', s)"
-                      x-text="t('gitWorkflow.stashPop')"></button>
-                    <button class="btn btn--sm btn--ghost" @click="stashAction('apply', s)"
-                      x-text="t('gitWorkflow.stashApply')"></button>
-                    <button class="btn btn--sm btn--danger-ghost" @click="stashAction('drop', s)"
-                      x-text="t('gitWorkflow.stashDrop')"></button>
+                    <button class="btn btn--sm btn--ghost" @click="stashAction('pop', s)">
+                      <span x-icon="{ name: 'upload', size: 13 }"></span>
+                      <span x-text="t('gitWorkflow.stashPop')"></span>
+                    </button>
+                    <button class="btn btn--sm btn--ghost" @click="stashAction('apply', s)">
+                      <span x-icon="{ name: 'download', size: 13 }"></span>
+                      <span x-text="t('gitWorkflow.stashApply')"></span>
+                    </button>
+                    <button class="btn btn--sm btn--danger-ghost" @click="stashAction('drop', s)">
+                      <span x-icon="{ name: 'trash-2', size: 13 }"></span>
+                      <span x-text="t('gitWorkflow.stashDrop')"></span>
+                    </button>
                   </div>
                 </template>
                 <div class="empty empty--tight" x-show="!stashes.length">
@@ -1329,11 +1452,18 @@
           <div class="row between mb-12">
             <a class="btn btn--sm btn--ghost" :href="base + '/tasks'"
               x-text="'← ' + t('project.tasks')"></a>
-            <div class="row gap-8" x-show="task">
+            <div class="row gap-8" x-show="task && !editingTask">
               <template x-for="opt in taskTransitionOptions()" :key="opt.value">
                 <button class="btn btn--sm btn--primary" :disabled="transitioning"
                   @click="transitionTask(opt.value)"
                   x-text="t('task.transitionTo').replace('{status}', opt.label)"></button>
+              </template>
+              <template x-if="isTaskOwner">
+                <div class="row gap-8">
+                  <button class="btn btn--sm" @click="startTaskEdit" x-text="t('common.edit')"></button>
+                  <button class="btn btn--sm btn--danger-ghost" :disabled="deletingTask" @click="deleteTask"
+                    x-text="t('common.delete')"></button>
+                </div>
               </template>
             </div>
           </div>
@@ -1346,23 +1476,71 @@
           <div x-show="task && !taskError">
             <div class="card">
               <div class="card__body" style="padding: 24px">
-                <div class="row gap-8 wrap">
-                  <span class="badge" :style="'background:' + statusOf(task && task.status).bg + ';color:' + statusOf(task && task.status).color"
-                    x-text="statusOf(task && task.status).label"></span>
-                  <span class="badge badge--gray" x-text="'P' + ((task && task.priority) || 0)"></span>
+                <div x-show="!editingTask">
+                  <div class="row gap-8 wrap">
+                    <span class="badge" :style="'background:' + statusOf(task && task.status).bg + ';color:' + statusOf(task && task.status).color"
+                      x-text="statusOf(task && task.status).label"></span>
+                    <span class="badge badge--gray" x-text="'P' + ((task && task.priority) || 0)"></span>
+                  </div>
+                  <div class="detail-title mt-12" x-text="task && task.title"></div>
+                  <div class="detail-meta mt-8 wrap">
+                    <span><span class="muted-2" x-text="t('task.initiator') + ' '"></span><span x-text="(task && task.initiator) || '-'"></span></span>
+                    <span><span class="muted-2" x-text="t('task.handler') + ' '"></span><span x-text="(task && task.handler) || '-'"></span></span>
+                    <span><span class="muted-2" x-text="t('task.verifier') + ' '"></span><span x-text="(task && task.verifier) || '-'"></span></span>
+                    <span x-text="task && task.created_at ? fmt.formatDateTime(task.created_at) : ''"></span>
+                  </div>
+                  <div class="md mt-16" x-show="taskGoalHtml" x-html="taskGoalHtml"></div>
                 </div>
-                <div class="detail-title mt-12" x-text="task && task.title"></div>
-                <div class="detail-meta mt-8 wrap">
-                  <span><span class="muted-2" x-text="t('task.initiator') + ' '"></span><span x-text="(task && task.initiator) || '-'"></span></span>
-                  <span><span class="muted-2" x-text="t('task.handler') + ' '"></span><span x-text="(task && task.handler) || '-'"></span></span>
-                  <span><span class="muted-2" x-text="t('task.verifier') + ' '"></span><span x-text="(task && task.verifier) || '-'"></span></span>
-                  <span x-text="task && task.created_at ? fmt.formatDateTime(task.created_at) : ''"></span>
+
+                <div x-show="editingTask" x-cloak>
+                  <div class="field">
+                    <label class="label" x-text="t('task.title') + ' *'"></label>
+                    <input class="input" x-model="taskEdit.title" />
+                  </div>
+                  <div class="row gap-12 wrap">
+                    <div class="field grow">
+                      <label class="label" x-text="t('task.priority')"></label>
+                      <select class="select" x-model.number="taskEdit.priority">
+                        <option :value="1">P1</option>
+                        <option :value="2">P2</option>
+                        <option :value="3">P3</option>
+                        <option :value="4">P4</option>
+                        <option :value="5">P5</option>
+                      </select>
+                    </div>
+                    <div class="field grow">
+                      <label class="label" x-text="t('task.handler')"></label>
+                      <input class="input" x-model="taskEdit.handler" placeholder="username" />
+                    </div>
+                    <div class="field grow">
+                      <label class="label" x-text="t('task.verifier')"></label>
+                      <input class="input" x-model="taskEdit.verifier" placeholder="username" />
+                    </div>
+                    <div class="field" style="max-width: 120px">
+                      <label class="label" x-text="t('task.sortOrder')"></label>
+                      <input class="input" type="number" x-model.number="taskEdit.sort_order" />
+                    </div>
+                  </div>
+                  <div class="field">
+                    <label class="label" x-text="t('task.goal')"></label>
+                    <textarea class="textarea" rows="4" x-model="taskEdit.goal"
+                      :placeholder="t('task.goalPlaceholder')"></textarea>
+                  </div>
+                  <div class="field">
+                    <label class="label" x-text="t('task.draftOrPlan')"></label>
+                    <textarea class="textarea" rows="6" x-model="taskEdit.draft"
+                      :placeholder="t('task.draftPlaceholder')"></textarea>
+                  </div>
+                  <div class="row between">
+                    <button class="btn btn--ghost" @click="cancelTaskEdit" x-text="t('common.cancel')"></button>
+                    <button class="btn btn--primary" :disabled="savingTaskEdit || !taskEdit.title.trim()"
+                      @click="saveTaskEdit" x-text="t('common.save')"></button>
+                  </div>
                 </div>
-                <div class="md mt-16" x-show="taskGoalHtml" x-html="taskGoalHtml"></div>
               </div>
             </div>
 
-            <div class="card mt-16" x-show="task && task.draft" x-cloak>
+            <div class="card mt-16" x-show="task && task.draft && !editingTask" x-cloak>
               <div class="card__body" style="padding: 24px">
                 <h2 class="section-title" x-text="t('task.draftOrPlan')"></h2>
                 <div class="md mt-12" x-html="taskDraftHtml"></div>
@@ -1738,7 +1916,7 @@
                 </div>
                 <div class="stat-mini">
                   <span class="stat-mini__label" x-text="t('projectSettings.syncInterval')"></span>
-                  <span class="stat-mini__value" x-text="syncDraft.intervalHours + 'h ' + syncDraft.intervalMinutes + 'm'"></span>
+                  <span class="stat-mini__value" x-text="intervalText()"></span>
                 </div>
               </div>
 
@@ -1749,20 +1927,21 @@
               </div>
 
               <div class="row gap-12 wrap" x-show="canManage">
-                <div class="field" style="max-width: 140px">
-                  <label class="label" x-text="t('common.hour')"></label>
-                  <input class="input" type="number" min="0" max="999" x-model.number="syncDraft.intervalHours" />
+                <div class="unit-field">
+                  <input class="input" type="number" min="0" max="999" x-model.number="syncDraft.intervalHours"
+                    :aria-label="t('common.hour')" />
+                  <span class="unit-field__unit" x-text="t('common.hour')"></span>
                 </div>
-                <div class="field" style="max-width: 140px">
-                  <label class="label" x-text="t('common.minute')"></label>
-                  <input class="input" type="number" min="0" max="59" x-model.number="syncDraft.intervalMinutes" />
+                <div class="unit-field">
+                  <input class="input" type="number" min="0" max="59" x-model.number="syncDraft.intervalMinutes"
+                    :aria-label="t('common.minute')" />
+                  <span class="unit-field__unit" x-text="t('common.minute')"></span>
                 </div>
-                <label class="checkbox" style="align-self: flex-end; padding-bottom: 10px">
+                <label class="checkbox">
                   <input type="checkbox" x-model="syncDraft.is_paused" />
                   <span x-text="t('projectSettings.pauseSync')"></span>
                 </label>
-                <button class="btn btn--sm btn--primary" style="align-self: flex-end; margin-bottom: 10px"
-                  :disabled="savingSync" @click="saveSyncConfig"
+                <button class="btn btn--sm btn--primary" :disabled="savingSync" @click="saveSyncConfig"
                   x-text="t('projectSettings.saveSyncConfig')"></button>
               </div>
               <div class="hint mt-8" x-text="t('projectSettings.syncIntervalHint')"></div>

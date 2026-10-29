@@ -65,6 +65,12 @@ func main() {
 		log.Fatalf("Failed to create repository root: %v", err)
 	}
 
+	// launchd/Finder 启动时 PATH 往往不含 Homebrew，备份用的 pg_dump/psql
+	// 会找不到；启动阶段先定位并补进 PATH。
+	if dir := services.EnsurePgTools(); dir != "" {
+		log.Printf("PostgreSQL tools not on PATH, using %s", dir)
+	}
+
 	if cfg.Admin.Username == "" || cfg.Admin.Password == "" {
 		log.Fatalf("Admin username or password is empty, please set them in the environment variables")
 	}

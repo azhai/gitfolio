@@ -33,13 +33,13 @@
         <div class="row gap-8 mb-16 wrap">
           <template x-for="item in tabs" :key="item.key">
             <button class="pill-tab" :class="tab === item.key ? 'is-active' : ''"
-              @click="tab = item.key" x-text="t(item.label)"></button>
+              @click="setTab(item.key)" x-text="t(item.label)"></button>
           </template>
         </div>
 
         <div class="card mb-24">
           <div class="card__body" style="padding: 14px 18px">
-            <input class="input" type="search" x-model="search"
+            <input class="input" type="search" x-model="search" @input="setPage(1)"
               :placeholder="t('projects.searchPlaceholder')" />
           </div>
         </div>
@@ -85,13 +85,13 @@
         </div>
 
         <div class="row center gap-8 mt-20" x-show="totalPages > 1" x-cloak>
-          <button class="btn btn--sm" :disabled="page <= 1" @click="page--"
+          <button class="btn btn--sm" :disabled="page <= 1" @click="setPage(page - 1)"
             x-text="t('projects.prevPage')"></button>
-          <template x-for="n in totalPages" :key="n">
-            <button class="btn btn--sm" style="min-width: 34px"
-              :class="page === n ? 'btn--primary' : ''" @click="page = n" x-text="n"></button>
+          <template x-for="item in pageItems" :key="item">
+            <button class="btn btn--sm" style="min-width: 34px" :disabled="item === '…'"
+              :class="page === item ? 'btn--primary' : ''" @click="setPage(item)" x-text="item"></button>
           </template>
-          <button class="btn btn--sm" :disabled="page >= totalPages" @click="page++"
+          <button class="btn btn--sm" :disabled="page >= totalPages" @click="setPage(page + 1)"
             x-text="t('projects.nextPage')"></button>
         </div>
       </section>

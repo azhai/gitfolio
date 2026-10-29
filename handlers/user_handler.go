@@ -259,6 +259,7 @@ func UpdateUserByUsername(c fiber.Ctx) error {
 		}
 	}
 
+	targetUser.Stamp()
 	err = db.User.Save().One(targetUser)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update user"})
@@ -418,6 +419,7 @@ func ChangePassword(c fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update password"})
 	}
 
+	userModel.Stamp()
 	err = db.User.Save().One(userModel)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to save user"})

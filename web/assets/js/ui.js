@@ -156,6 +156,15 @@ export function query(name) {
   return new URLSearchParams(window.location.search).get(name) || ''
 }
 
+// 把页面内的局部状态（标签页、页码）写回地址栏，刷新后还能回到原处。
+export function setQuery(name, value) {
+  var params = new URLSearchParams(window.location.search)
+  if (value === '' || value == null) params.delete(name)
+  else params.set(name, value)
+  var qs = params.toString()
+  window.history.replaceState(null, '', window.location.pathname + (qs ? '?' + qs : ''))
+}
+
 // Owner/repo live at the first two path segments: /<owner>/<repo>/<tab>/...
 export function projectRef() {
   var parts = window.location.pathname.split('/').filter(Boolean)

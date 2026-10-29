@@ -159,24 +159,70 @@ func (s *GitService) GetHeadBranch(owner, name string) string {
 	return strings.TrimSpace(string(output))
 }
 
-// GetAllBranches 获取所有分支列表（含远程分支）
+// GetAllBranches 获取所有分支列表（含远程分支）。
+// 远程分支与同名本地分支指向同一个提交时不重复返回：镜像仓库里这两条
+// 完全等价，下拉框里成对出现只是噪音。分叉了才把远程那条留着。
 func (s *GitService) GetAllBranches(owner, name string) ([]string, error) {
 	repoPath := s.getRepoPath(owner, name)
 
-	cmd := exec.Command("git", "-C", repoPath, "branch", "-a", "--format=%(refname:short)")
+	cmd := exec.Command("git", "-C", repoPath, "for-each-ref",
+		"--format=%(refname)%09%(objectname)", "refs/heads", "refs/remotes")
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("failed to list branches: %w", err)
 	}
 
-	lines := strings.Split(string(output), "\n")
-	branches := make([]string, 0, len(lines))
+	type refEntry struct {
+		short  string
+		commit string
+		local  bool
+	}
 
+	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+	entries := make([]refEntry, 0, len(lines))
 	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line != "" {
-			branches = append(branches, line)
+		parts := strings.SplitN(line, "\t", 2)
+		if len(parts) != 2 {
+			continue
 		}
+		ref, commit := parts[0], parts[1]
+		if branch, ok := strings.CutPrefix(ref, "refs/heads/"); ok {
+			entries = append(entries, refEntry{short: branch, commit: commit, local: true})
+			continue
+		}
+		rest, ok := strings.CutPrefix(ref, "refs/remotes/")
+		if !ok {
+			continue
+		}
+		remote, branch, ok := strings.Cut(rest, "/")
+		// origin/HEAD 只是默认分支的别名，不单独列出来。
+		if !ok || branch == "HEAD" {
+			continue
+		}
+		entries = append(entries, refEntry{short: remote + "/" + branch, commit: commit})
+	}
+
+	locals := make(map[string]string, len(entries))
+	for _, e := range entries {
+		if e.local {
+			locals[e.short] = e.commit
+		}
+	}
+
+	branches := make([]string, 0, len(entries))
+	seen := make(map[string]bool, len(entries))
+	for _, e := range entries {
+		if !e.local {
+			_, branch, _ := strings.Cut(e.short, "/")
+			if commit, ok := locals[branch]; ok && commit == e.commit {
+				continue
+			}
+		}
+		if seen[e.short] {
+			continue
+		}
+		seen[e.short] = true
+		branches = append(branches, e.short)
 	}
 
 	return branches, nil

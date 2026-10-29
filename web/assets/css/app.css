@@ -710,6 +710,32 @@ hr {
   font-size: 13px;
 }
 
+/* 数字输入框 + 右侧单位（小时/分钟）合并成一个控件 */
+.unit-field {
+  display: inline-flex;
+  align-items: stretch;
+  height: 40px;
+}
+
+.unit-field .input {
+  width: 96px;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.unit-field__unit {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 12px;
+  font-size: 13px;
+  color: var(--text-3);
+  white-space: nowrap;
+  background: var(--panel-2);
+  border: 1px solid var(--border-3);
+  border-left: 0;
+  border-radius: 0 var(--radius) var(--radius) 0;
+}
+
 .hint {
   margin-top: 5px;
   font-size: 12px;
@@ -804,6 +830,9 @@ hr {
 }
 
 .card__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
   font-size: 14.5px;
   font-weight: 600;
   color: var(--text);
@@ -1685,6 +1714,131 @@ hr {
 .change-row > .grow,
 .change-row > .mono {
   min-width: 0;
+}
+
+/* Git 工作流的四步引导条：完成的步骤打勾变绿，当前步骤高亮。 */
+.git-steps {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.git-step {
+  display: flex;
+  flex: 1 1 200px;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  opacity: 0.72;
+}
+
+.git-step.is-active {
+  opacity: 1;
+  border-color: var(--green-500);
+  background: var(--green-50);
+}
+
+.git-step.is-done {
+  opacity: 1;
+  border-color: var(--green-200);
+}
+
+.git-step__num {
+  display: flex;
+  flex: 0 0 26px;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-3);
+  background: var(--panel-2);
+  border: 1px solid var(--border-3);
+  border-radius: var(--radius-full);
+}
+
+.git-step.is-active .git-step__num {
+  color: #fff;
+  background: var(--green-500);
+  border-color: var(--green-500);
+}
+
+.git-step.is-done .git-step__num {
+  color: var(--green-700);
+  background: var(--green-100);
+  border-color: var(--green-200);
+}
+
+.git-step__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.git-step__title {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.git-step__desc {
+  font-size: 12px;
+  color: var(--text-3);
+  line-height: 1.45;
+}
+
+.git-hint {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 10px;
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+
+/* 引导内容：默认展开，点“知道了”后折叠，不挡住后面的操作。 */
+.git-guide {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--border);
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+
+.git-guide__item {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  line-height: 1.5;
+}
+
+.git-guide__item > [x-icon],
+.git-guide__item > .icon {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.git-section-title {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 26px 0 12px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 /* ---------- diff ---------- */

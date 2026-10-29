@@ -4,9 +4,10 @@ import Alpine from '../../lib/alpine.min.js'
 import { reposAPI } from '../api.js'
 import { t, timeAgo } from '../i18n.js'
 import { projectTypeClass, projectTypeLabel, repoUrl } from '../model.js'
-import { toast, toastError } from '../ui.js'
+import { toast, toastError, query, setQuery } from '../ui.js'
 
 var PAGE_SIZE = 6
+var LIST_TABS = ['all', 'my', 'starred']
 
 var LANG_COLORS = {
   Go: '#00ADD8',
@@ -69,6 +70,11 @@ Alpine.data('projects', function () {
         { key: 'my', label: 'projects.tabMy' },
         { key: 'starred', label: 'projects.tabStarred' },
       ]
+      // 标签和页码写进地址栏，刷新后仍在原来的筛选和页上。
+      var tab = query('tab')
+      if (LIST_TABS.indexOf(tab) >= 0 && tab !== 'all') this.tab = tab
+      var page = parseInt(query('page'), 10)
+      if (page > 1) this.page = page
       this.migrateTypes = [
         { key: 'mirror', icon: 'download', color: '#2563eb', label: t('project.mirror'), desc: t('migrateProject.mirrorDesc') },
         { key: 'public', icon: 'globe', color: '#16a34a', label: t('project.public'), desc: t('migrateProject.publicDesc') },
@@ -95,6 +101,8 @@ Alpine.data('projects', function () {
       } finally {
         this.loading = false
       }
+      // 地址栏里的页码可能超出实际页数（仓库变少/筛选后），数据到了再纠正。
+      if (this.page > this.totalPages) this.setPage(this.totalPages)
     },
 
     get isGuest() {
@@ -118,10 +126,40 @@ Alpine.data('projects', function () {
       return Math.max(1, Math.ceil(this.filtered.length / PAGE_SIZE))
     },
 
+    // 1 … 4 5 6 … 20 形式的页码序列，页数多时不至于铺满一行。
+    get pageItems() {
+      var current = this.page
+      var total = this.totalPages
+      if (total <= 7) {
+        var all = []
+        for (var i = 1; i <= total; i++) all.push(i)
+        return all
+      }
+      var lo = Math.max(2, current - 2)
+      var hi = Math.min(total - 1, current + 2)
+      var items = [1]
+      if (lo > 2) items.push('…')
+      for (var j = lo; j <= hi; j++) items.push(j)
+      if (hi < total - 1) items.push('…')
+      items.push(total)
+      return items
+    },
+
     get paged() {
-      if (this.page > this.totalPages) this.page = 1
       var start = (this.page - 1) * PAGE_SIZE
       return this.filtered.slice(start, start + PAGE_SIZE)
+    },
+
+    setTab: function (key) {
+      this.tab = key
+      setQuery('tab', key === 'all' ? '' : key)
+      this.setPage(1)
+    },
+
+    setPage: function (page) {
+      var next = Math.min(Math.max(1, page), this.totalPages)
+      this.page = next
+      setQuery('page', next > 1 ? next : '')
     },
 
     createProject: async function () {

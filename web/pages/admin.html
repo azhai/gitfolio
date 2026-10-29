@@ -24,7 +24,7 @@
         </div>
 
         <div class="tabs mb-20">
-          <button class="tab" :class="tab === 'users' ? 'is-active' : ''" @click="tab = 'users'">
+          <button class="tab" :class="tab === 'users' ? 'is-active' : ''" @click="switchTab('users')">
             <span x-icon="{ name: 'users', size: 15 }"></span>
             <span x-text="t('admin.userManagement')"></span>
           </button>
@@ -181,12 +181,14 @@
 
         <!-- backups -->
         <section x-show="tab === 'backup'" x-cloak>
-          <div class="row gap-8 mb-16">
+          <div class="row gap-8 mb-8 wrap">
             <button class="btn btn--primary btn--sm" :disabled="backingUp" @click="createBackup('full')">
               <span x-icon="{ name: 'database', size: 14 }"></span>
               <span x-text="t('admin.fullBackup')"></span>
             </button>
-            <button class="btn btn--sm" :disabled="backingUp" @click="createBackup('incremental')">
+            <button class="btn btn--sm" :disabled="backingUp || !hasFullBackup()"
+              :title="!hasFullBackup() ? t('admin.incrementalNeedsFull') : ''"
+              @click="createBackup('incremental')">
               <span x-icon="{ name: 'download', size: 14 }"></span>
               <span x-text="t('admin.incrementalBackup')"></span>
             </button>
@@ -195,6 +197,7 @@
               <span x-text="t('common.refresh')"></span>
             </button>
           </div>
+          <div class="hint mb-16" x-text="t('admin.backupHint')"></div>
 
           <div class="card">
             <table class="table">
@@ -211,7 +214,11 @@
               <tbody>
                 <template x-for="b in backups" :key="b.id">
                   <tr>
-                    <td class="mono truncate" x-text="b.name || ('#' + b.id)"></td>
+                    <td>
+                      <div class="mono truncate" x-text="b.name || ('#' + b.id)"></div>
+                      <div class="text-xs mt-4" style="color: var(--red-600)" x-show="b.error"
+                        x-text="b.error"></div>
+                    </td>
                     <td>
                       <span class="badge" :class="b.backup_type === 'full' ? 'badge--blue' : 'badge--gray'"
                         x-text="b.backup_type === 'full' ? t('admin.fullBackup') : t('admin.incrementalBackup')"></span>

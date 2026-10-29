@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/azhai/gitfolio/helpers"
@@ -88,16 +89,18 @@ type ScheduleInput struct {
 	User3         string `json:"user3"`
 }
 
+// UpdateTaskRequest 用指针区分“没传”和“传了空值”：
+// 编辑任务时把目标、方案清空，或者取消处理人/验收人，都是正常操作。
 type UpdateTaskRequest struct {
-	Title        string          `json:"title"`
-	Draft        string          `json:"draft"`
-	Goal         string          `json:"goal"`
-	PreviewImage string          `json:"preview_image"`
-	Status       string          `json:"status"`
-	Priority     int             `json:"priority"`
-	SortOrder    int             `json:"sort_order"`
-	Verifier     string          `json:"verifier"`
-	Handler      string          `json:"handler"`
+	Title        *string         `json:"title"`
+	Draft        *string         `json:"draft"`
+	Goal         *string         `json:"goal"`
+	PreviewImage *string         `json:"preview_image"`
+	Status       *string         `json:"status"`
+	Priority     *int            `json:"priority"`
+	SortOrder    *int            `json:"sort_order"`
+	Verifier     *string         `json:"verifier"`
+	Handler      *string         `json:"handler"`
 	Schedules    []ScheduleInput `json:"schedules"`
 }
 
@@ -268,8 +271,7 @@ func ListTasks(c fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch tasks"})
 	}
 
-	var response []TaskResponse
-	response = make([]TaskResponse, 0)
+	response := make([]TaskResponse, 0)
 	for _, task := range tasks {
 		initiator := task.Initiator
 		var verifier *models.User
@@ -316,7 +318,7 @@ func getTaskSchedules(db *models.Database, taskID int64) []TaskScheduleResp {
 		return []TaskScheduleResp{}
 	}
 
-	var result []TaskScheduleResp
+	result := make([]TaskScheduleResp, 0)
 	for _, s := range schedules {
 		resp := TaskScheduleResp{
 			ID:           s.ID,
@@ -363,7 +365,7 @@ func getTaskAttachments(db *models.Database, taskID int64) []TaskAttachmentResp 
 		return []TaskAttachmentResp{}
 	}
 
-	var result []TaskAttachmentResp
+	result := make([]TaskAttachmentResp, 0)
 	for _, a := range attachments {
 		result = append(result, TaskAttachmentResp{
 			ID:       a.ID,
@@ -393,7 +395,7 @@ func getTaskIssues(db *models.Database, taskID int64) []TaskIssueResp {
 		return []TaskIssueResp{}
 	}
 
-	var result []TaskIssueResp
+	result := make([]TaskIssueResp, 0)
 	for _, issue := range issues {
 		status := "open"
 		if issue.IsClosed {
@@ -482,37 +484,38 @@ func UpdateTask(c fiber.Ctx) error {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Access denied"})
 	}
 
-	if req.Title != "" {
-		task.Title = req.Title
+	if req.Title != nil && strings.TrimSpace(*req.Title) != "" {
+		task.Title = *req.Title
 	}
-	if req.Draft != "" {
-		task.Draft = req.Draft
+	if req.Draft != nil {
+		task.Draft = *req.Draft
 	}
-	if req.Goal != "" {
-		task.Goal = req.Goal
+	if req.Goal != nil {
+		task.Goal = *req.Goal
 	}
-	if req.PreviewImage != "" {
-		task.PreviewImage = req.PreviewImage
+	if req.PreviewImage != nil {
+		task.PreviewImage = *req.PreviewImage
 	}
-	if req.Status != "" {
-		task.Status = req.Status
+	if req.Status != nil && *req.Status != "" {
+		task.Status = *req.Status
 	}
-	if req.Priority >= 1 && req.Priority <= 5 {
-		task.Priority = req.Priority
+	if req.Priority != nil && *req.Priority >= 1 && *req.Priority <= 5 {
+		task.Priority = *req.Priority
 	}
-	if req.SortOrder != 0 {
-		task.SortOrder = req.SortOrder
+	if req.SortOrder != nil {
+		task.SortOrder = *req.SortOrder
 	}
 
-	if req.Verifier != "" {
-		task.VerifierID = findUserByUsername(db, req.Verifier)
+	if req.Verifier != nil {
+		task.VerifierID = findUserByUsername(db, *req.Verifier)
 	}
-	if req.Handler != "" {
-		task.HandlerID = findUserByUsername(db, req.Handler)
+	if req.Handler != nil {
+		task.HandlerID = findUserByUsername(db, *req.Handler)
 	}
 
 	now := time.Now().UTC()
 	task.LastHandledAt = &now
+	task.Stamp()
 
 	err = db.Task.Save().One(task)
 	if err != nil {
@@ -549,9 +552,15 @@ func DeleteTask(c fiber.Ctx) error {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Access denied"})
 	}
 
+	// 这些表都没有外键级联，任务删掉后得自己清理，否则会留下孤儿行。
 	db.TaskSchedule.Delete().Where("task_id = ?", task.ID).Exec()
 	db.TaskAttachment.Delete().Where("task_id = ?", task.ID).Exec()
 	db.TaskIssue.Delete().Where("task_id = ?", task.ID).Exec()
+	db.TaskPullRequest.Delete().Where("task_id = ?", task.ID).Exec()
+	db.TaskTimeLog.Delete().Where("task_id = ?", task.ID).Exec()
+	db.TaskTransition.Delete().Where("task_id = ?", task.ID).Exec()
+	db.Comment.Delete().Where("task_id = ?", task.ID).Exec()
+	db.CommitReference.Delete().Where("target_type = ? AND target_id = ?", "task", task.ID).Exec()
 	db.Task.Delete().Where("id = ?", task.ID).Exec()
 
 	return c.Status(fiber.StatusNoContent).JSON(nil)
@@ -792,6 +801,7 @@ func TransitionTask(c fiber.Ctx) error {
 
 	task.Status = req.ToStatus
 	task.LastHandledAt = &now
+	task.Stamp()
 	db.Task.Save().One(task)
 
 	return c.Status(fiber.StatusOK).JSON(buildTaskFullResponse(db, task))
@@ -932,10 +942,26 @@ func CreateTaskComment(c fiber.Ctx) error {
 	}
 
 	taskIDVal := task.ID
+	authorUser, _ := db.User.Select().Where("id = ?", userID).One()
+	var authorContrib *models.Contributor
+	if authorUser != nil {
+		authorContrib = helpers.FindOrCreateContributor(db, result.Repo.ID, authorUser.Username, authorUser.Email, authorUser.Avatar)
+	}
+
+	authorName := ""
+	authorID := userID
+	if authorContrib != nil {
+		authorID = authorContrib.ID
+		authorName = authorContrib.Name
+	} else if authorUser != nil {
+		authorName = authorUser.Username
+	}
+
 	comment := &models.Comment{
-		Body:     req.Body,
-		TaskID:   &taskIDVal,
-		AuthorID: userID,
+		Body:       req.Body,
+		TaskID:     &taskIDVal,
+		AuthorID:   authorID,
+		AuthorName: authorName,
 	}
 
 	comment.Stamp()
@@ -943,17 +969,11 @@ func CreateTaskComment(c fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create comment"})
 	}
 
-	user := helpers.GetUser(db, userID)
-	username := ""
-	if user != nil {
-		username = user.Username
-	}
-
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
 		"id":         comment.ID,
 		"body":       comment.Body,
 		"author_id":  comment.AuthorID,
-		"author":     username,
+		"author":     authorName,
 		"created_at": comment.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		"updated_at": comment.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 	})
@@ -1070,7 +1090,7 @@ func GetTaskPullRequests(c fiber.Ctx) error {
 		IsMerged     bool   `json:"is_merged"`
 	}
 
-	var response []PRSummary
+	response := make([]PRSummary, 0)
 	for _, pr := range prs {
 		status := pr.Status
 		if pr.IsClosed {
@@ -1120,7 +1140,7 @@ func GetTaskCommits(c fiber.Ctx) error {
 		Date        string `json:"date"`
 	}
 
-	var response []CommitSummary
+	response := make([]CommitSummary, 0)
 	for _, ref := range refs {
 		detail, err := gitSvc.GetCommitDetail(result.OwnerName(), result.Repo.Name, ref.CommitHash)
 		if err != nil {
@@ -1153,8 +1173,11 @@ func StartTimer(c fiber.Ctx) error {
 	var req struct {
 		Note string `json:"note"`
 	}
-	if err := c.Bind().JSON(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	// 计时器允许不带请求体直接开始，空 body 不是错误。
+	if len(c.Body()) > 0 {
+		if err := c.Bind().JSON(&req); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+		}
 	}
 
 	result, err := helpers.GetOwnerAndRepoWithPrivateAccessFromParams(c)
@@ -1260,7 +1283,7 @@ func GetTaskTimeLogs(c fiber.Ctx) error {
 		Note      string `json:"note"`
 	}
 
-	var response []TimeLogResponse
+	response := make([]TimeLogResponse, 0)
 	for _, l := range logs {
 		username := ""
 		if l.User != nil {

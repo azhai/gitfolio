@@ -441,6 +441,10 @@ Alpine.data('project', function () {
     postingTask: false,
     transitioning: false,
     isTaskOwner: false,
+    editingTask: false,
+    savingTaskEdit: false,
+    deletingTask: false,
+    taskEdit: { title: '', goal: '', draft: '', priority: 3, status: 'draft', handler: '', verifier: '', sort_order: 0 },
     openIssues: [],
     openIssuesLoaded: false,
     showTaskIssuePicker: false,
@@ -471,6 +475,8 @@ Alpine.data('project', function () {
     commitMessage: '',
     committing: false,
     staging: false,
+    // 新手引导：默认展开，点“知道了”后记住，不再打扰。
+    gitGuideOpen: true,
     stashes: [],
     stashMessage: '',
     branchDraft: '',
@@ -508,6 +514,11 @@ Alpine.data('project', function () {
 
     init: function () {
       var r = parsePath()
+      try {
+        this.gitGuideOpen = window.localStorage.getItem('gitfolio.gitGuideDismissed') !== '1'
+      } catch (err) {
+        /* private mode may block storage; keep the guide visible */
+      }
       this.owner = r.owner
       this.repoName = r.repo
       this.tab = r.tab
@@ -1192,6 +1203,62 @@ Alpine.data('project', function () {
       }
     },
 
+    startTaskEdit: function () {
+      if (!this.task) return
+      this.taskEdit = {
+        title: this.task.title || '',
+        goal: this.task.goal || '',
+        draft: this.task.draft || '',
+        priority: this.task.priority || 3,
+        status: this.task.status || 'draft',
+        handler: this.task.handler || '',
+        verifier: this.task.verifier || '',
+        sort_order: this.task.sort_order || 0,
+      }
+      this.editingTask = true
+    },
+
+    cancelTaskEdit: function () {
+      this.editingTask = false
+    },
+
+    saveTaskEdit: async function () {
+      if (!this.taskEdit.title.trim()) {
+        toast(t('task.titleRequired'), 'error')
+        return
+      }
+      this.savingTaskEdit = true
+      try {
+        var updated = await tasksAPI.update(this.owner, this.repoName, this.number, this.taskEdit)
+        if (updated) this.applyTask(updated)
+        this.editingTask = false
+        toast(t('common.success'))
+      } catch (err) {
+        toast(err.message || t('common.failed'), 'error')
+      } finally {
+        this.savingTaskEdit = false
+      }
+    },
+
+    deleteTask: async function () {
+      if (!this.task) return
+      var ok = await confirmBox({
+        title: t('task.confirmDelete'),
+        message: this.task.title,
+        danger: true,
+        confirmText: t('common.delete'),
+      })
+      if (!ok) return
+      this.deletingTask = true
+      try {
+        await tasksAPI.del(this.owner, this.repoName, this.number)
+        window.location.href = this.base + '/tasks'
+      } catch (err) {
+        toast(err.message || t('common.failed'), 'error')
+        this.deletingTask = false
+      }
+    },
+
     createTask: async function () {
       if (!this.newTask.title.trim()) {
         toast(t('task.titleRequired'), 'error')
@@ -1722,6 +1789,17 @@ Alpine.data('project', function () {
       }
     },
 
+    // 间隔展示成 “2 小时 30 分钟”，0 就是手动同步。
+    intervalText: function () {
+      var hours = Number(this.syncDraft.intervalHours) || 0
+      var minutes = Number(this.syncDraft.intervalMinutes) || 0
+      if (!hours && !minutes) return t('common.manual')
+      var parts = []
+      if (hours) parts.push(hours + ' ' + t('common.hour'))
+      if (minutes) parts.push(minutes + ' ' + t('common.minute'))
+      return parts.join(' ')
+    },
+
     saveSyncConfig: async function () {
       this.savingSync = true
       var seconds =
@@ -1816,6 +1894,55 @@ Alpine.data('project', function () {
     },
 
     // ---------- git workflow ----------
+
+    // 四步流程：暂存 → 说明 → 提交 → 推送。当前该做哪一步按工作区状态算出来，
+    // 新手不用理解暂存区也能顺着往下走。
+    gitSteps: function () {
+      var staged = this.gitStaged.length
+      var hasMessage = !!(this.commitMessage || '').trim()
+      var current = 1
+      if (staged > 0) current = hasMessage ? 3 : 2
+      else if (!this.changesCount) current = 4
+      return [
+        { n: 1, icon: 'file-pen', title: t('gitWorkflow.stepStage'), desc: t('gitWorkflow.stepStageDesc') },
+        { n: 2, icon: 'pencil', title: t('gitWorkflow.stepMessage'), desc: t('gitWorkflow.stepMessageDesc') },
+        { n: 3, icon: 'git-commit-vertical', title: t('gitWorkflow.stepCommit'), desc: t('gitWorkflow.stepCommitDesc') },
+        { n: 4, icon: 'upload', title: t('gitWorkflow.stepPush'), desc: t('gitWorkflow.stepPushDesc') },
+      ].map(function (step) {
+        step.state = step.n < current ? 'is-done' : (step.n === current ? 'is-active' : '')
+        return step
+      })
+    },
+
+    gitHint: function () {
+      if (this.gitBusy) return t('gitWorkflow.hintBusy')
+      if (this.gitStaged.length) {
+        return (this.commitMessage || '').trim()
+          ? t('gitWorkflow.hintCommit')
+          : t('gitWorkflow.hintMessage', { count: this.gitStaged.length })
+      }
+      if (this.changesCount) return t('gitWorkflow.hintStage', { count: this.changesCount })
+      return t('gitWorkflow.hintClean')
+    },
+
+    dismissGitGuide: function () {
+      this.gitGuideOpen = false
+      try {
+        window.localStorage.setItem('gitfolio.gitGuideDismissed', '1')
+      } catch (err) {
+        /* storage may be unavailable; the guide just reappears next time */
+      }
+    },
+
+    toggleGitGuide: function () {
+      this.gitGuideOpen = !this.gitGuideOpen
+      try {
+        if (this.gitGuideOpen) window.localStorage.removeItem('gitfolio.gitGuideDismissed')
+        else window.localStorage.setItem('gitfolio.gitGuideDismissed', '1')
+      } catch (err) {
+        /* storage may be unavailable; the guide just reappears next time */
+      }
+    },
 
     loadGitStatus: async function () {
       this.gitLoading = true

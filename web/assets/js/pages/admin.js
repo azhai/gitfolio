@@ -2,7 +2,9 @@
 import Alpine from '../../lib/alpine.min.js'
 import { usersAPI, adminAPI, backupsAPI } from '../api.js'
 import { t, timeAgo } from '../i18n.js'
-import { toast, toastError, confirmBox } from '../ui.js'
+import { toast, toastError, confirmBox, query, setQuery } from '../ui.js'
+
+var ADMIN_TABS = ['users', 'tasks', 'backup']
 
 function intervalLabel(seconds) {
   if (!seconds) return '-'
@@ -45,10 +47,14 @@ Alpine.data('admin', function () {
       } finally {
         this.loading = false
       }
+      // ?tab=backup 之类的地址刷新后还停在原标签页。
+      var tab = query('tab')
+      if (ADMIN_TABS.indexOf(tab) >= 0) this.switchTab(tab)
     },
 
     switchTab: function (name) {
       this.tab = name
+      setQuery('tab', name === 'users' ? '' : name)
       if (name === 'tasks' && !this.loaded.tasks) {
         this.loaded.tasks = true
         this.loadTasks()
@@ -143,6 +149,13 @@ Alpine.data('admin', function () {
       } catch (err) {
         this.backups = []
       }
+    },
+
+    // 增量备份必须挂在一个成功的全量备份上，没有就先把按钮禁掉。
+    hasFullBackup: function () {
+      return (this.backups || []).some(function (b) {
+        return b.backup_type === 'full' && b.status === 'success'
+      })
     },
 
     createBackup: async function (type) {

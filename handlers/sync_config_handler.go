@@ -59,22 +59,25 @@ func UpdateSyncConfig(c fiber.Ctx) error {
 		return err
 	}
 
+	// 指针字段：只改暂停状态时请求里没有 sync_interval，不能把间隔清零。
 	var req struct {
-		SyncInterval int  `json:"sync_interval"`
-		IsPaused     bool `json:"is_paused"`
+		SyncInterval *int  `json:"sync_interval"`
+		IsPaused     *bool `json:"is_paused"`
 	}
 	if err := c.Bind().JSON(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	if req.SyncInterval < 0 {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Sync interval cannot be negative"})
-	}
-	if req.SyncInterval > 3596400 {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Sync interval must be at most 999 hours (3596400 seconds)"})
-	}
-	if req.SyncInterval > 0 && req.SyncInterval < 60 {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Sync interval must be at least 60 seconds (1 minute) when not manual"})
+	if req.SyncInterval != nil {
+		if *req.SyncInterval < 0 {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Sync interval cannot be negative"})
+		}
+		if *req.SyncInterval > 3596400 {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Sync interval must be at most 999 hours (3596400 seconds)"})
+		}
+		if *req.SyncInterval > 0 && *req.SyncInterval < 60 {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Sync interval must be at least 60 seconds (1 minute) when not manual"})
+		}
 	}
 
 	db := models.GetDB()
@@ -85,7 +88,20 @@ func UpdateSyncConfig(c fiber.Ctx) error {
 		syncType = "mirror"
 	}
 
-	sp, err := schedulerSvc.UpdateSyncConfig(result.Repo.ID, syncType, req.SyncInterval, req.IsPaused)
+	current, err := schedulerSvc.GetOrCreateSyncPoint(result.Repo.ID, syncType)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to get sync config"})
+	}
+	interval := current.SyncInterval
+	if req.SyncInterval != nil {
+		interval = *req.SyncInterval
+	}
+	paused := current.IsPaused
+	if req.IsPaused != nil {
+		paused = *req.IsPaused
+	}
+
+	sp, err := schedulerSvc.UpdateSyncConfig(result.Repo.ID, syncType, interval, paused)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": fmt.Sprintf("Failed to update sync config: %v", err)})
 	}
