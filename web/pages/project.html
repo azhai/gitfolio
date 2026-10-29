@@ -28,6 +28,12 @@
         <span x-icon="{ name: 'file-diff', size: 15 }"></span>
         <span x-text="t('project.commits')"></span>
       </a>
+      <a class="sidebar__link" x-show="canManage && repo && repo.has_work_tree"
+        :class="tab === 'changes' ? 'is-active' : ''" :href="base + '/changes'">
+        <span x-icon="{ name: 'git-commit-vertical', size: 15 }"></span>
+        <span x-text="t('sidebar.gitWorkflow')"></span>
+        <span class="sidebar__count" x-show="changesCount" x-text="changesCount"></span>
+      </a>
       <a class="sidebar__link" :class="tab === 'branches' ? 'is-active' : ''" :href="base + '/branches'">
         <span x-icon="{ name: 'git-branch', size: 15 }"></span>
         <span x-text="t('project.branches')"></span>
@@ -123,6 +129,12 @@
             <span x-icon="{ name: 'file-diff', size: 15 }"></span>
             <span x-text="t('project.commits')"></span>
             <span class="tab__count" x-show="repo" x-text="repo && repo.commits_count"></span>
+          </a>
+          <a class="tab" x-show="canManage && repo && repo.has_work_tree"
+            :class="tab === 'changes' ? 'is-active' : ''" :href="base + '/changes'">
+            <span x-icon="{ name: 'git-commit-vertical', size: 15 }"></span>
+            <span x-text="t('sidebar.gitWorkflow')"></span>
+            <span class="tab__count" x-show="changesCount" x-text="changesCount"></span>
           </a>
           <a class="tab" :class="tab === 'branches' ? 'is-active' : ''" :href="base + '/branches'">
             <span x-icon="{ name: 'git-branch', size: 15 }"></span>
@@ -319,6 +331,236 @@
               </template>
               <div class="empty" x-show="!branches.length" x-cloak>
                 <div class="empty__desc" x-text="t('common.noData')"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- git workflow -->
+        <section x-show="tab === 'changes'" x-cloak style="max-width: 1000px">
+          <div class="row between mb-12 wrap gap-12">
+            <h1 class="page-title" x-text="t('sidebar.gitWorkflow')"></h1>
+            <div class="row gap-8 wrap">
+              <span class="badge badge--gray mono" x-show="gitBranch" x-text="gitBranch"></span>
+              <button class="btn btn--sm" :disabled="gitLoading" @click="loadGitStatus">
+                <span x-icon="{ name: 'refresh-cw', size: 14 }"></span>
+                <span x-text="t('common.refresh')"></span>
+              </button>
+            </div>
+          </div>
+
+          <div class="alert alert--warn mb-16" x-show="gitBusy" x-cloak>
+            <span class="grow" x-text="t('gitWorkflow.conflictHint')"></span>
+            <span class="mono text-xs" x-show="gitOperation" x-text="gitOperation"></span>
+            <button class="btn btn--sm btn--danger-ghost" x-show="gitOperation" @click="abortGitOperation"
+              x-text="t('gitWorkflow.abortOp')"></button>
+          </div>
+
+          <div class="alert alert--info mb-16" x-show="!loading && repo && !repo.has_work_tree" x-cloak
+            x-text="t('gitWorkflow.notWorkTree')"></div>
+
+          <div class="card mb-16" x-show="gitConflicts.length" x-cloak>
+            <div class="card__head">
+              <span class="card__title" x-text="t('gitWorkflow.conflict')"></span>
+            </div>
+            <div class="list">
+              <template x-for="f in gitConflicts" :key="'c-' + f">
+                <div class="list__item change-row">
+                  <span x-icon="{ name: 'triangle-alert', size: 14, color: '#b45309' }"></span>
+                  <span class="mono grow truncate" x-text="f"></span>
+                </div>
+              </template>
+            </div>
+          </div>
+
+          <!-- staged -->
+          <div class="card mb-16" x-show="gitStaged.length">
+            <div class="card__head">
+              <span class="card__title">
+                <span x-text="t('gitWorkflow.staged')"></span>
+                <span class="muted-2" x-text="' · ' + gitStaged.length"></span>
+              </span>
+              <button class="btn btn--sm" :disabled="staging" @click="unstageAll"
+                x-text="t('gitWorkflow.unstageAll')"></button>
+            </div>
+            <div class="list">
+              <template x-for="f in gitStaged" :key="'s-' + f.path">
+                <div class="list__item change-row">
+                  <span class="badge badge--green" x-text="f.status"></span>
+                  <span class="mono grow truncate" x-text="f.path"></span>
+                  <button class="btn btn--sm btn--ghost" @click="openDiff(f, true)"
+                    x-text="t('gitWorkflow.viewDiff')"></button>
+                  <button class="btn btn--sm" :disabled="staging" @click="unstageFiles([f])"
+                    x-text="t('gitWorkflow.unstage')"></button>
+                </div>
+              </template>
+            </div>
+          </div>
+
+          <!-- unstaged -->
+          <div class="card mb-16" x-show="gitUnstaged.length">
+            <div class="card__head">
+              <span class="card__title">
+                <span x-text="t('gitWorkflow.unstaged')"></span>
+                <span class="muted-2" x-text="' · ' + gitUnstaged.length"></span>
+              </span>
+              <button class="btn btn--sm" :disabled="staging" @click="stageAll"
+                x-text="t('gitWorkflow.stageAll')"></button>
+            </div>
+            <div class="list">
+              <template x-for="f in gitUnstaged" :key="'u-' + f.path">
+                <div class="list__item change-row">
+                  <span class="badge badge--amber" x-text="f.status"></span>
+                  <span class="mono grow truncate" x-text="f.path"></span>
+                  <button class="btn btn--sm btn--ghost" @click="openDiff(f, false)"
+                    x-text="t('gitWorkflow.viewDiff')"></button>
+                  <button class="btn btn--sm btn--danger-ghost" @click="discardFile(f, false)"
+                    x-text="t('gitWorkflow.discard')"></button>
+                  <button class="btn btn--sm" :disabled="staging" @click="stageFiles([f])"
+                    x-text="t('gitWorkflow.stage')"></button>
+                </div>
+              </template>
+            </div>
+          </div>
+
+          <!-- untracked -->
+          <div class="card mb-16" x-show="gitUntracked.length">
+            <div class="card__head">
+              <span class="card__title">
+                <span x-text="t('gitWorkflow.untracked')"></span>
+                <span class="muted-2" x-text="' · ' + gitUntracked.length"></span>
+              </span>
+            </div>
+            <div class="list">
+              <template x-for="f in gitUntracked" :key="'t-' + f.path">
+                <div class="list__item change-row">
+                  <span class="badge badge--gray" x-text="f.status"></span>
+                  <span class="mono grow truncate" x-text="f.path"></span>
+                  <button class="btn btn--sm btn--danger-ghost" @click="discardFile(f, true)"
+                    x-text="t('gitWorkflow.discard')"></button>
+                  <button class="btn btn--sm" :disabled="staging" @click="stageFiles([f])"
+                    x-text="t('gitWorkflow.stage')"></button>
+                </div>
+              </template>
+            </div>
+          </div>
+
+          <div class="card mb-16" x-show="!gitLoading && !changesCount && repo && repo.has_work_tree" x-cloak>
+            <div class="empty empty--tight">
+              <div class="empty__desc" x-text="t('gitWorkflow.cleanWorking')"></div>
+            </div>
+          </div>
+
+          <!-- selected file diff -->
+          <div class="card mb-16" x-show="diffPath" x-cloak>
+            <div class="card__head">
+              <span class="card__title mono truncate" x-text="diffPath"></span>
+              <div class="row gap-8">
+                <span class="badge" x-show="diffResult && !diffResult.is_binary"
+                  x-text="'+' + ((diffResult && diffResult.additions) || 0)"></span>
+                <span class="badge badge--red" x-show="diffResult && !diffResult.is_binary"
+                  x-text="'-' + ((diffResult && diffResult.deletions) || 0)"></span>
+                <span class="badge badge--gray"
+                  x-text="diffStaged ? t('gitWorkflow.stagedDiff') : t('gitWorkflow.unstagedDiff')"></span>
+              </div>
+            </div>
+            <div class="diff" x-show="!diffLoading && !(diffResult && diffResult.is_binary)">
+              <template x-for="(line, i) in diffRows()" :key="i">
+                <div :class="line.cls">
+                  <span class="diff__sign" x-text="line.sign"></span>
+                  <span class="diff__text" x-text="line.text"></span>
+                </div>
+              </template>
+            </div>
+            <div class="empty empty--tight" x-show="diffLoading">
+              <div class="empty__desc" x-text="t('common.loading')"></div>
+            </div>
+            <div class="empty empty--tight" x-show="!diffLoading && diffResult && diffResult.is_binary">
+              <div class="empty__desc" x-text="t('gitWorkflow.binaryFileHint')"></div>
+            </div>
+            <div class="empty empty--tight" x-show="!diffLoading && diffResult && !diffResult.is_binary && !diffRows().length">
+              <div class="empty__desc" x-text="t('common.noData')"></div>
+            </div>
+          </div>
+
+          <!-- commit -->
+          <div class="card mb-16" x-show="repo && repo.has_work_tree">
+            <div class="card__head">
+              <span class="card__title" x-text="t('gitWorkflow.commit')"></span>
+            </div>
+            <div class="card__body" style="padding: 20px">
+              <textarea class="textarea" rows="3" x-model="commitMessage"
+                :placeholder="t('gitWorkflow.commitPlaceholder')"></textarea>
+              <div class="row between mt-12 gap-12 wrap">
+                <span class="text-xs muted-2"
+                  x-text="gitStaged.length ? gitStaged.length + ' · ' + t('gitWorkflow.staged') : t('gitWorkflow.noStagedFiles')"></span>
+                <button class="btn btn--primary btn--sm"
+                  :disabled="committing || gitBusy || !gitStaged.length || !commitMessage.trim()"
+                  @click="commitStaged" x-text="t('gitWorkflow.commit')"></button>
+              </div>
+            </div>
+          </div>
+
+          <!-- branches -->
+          <div class="card mb-16" x-show="repo && repo.has_work_tree">
+            <div class="card__head">
+              <span class="card__title" x-text="t('gitWorkflow.branchOps')"></span>
+            </div>
+            <div class="card__body" style="padding: 20px">
+              <div class="row gap-8 wrap">
+                <select class="select" x-model="branchDraft" style="max-width: 220px">
+                  <template x-for="b in branches" :key="'sw-' + b">
+                    <option :value="b" x-text="b"></option>
+                  </template>
+                </select>
+                <button class="btn btn--sm" :disabled="gitBusy || !branchDraft || branchDraft === gitBranch"
+                  @click="switchBranch" x-text="t('gitWorkflow.switchTo')"></button>
+                <input class="input" x-model="newBranch" :placeholder="t('gitWorkflow.branchNamePlaceholder')"
+                  style="max-width: 200px" />
+                <button class="btn btn--sm" @click="createBranchFrom"
+                  x-text="t('gitWorkflow.createBranch')"></button>
+              </div>
+              <div class="row gap-8 wrap mt-12">
+                <select class="select" x-model="mergeSource" style="max-width: 220px">
+                  <option value="" x-text="t('gitWorkflow.selectSourceBranch')"></option>
+                  <template x-for="b in mergeCandidates()" :key="'mg-' + b">
+                    <option :value="b" x-text="b"></option>
+                  </template>
+                </select>
+                <button class="btn btn--sm" :disabled="gitBusy || !mergeSource"
+                  @click="mergeInto(mergeSource)" x-text="t('gitWorkflow.mergeBranch')"></button>
+              </div>
+            </div>
+          </div>
+
+          <!-- stash -->
+          <div class="card" x-show="repo && repo.has_work_tree">
+            <div class="card__head">
+              <span class="card__title" x-text="t('gitWorkflow.stashManagement')"></span>
+            </div>
+            <div class="card__body" style="padding: 20px">
+              <div class="row gap-8 wrap">
+                <input class="input grow" x-model="stashMessage"
+                  :placeholder="t('gitWorkflow.stashMsgPlaceholder')" style="min-width: 200px" />
+                <button class="btn btn--sm" @click="saveStash" x-text="t('gitWorkflow.stashSave')"></button>
+              </div>
+              <div class="list mt-12">
+                <template x-for="s in stashes" :key="'st-' + s.index">
+                  <div class="list__item change-row">
+                    <span class="mono muted-2 text-xs" x-text="'stash@{' + s.index + '}'"></span>
+                    <span class="grow truncate" x-text="s.message"></span>
+                    <span class="text-xs muted-2" x-text="s.date"></span>
+                    <button class="btn btn--sm btn--ghost" @click="stashAction('pop', s)"
+                      x-text="t('gitWorkflow.stashPop')"></button>
+                    <button class="btn btn--sm btn--ghost" @click="stashAction('apply', s)"
+                      x-text="t('gitWorkflow.stashApply')"></button>
+                    <button class="btn btn--sm btn--danger-ghost" @click="stashAction('drop', s)"
+                      x-text="t('gitWorkflow.stashDrop')"></button>
+                  </div>
+                </template>
+                <div class="empty empty--tight" x-show="!stashes.length">
+                  <div class="empty__desc" x-text="t('gitWorkflow.noStash')"></div>
+                </div>
               </div>
             </div>
           </div>

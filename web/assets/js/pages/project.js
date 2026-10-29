@@ -33,7 +33,8 @@ function parsePath() {
       tab = 'commit'
       sha = decodeURIComponent(rest[1])
     } else tab = 'commits'
-  } else if (head === 'branches') tab = 'branches'
+  } else if (head === 'changes') tab = 'changes'
+  else if (head === 'branches') tab = 'branches'
   else if (head === 'tags') tab = 'tags'
   else if (head === 'releases') tab = 'releases'
   else if (head === 'stats') tab = 'stats'
@@ -157,6 +158,30 @@ Alpine.data('project', function () {
     transitioning: false,
     newTask: { title: '', goal: '', draft: '', priority: 3, handler: '', verifier: '' },
 
+    // git 工作流：工作区、暂存区与 stash
+    gitStatus: null,
+    gitStaged: [],
+    gitUnstaged: [],
+    gitUntracked: [],
+    gitConflicts: [],
+    gitBranch: '',
+    gitOperation: '',
+    gitBusy: false,
+    gitLoading: false,
+    diffPath: '',
+    diffStaged: false,
+    diffResult: null,
+    diffLoading: false,
+    commitMessage: '',
+    committing: false,
+    staging: false,
+    stashes: [],
+    stashMessage: '',
+    branchDraft: '',
+    newBranch: '',
+    mergeSource: '',
+    changesCount: 0,
+
     codeStats: null,
     statsError: '',
     languageRows: [],
@@ -238,6 +263,7 @@ Alpine.data('project', function () {
         else if (this.tab === 'prs') await this.loadPRs()
         else if (this.tab === 'pr') await this.loadPR()
         else if (this.tab === 'pr-new') await this.loadBranches()
+        else if (this.tab === 'changes') await this.loadGitStatus()
         else if (this.tab === 'settings') await this.loadBranches()
         else if (this.tab === 'sync') await this.loadSync()
       } catch (err) {
@@ -406,6 +432,10 @@ Alpine.data('project', function () {
       // selectable so saving settings cannot silently switch the default.
       var def = (this.repo && this.repo.default_branch) || ''
       if (def && this.branches.indexOf(def) < 0) this.branches = [def].concat(this.branches)
+      // 分支下拉先于选项渲染时，select 会对不上当前分支，这里补一次默认值。
+      if (this.tab === 'changes' && !this.branchDraft) {
+        this.branchDraft = this.gitBranch || this.branches[0] || ''
+      }
       if (this.tab === 'pr-new') {
         if (!this.newPR.target_branch) this.newPR.target_branch = def || this.branches[0] || ''
         if (!this.newPR.source_branch) this.newPR.source_branch = def || this.branches[0] || ''
@@ -1051,6 +1081,268 @@ Alpine.data('project', function () {
         toast(err.message || t('projectSettings.syncFailed'), 'error')
       } finally {
         this.syncing = false
+      }
+    },
+
+    // ---------- git workflow ----------
+
+    loadGitStatus: async function () {
+      this.gitLoading = true
+      try {
+        var st = (await reposAPI.getGitStatus(this.owner, this.repoName)) || {}
+        this.gitStatus = st
+        this.gitStaged = st.staged || []
+        this.gitUnstaged = st.unstaged || []
+        this.gitUntracked = st.untracked || []
+        this.gitConflicts = st.conflict_files || []
+        this.gitBranch = st.current_branch || ''
+        this.gitOperation = st.rebasing ? 'rebase'
+          : st.merging ? 'merge'
+            : st.reverting ? 'revert'
+              : st.cherry_picking ? 'cherry-pick' : ''
+        // 有未完成的操作或未解决的冲突时，提交与切分支都只会继续制造麻烦。
+        this.gitBusy = !!this.gitOperation || this.gitConflicts.length > 0
+        this.changesCount = this.gitStaged.length + this.gitUnstaged.length + this.gitUntracked.length
+        if (!this.branchDraft) this.branchDraft = this.gitBranch
+      } catch (err) {
+        toast(err.message || t('gitWorkflow.diffLoadFailed'), 'error')
+      } finally {
+        this.gitLoading = false
+      }
+      await this.loadStashes()
+      await this.loadBranches()
+    },
+
+    filePaths: function (files) {
+      return (files || []).map(function (f) { return f.path })
+    },
+
+    stageFiles: async function (files) {
+      var paths = this.filePaths(files)
+      if (!paths.length || this.staging) return
+      this.staging = true
+      try {
+        await reposAPI.stageFiles(this.owner, this.repoName, paths)
+        toast(t('gitWorkflow.stageSuccess'))
+        await this.loadGitStatus()
+      } catch (err) {
+        toast(err.message || t('gitWorkflow.stageFailed'), 'error')
+      } finally {
+        this.staging = false
+      }
+    },
+
+    unstageFiles: async function (files) {
+      var paths = this.filePaths(files)
+      if (!paths.length || this.staging) return
+      this.staging = true
+      try {
+        await reposAPI.unstageFiles(this.owner, this.repoName, paths)
+        toast(t('gitWorkflow.unstageSuccess'))
+        await this.loadGitStatus()
+      } catch (err) {
+        toast(err.message || t('gitWorkflow.unstageFailed'), 'error')
+      } finally {
+        this.staging = false
+      }
+    },
+
+    stageAll: function () {
+      return this.stageFiles(this.gitUnstaged.concat(this.gitUntracked))
+    },
+
+    unstageAll: function () {
+      return this.unstageFiles(this.gitStaged)
+    },
+
+    discardFile: async function (file, isUntracked) {
+      var ok = await confirmBox({
+        title: t('gitWorkflow.confirmDiscardTitle'),
+        message: t('gitWorkflow.confirmDiscardBody', { path: file.path }),
+        danger: true,
+        confirmText: t('gitWorkflow.discard'),
+      })
+      if (!ok) return
+      try {
+        await reposAPI.discard(this.owner, this.repoName, file.path, !!isUntracked)
+        if (this.diffPath === file.path) this.diffResult = null
+        toast(t('gitWorkflow.discardSuccess'))
+        await this.loadGitStatus()
+      } catch (err) {
+        toast(err.message || t('gitWorkflow.discardFailed'), 'error')
+      }
+    },
+
+    openDiff: async function (file, staged) {
+      this.diffPath = file.path
+      this.diffStaged = !!staged
+      this.diffLoading = true
+      try {
+        this.diffResult = await reposAPI.diff(this.owner, this.repoName, file.path, !!staged)
+      } catch (err) {
+        this.diffResult = null
+        toast(err.message || t('gitWorkflow.diffLoadFailed'), 'error')
+      } finally {
+        this.diffLoading = false
+      }
+    },
+
+    // 后端按行给出 type（hunk/added/deleted/context），这里换成和提交详情
+    // 同一套 .diff__* 结构，两处样式一致。
+    diffRows: function () {
+      var lines = (this.diffResult && this.diffResult.lines) || []
+      return lines.map(function (line) {
+        var cls = 'diff__line'
+        var sign = ' '
+        if (line.type === 'hunk') {
+          cls = 'diff__hunk'
+          sign = ''
+        } else if (line.type === 'added') {
+          cls += ' diff__line--add'
+          sign = '+'
+        } else if (line.type === 'deleted') {
+          cls += ' diff__line--del'
+          sign = '-'
+        }
+        return { cls: cls, sign: sign, text: line.content }
+      })
+    },
+
+    commitStaged: async function () {
+      var message = (this.commitMessage || '').trim()
+      if (!this.gitStaged.length) {
+        toast(t('gitWorkflow.noStagedFiles'), 'error')
+        return
+      }
+      if (!message) {
+        toast(t('gitWorkflow.messageRequired'), 'error')
+        return
+      }
+      this.committing = true
+      try {
+        await reposAPI.commitChanges(this.owner, this.repoName, message)
+        this.commitMessage = ''
+        this.diffResult = null
+        this.diffPath = ''
+        toast(t('gitWorkflow.commitSuccess'))
+        // 提交会改动 HEAD，仓库头部的提交数与最近提交时间都要重新读。
+        await this.loadGitStatus()
+        this.repo = await reposAPI.get(this.owner, this.repoName)
+      } catch (err) {
+        toast(err.message || t('gitWorkflow.commitFailed'), 'error')
+      } finally {
+        this.committing = false
+      }
+    },
+
+    loadStashes: async function () {
+      try {
+        var data = await reposAPI.stashList(this.owner, this.repoName)
+        this.stashes = (data && data.stashes) || []
+      } catch (err) {
+        this.stashes = []
+      }
+    },
+
+    saveStash: async function () {
+      try {
+        await reposAPI.stashSave(this.owner, this.repoName, this.stashMessage)
+        this.stashMessage = ''
+        this.diffResult = null
+        this.diffPath = ''
+        toast(t('gitWorkflow.stashSaveSuccess'))
+        await this.loadGitStatus()
+      } catch (err) {
+        toast(err.message || t('gitWorkflow.stashSaveFailed'), 'error')
+      }
+    },
+
+    stashAction: async function (kind, entry) {
+      if (kind === 'drop') {
+        var ok = await confirmBox({
+          title: t('gitWorkflow.confirmStashDropTitle'),
+          message: t('gitWorkflow.confirmStashDropBody', { index: entry.index }),
+          danger: true,
+          confirmText: t('gitWorkflow.discard'),
+        })
+        if (!ok) return
+      }
+      var call = kind === 'pop' ? reposAPI.stashPop
+        : kind === 'apply' ? reposAPI.stashApply
+          : reposAPI.stashDrop
+      var okMsg = kind === 'pop' ? t('gitWorkflow.stashPopSuccess')
+        : kind === 'apply' ? t('gitWorkflow.stashApplySuccess')
+          : t('gitWorkflow.stashDropSuccess')
+      var failMsg = kind === 'pop' ? t('gitWorkflow.stashPopFailed')
+        : kind === 'apply' ? t('gitWorkflow.stashApplyFailed')
+          : t('gitWorkflow.stashDropFailed')
+      try {
+        await call(this.owner, this.repoName, entry.index)
+        toast(okMsg)
+        this.diffResult = null
+        this.diffPath = ''
+        await this.loadGitStatus()
+      } catch (err) {
+        toast(err.message || failMsg, 'error')
+      }
+    },
+
+    switchBranch: async function () {
+      var branch = this.branchDraft
+      if (!branch || branch === this.gitBranch) return
+      try {
+        await reposAPI.checkout(this.owner, this.repoName, branch)
+        toast(t('gitWorkflow.switchSuccess', { branch: branch }))
+        this.diffResult = null
+        this.diffPath = ''
+        await this.loadGitStatus()
+      } catch (err) {
+        toast(err.message || t('gitWorkflow.switchFailed'), 'error')
+      }
+    },
+
+    createBranchFrom: async function () {
+      var name = (this.newBranch || '').trim()
+      if (!name) {
+        toast(t('gitWorkflow.branchNamePlaceholder'), 'error')
+        return
+      }
+      try {
+        await reposAPI.createBranch(this.owner, this.repoName, name, 'HEAD')
+        this.newBranch = ''
+        toast(t('gitWorkflow.createBranchSuccess'))
+        await this.loadGitStatus()
+      } catch (err) {
+        toast(err.message || t('gitWorkflow.createBranchFailed'), 'error')
+      }
+    },
+
+    mergeCandidates: function () {
+      var current = this.gitBranch
+      return (this.branches || []).filter(function (b) { return b !== current })
+    },
+
+    mergeInto: async function (source) {
+      if (!source) return
+      try {
+        await reposAPI.mergeBranch(this.owner, this.repoName, source, this.gitBranch)
+        toast(t('gitWorkflow.mergeSuccess'))
+        await this.loadGitStatus()
+      } catch (err) {
+        toast(err.message || t('gitWorkflow.mergeFailed'), 'error')
+      }
+    },
+
+    abortGitOperation: async function () {
+      if (!this.gitOperation) return
+      try {
+        await reposAPI.abortOperation(this.owner, this.repoName, this.gitOperation)
+        toast(t('gitWorkflow.abortOp'))
+        this.diffResult = null
+        this.diffPath = ''
+        await this.loadGitStatus()
+      } catch (err) {
+        toast(err.message || t('common.failed'), 'error')
       }
     },
 

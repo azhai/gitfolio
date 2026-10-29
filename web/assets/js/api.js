@@ -232,6 +232,15 @@ export const reposAPI = {
   checkout(owner, repo, branch) {
     return api.post('/' + owner + '/' + repo + '/checkout', { branch: branch })
   },
+  createBranch(owner, repo, name, sourceRef) {
+    return api.post('/' + owner + '/' + repo + '/branches', { name: name, source_ref: sourceRef || 'HEAD' })
+  },
+  mergeBranch(owner, repo, sourceBranch, targetBranch) {
+    return api.post('/' + owner + '/' + repo + '/merge', {
+      source_branch: sourceBranch,
+      target_branch: targetBranch || '',
+    })
+  },
   rebaseInteractive(owner, repo, base, todos) {
     return api.post('/' + owner + '/' + repo + '/rebase-interactive', { base: base, todos: todos })
   },

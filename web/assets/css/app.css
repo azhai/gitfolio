@@ -1506,6 +1506,20 @@ hr {
   overflow-x: auto;
 }
 
+/* ---------- git workflow ---------- */
+/* 变更行：状态徽标 + 路径 + 操作按钮，路径过长时省略而不是把按钮挤出去。 */
+.change-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+}
+
+.change-row > .grow,
+.change-row > .mono {
+  min-width: 0;
+}
+
 /* ---------- diff ---------- */
 .diff {
   font-family: var(--font-mono);
