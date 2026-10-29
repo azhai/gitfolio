@@ -103,13 +103,30 @@ var pageRoutes = []struct{ prefix, file string }{
 // pageFor resolves a request path to a document. Anything with an owner and a
 // repository segment (/owner/repo/...) is served by the project workspace shell.
 func pageFor(path string) string {
+	segs := strings.Split(strings.Trim(path, "/"), "/")
+	isRepoPath := len(segs) >= 2 && segs[0] != "" && segs[0] != "api" && segs[0] != "uploads"
+
+	// 先按仓库查：内置管理员账号就叫 admin，/admin/<repo> 必须落到项目页，
+	// 不能被 /admin 这条页面路由吃掉。/users/azhai 之类的路径在这里查不到，
+	// 自然会继续走下面的路由表。
+	if isRepoPath {
+		if res := helpers.FindOwnerAndRepo(segs[0], segs[1]); res != nil && res.Repo != nil {
+			return "project.html"
+		}
+		// 账号存在但仓库不存在：同样交给项目页，由它返回 404，
+		// 而不是让 /admin/<不存在的仓库> 落到管理后台。
+		if helpers.HasOwner(segs[0]) {
+			return "project.html"
+		}
+	}
+
 	for _, route := range pageRoutes {
 		if path == route.prefix || strings.HasPrefix(path, route.prefix+"/") {
 			return route.file
 		}
 	}
-	segs := strings.Split(strings.Trim(path, "/"), "/")
-	if len(segs) >= 2 && segs[0] != "" && segs[0] != "api" && segs[0] != "uploads" {
+	if isRepoPath {
+		// 仓库不存在也交给项目页外壳，由它返回 404。
 		return "project.html"
 	}
 	return ""

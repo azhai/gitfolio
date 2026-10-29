@@ -86,6 +86,24 @@ func FindOwnerAndRepo(ownerName, repoName string) *ResourceResult {
 	return nil
 }
 
+// HasOwner 报告该用户名或团队名是否存在。
+//
+// 用来区分「账号下的仓库不存在」和「这根本不是仓库路径」：前者应该落到
+// 项目页再由它返回 404，后者要走页面路由表（例如 /users/azhai）。
+func HasOwner(account string) bool {
+	db := models.GetDB()
+	if db == nil || account == "" {
+		return false
+	}
+	if user, _ := db.User.Select().Where("username = ?", account).One(); user != nil {
+		return true
+	}
+	if group, _ := db.Group.Select().Where("name = ?", account).One(); group != nil {
+		return true
+	}
+	return false
+}
+
 // GetOwnerAndRepo 根据用户名或团队名和仓库名查找所有者和仓库
 func GetOwnerAndRepo(c fiber.Ctx, ownerName, repoName string) (*ResourceResult, error) {
 	if ownerName == "" {
