@@ -54,8 +54,8 @@ export function topnavHTML() {
     '</div>' +
     '<div class="lang-switch" data-lang="' + lang + '">' +
     '<div class="lang-switch__thumb"></div>' +
-    '<button class="' + (lang === 'zh' ? 'is-active' : '') + '" @click="window.__setLang(\'zh\')">中文</button>' +
-    '<button class="' + (lang === 'en' ? 'is-active' : '') + '" @click="window.__setLang(\'en\')">EN</button>' +
+    '<button type="button" data-lang="zh" class="' + (lang === 'zh' ? 'is-active' : '') + '">中文</button>' +
+    '<button type="button" data-lang="en" class="' + (lang === 'en' ? 'is-active' : '') + '">EN</button>' +
     '</div>' +
     '<a class="nav-icon-btn" href="/activity" title="' + t('nav.activity') + '">' + icon('bell', { size: 18 }) + '</a>' +
     '<div class="user-menu" x-data="{ open: false }" @click.outside="open = false">' +
@@ -112,9 +112,25 @@ export function footerHTML(siteMark) {
   )
 }
 
+// The nav is injected into the DOM before Alpine starts, and its Alpine event
+// bindings proved unreliable there, so the language switch uses a plain DOM
+// listener instead of @click.
+function bindLangSwitch() {
+  var switches = document.querySelectorAll('.lang-switch')
+  for (var i = 0; i < switches.length; i++) {
+    switches[i].addEventListener('click', function (e) {
+      var btn = e.target.closest ? e.target.closest('button[data-lang]') : null
+      if (!btn) return
+      var lang = btn.getAttribute('data-lang')
+      if (setLanguage(lang)) window.location.reload()
+    })
+  }
+}
+
 export function mountShell() {
   var slot = document.getElementById('app-shell')
   if (slot) slot.outerHTML = topnavHTML()
+  bindLangSwitch()
 
   var footer = document.getElementById('app-footer')
   if (footer) footer.outerHTML = footerHTML('')

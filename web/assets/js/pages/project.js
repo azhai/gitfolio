@@ -12,6 +12,7 @@ import { fileIcon } from '../icon.js'
 import { toast, copyText, sanitizeHtml, confirmBox } from '../ui.js'
 
 var PER_PAGE = 30
+var ISSUE_PER_PAGE = 20
 
 var TAB_GROUPS = {
   issues: ['issues', 'issue', 'issue-new'],
@@ -385,13 +386,20 @@ Alpine.data('project', function () {
     commits: [],
     commitPage: 1,
     commitPages: 1,
+    commitTotal: 0,
     showGraph: true,
     graphLayout: null,
     branches: [],
 
     issues: [],
+    issuePage: 1,
+    issuePages: 1,
+    issueTotal: 0,
     issueError: '',
     prs: [],
+    prPage: 1,
+    prPages: 1,
+    prTotal: 0,
     prError: '',
 
     issue: null,
@@ -747,6 +755,7 @@ Alpine.data('project', function () {
       this.commits = (data && data.commits) || []
       var total = (data && data.total) || this.commits.length
       this.commitPage = page
+      this.commitTotal = total
       this.commitPages = Math.max(1, Math.ceil(total / PER_PAGE))
       this.graphLayout = this.showGraph ? computeGraphLayout(this.commits) : null
     },
@@ -763,6 +772,47 @@ Alpine.data('project', function () {
     goCommitPage: async function (page) {
       if (page < 1 || page > this.commitPages) return
       await this.loadCommits(page)
+    },
+
+    // ---------- 高级翻页 ----------
+    // 生成 1 … 4 5 6 … 20 这种页码序列；总页数不多时全部展开。
+    // 页码数字和省略号混在一个数组里，模板里用 disabled 的按钮渲染省略号。
+    pageItems: function (current, total) {
+      if (total <= 7) {
+        var all = []
+        for (var i = 1; i <= total; i++) all.push(i)
+        return all
+      }
+      var lo = Math.max(2, current - 2)
+      var hi = Math.min(total - 1, current + 2)
+      var items = [1]
+      if (lo > 2) items.push('…')
+      for (var j = lo; j <= hi; j++) items.push(j)
+      if (hi < total - 1) items.push('…')
+      items.push(total)
+      return items
+    },
+
+    commitPageItems: function () {
+      return this.pageItems(this.commitPage, this.commitPages)
+    },
+
+    issuePageItems: function () {
+      return this.pageItems(this.issuePage, this.issuePages)
+    },
+
+    prPageItems: function () {
+      return this.pageItems(this.prPage, this.prPages)
+    },
+
+    goIssuePage: async function (page) {
+      if (page < 1 || page > this.issuePages) return
+      await this.loadIssues(page)
+    },
+
+    goPrPage: async function (page) {
+      if (page < 1 || page > this.prPages) return
+      await this.loadPRs(page)
     },
 
     loadBranches: async function () {
@@ -1200,10 +1250,14 @@ Alpine.data('project', function () {
 
     // ---------- issues ----------
 
-    loadIssues: async function () {
+    loadIssues: async function (page) {
+      page = page || this.issuePage || 1
       try {
-        var data = await issuesAPI.list(this.owner, this.repoName, { per_page: 50 })
+        var data = await issuesAPI.list(this.owner, this.repoName, { page: page, per_page: ISSUE_PER_PAGE })
         this.issues = Array.isArray(data) ? data : (data && data.data) || []
+        this.issueTotal = (data && data.total) || 0
+        this.issuePage = (data && data.page) || page
+        this.issuePages = Math.max(1, Math.ceil(this.issueTotal / ISSUE_PER_PAGE))
       } catch (err) {
         this.issues = []
         this.issueError = err.message || ''
@@ -1282,10 +1336,14 @@ Alpine.data('project', function () {
 
     // ---------- pull requests ----------
 
-    loadPRs: async function () {
+    loadPRs: async function (page) {
+      page = page || this.prPage || 1
       try {
-        var data = await prsAPI.list(this.owner, this.repoName, { per_page: 50 })
+        var data = await prsAPI.list(this.owner, this.repoName, { page: page, per_page: ISSUE_PER_PAGE })
         this.prs = Array.isArray(data) ? data : (data && data.data) || []
+        this.prTotal = (data && data.total) || 0
+        this.prPage = (data && data.page) || page
+        this.prPages = Math.max(1, Math.ceil(this.prTotal / ISSUE_PER_PAGE))
       } catch (err) {
         this.prs = []
         this.prError = err.message || ''

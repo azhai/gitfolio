@@ -317,6 +317,7 @@ var en = {
     noTasks: 'No tasks yet',
   },
   projects: {
+    totalItems: '{count} in total',
     title: 'Projects',
     migrateProject: 'Migrate Project',
     newProject: '+ New Project',

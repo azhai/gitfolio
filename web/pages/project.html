@@ -311,12 +311,19 @@
             </div>
           </div>
 
-          <div class="row center gap-8 mt-16" x-show="commitPages > 1" x-cloak>
+          <div class="pager row center gap-4 mt-16 wrap" x-show="commitPages > 1" x-cloak>
+            <button class="btn btn--sm" :disabled="commitPage <= 1" @click="goCommitPage(1)" x-text="'«'"></button>
             <button class="btn btn--sm" :disabled="commitPage <= 1" @click="goCommitPage(commitPage - 1)"
               x-text="t('projects.prevPage')"></button>
-            <span class="text-sm muted" x-text="commitPage + ' / ' + commitPages"></span>
+            <template x-for="(p, pi) in commitPageItems()" :key="'cp-' + pi">
+              <button class="btn btn--sm pager__num" :class="p === commitPage ? 'btn--primary' : ''"
+                :disabled="p === '…' || p === commitPage" @click="goCommitPage(p)" x-text="p"></button>
+            </template>
             <button class="btn btn--sm" :disabled="commitPage >= commitPages" @click="goCommitPage(commitPage + 1)"
               x-text="t('projects.nextPage')"></button>
+            <button class="btn btn--sm" :disabled="commitPage >= commitPages" @click="goCommitPage(commitPages)"
+              x-text="'»'"></button>
+            <span class="text-xs muted-2 ml-8" x-text="t('projects.totalItems', { count: commitTotal })"></span>
           </div>
         </section>
 
@@ -890,7 +897,7 @@
         <!-- issues -->
         <section x-show="tab === 'issues'" x-cloak>
           <div class="row between mb-12" x-show="canCreate">
-            <span class="muted text-sm" x-text="issues.length + ' / ' + ((repo && repo.open_issues_count) || 0)"></span>
+            <span class="muted text-sm" x-text="t('projects.totalItems', { count: issueTotal })"></span>
             <a class="btn btn--sm btn--primary" :href="base + '/issues/new'"
               x-text="t('issue.newIssue')"></a>
           </div>
@@ -914,12 +921,27 @@
               </div>
             </div>
           </div>
+
+          <div class="pager row center gap-4 mt-16 wrap" x-show="issuePages > 1" x-cloak>
+            <button class="btn btn--sm" :disabled="issuePage <= 1" @click="goIssuePage(1)" x-text="'«'"></button>
+            <button class="btn btn--sm" :disabled="issuePage <= 1" @click="goIssuePage(issuePage - 1)"
+              x-text="t('projects.prevPage')"></button>
+            <template x-for="(pg, pi) in issuePageItems()" :key="'issue-' + pi">
+              <button class="btn btn--sm pager__num" :class="pg === issuePage ? 'btn--primary' : ''"
+                :disabled="pg === '…' || pg === issuePage" @click="goIssuePage(pg)" x-text="pg"></button>
+            </template>
+            <button class="btn btn--sm" :disabled="issuePage >= issuePages" @click="goIssuePage(issuePage + 1)"
+              x-text="t('projects.nextPage')"></button>
+            <button class="btn btn--sm" :disabled="issuePage >= issuePages" @click="goIssuePage(issuePages)"
+              x-text="'»'"></button>
+            <span class="text-xs muted-2 ml-8" x-text="t('projects.totalItems', { count: issueTotal })"></span>
+          </div>
         </section>
 
         <!-- pull requests -->
         <section x-show="tab === 'prs'" x-cloak>
           <div class="row between mb-12" x-show="canCreate">
-            <span class="muted text-sm" x-text="prs.length + ''"></span>
+            <span class="muted text-sm" x-text="t('projects.totalItems', { count: prTotal })"></span>
             <a class="btn btn--sm btn--primary" :href="base + '/pull_requests/new'"
               x-text="t('pr.newPR')"></a>
           </div>
@@ -942,6 +964,21 @@
                 <div class="empty__desc" x-text="prError || t('pr.noPRs')"></div>
               </div>
             </div>
+          </div>
+
+          <div class="pager row center gap-4 mt-16 wrap" x-show="prPages > 1" x-cloak>
+            <button class="btn btn--sm" :disabled="prPage <= 1" @click="goPrPage(1)" x-text="'«'"></button>
+            <button class="btn btn--sm" :disabled="prPage <= 1" @click="goPrPage(prPage - 1)"
+              x-text="t('projects.prevPage')"></button>
+            <template x-for="(pg, pi) in prPageItems()" :key="'pr-' + pi">
+              <button class="btn btn--sm pager__num" :class="pg === prPage ? 'btn--primary' : ''"
+                :disabled="pg === '…' || pg === prPage" @click="goPrPage(pg)" x-text="pg"></button>
+            </template>
+            <button class="btn btn--sm" :disabled="prPage >= prPages" @click="goPrPage(prPage + 1)"
+              x-text="t('projects.nextPage')"></button>
+            <button class="btn btn--sm" :disabled="prPage >= prPages" @click="goPrPage(prPages)"
+              x-text="'»'"></button>
+            <span class="text-xs muted-2 ml-8" x-text="t('projects.totalItems', { count: prTotal })"></span>
           </div>
         </section>
 

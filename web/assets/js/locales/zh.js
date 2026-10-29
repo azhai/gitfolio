@@ -318,6 +318,7 @@ var zh = {
     noTasks: '暂无任务',
   },
   projects: {
+    totalItems: '共 {count} 条',
     title: '项目',
     migrateProject: '迁移项目',
     newProject: '+ 新建项目',

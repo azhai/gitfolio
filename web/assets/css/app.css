@@ -1614,6 +1614,14 @@ hr {
   background-color: #ffeef0;
 }
 
+/* ---------- pager ---------- */
+/* 高级翻页：页码按钮等宽，省略号按钮禁用但保持占位。 */
+.pager__num {
+  min-width: 32px;
+  justify-content: center;
+  font-variant-numeric: tabular-nums;
+}
+
 /* ---------- repo head ---------- */
 .repo-title {
   font-size: 22px;
@@ -2437,4 +2445,8 @@ hr {
   .modal {
     max-width: calc(100vw - 24px);
   }
+}
+
+.ml-8 {
+  margin-left: 8px;
 }
