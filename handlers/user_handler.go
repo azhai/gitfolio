@@ -1,12 +1,17 @@
 package handlers
 
 import (
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 
 	"github.com/azhai/gitfolio/config"
 	"github.com/azhai/gitfolio/middleware"
 	"github.com/azhai/gitfolio/models"
+	"github.com/azhai/gitfolio/services"
 	"github.com/gofiber/fiber/v3"
 )
 
@@ -424,4 +429,106 @@ func ChangePassword(c fiber.Ctx) error {
 // Logout 用户登出
 func Logout(c fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Logged out successfully"})
+}
+
+// ScanUserRepos 扫描自有仓库目录，把还没登记的 git 仓库补进数据库。
+//
+// 只扫目录的第一层——和 ResolveRepoLocationUnder 的布局一致
+// （<repo_root>/<name>），更深的不属于这个账号的直接管理范围。
+// 已经登记过的名字跳过，新发现的以 local 项目入库。
+func ScanUserRepos(c fiber.Ctx) error {
+	userID := middleware.GetCurrentUserID(c)
+	db := models.GetDB()
+
+	userModel, err := db.User.Select().Where("id = ?", userID).One()
+	if err != nil || userModel == nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "User not found"})
+	}
+	root := strings.TrimSpace(userModel.RepoRoot)
+	if root == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "repo_root is not set"})
+	}
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Cannot read repo_root: " + err.Error(),
+		})
+	}
+
+	registered := map[string]bool{}
+	if repos, err := db.Repository.Select().Where("owner_id = ? AND owner_type = 'user'", userID).All(); err == nil {
+		for _, r := range repos {
+			registered[r.Name] = true
+		}
+	}
+
+	added := make([]string, 0)
+	skipped := 0
+	for _, entry := range entries {
+		if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
+			continue
+		}
+		name := entry.Name()
+		path := filepath.Join(root, name)
+		if !isGitRepository(path) {
+			continue
+		}
+		if registered[name] {
+			skipped++
+			continue
+		}
+
+		repo := &models.Repository{
+			Name:          name,
+			OwnerID:       userID,
+			OwnerType:     "user",
+			ProjectType:   "local",
+			LocalPath:     path,
+			DefaultBranch: detectDefaultBranch(path),
+		}
+		repo.Stamp()
+		if err := db.Repository.Insert().One(repo); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "Failed to register " + name + ": " + err.Error(),
+			})
+		}
+		stats := &models.RepositoryStats{RepositoryID: repo.ID}
+		stats.Stamp()
+		if err := db.RepositoryStats.Insert().One(stats); err != nil {
+			// 统计行缺失只影响计数展示，不算失败。
+			fmt.Printf("Warning: failed to create stats for scanned repo %s: %v\n", name, err)
+		}
+		services.NewSchedulerService(db).GetOrCreateSyncPoint(repo.ID, "stats")
+		registered[name] = true
+		added = append(added, name)
+	}
+
+	return c.JSON(fiber.Map{"added": len(added), "names": added, "skipped": skipped})
+}
+
+// isGitRepository 判断目录是不是一个 git 仓库：普通仓库看 .git，
+// 裸仓库看 HEAD/config/objects 三件套。
+func isGitRepository(path string) bool {
+	if fi, err := os.Stat(filepath.Join(path, ".git")); err == nil && fi.IsDir() {
+		return true
+	}
+	for _, part := range []string{"HEAD", "config", "objects"} {
+		if _, err := os.Stat(filepath.Join(path, part)); err != nil {
+			return false
+		}
+	}
+	return true
+}
+
+// detectDefaultBranch 读出仓库当前分支；空仓库或分离 HEAD 时回退 main。
+func detectDefaultBranch(path string) string {
+	out, err := exec.Command("git", "-C", path, "rev-parse", "--abbrev-ref", "HEAD").Output()
+	if err != nil {
+		return "main"
+	}
+	branch := strings.TrimSpace(string(out))
+	if branch == "" || branch == "HEAD" {
+		return "main"
+	}
+	return branch
 }

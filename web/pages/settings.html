@@ -82,7 +82,13 @@
               <div class="hint" x-text="t('userSettings.repoRootHint')"></div>
             </div>
 
-            <div class="row" style="justify-content: flex-end">
+            <div class="row" style="justify-content: flex-end; gap: 10px">
+              <button class="btn" x-show="profile.repo_root" x-cloak
+                :disabled="scanning" @click="scanRepos">
+                <span class="spinner spinner--sm" x-show="scanning" x-cloak></span>
+                <span x-icon="{ name: 'folder-open', size: 14 }"></span>
+                <span x-text="t('userSettings.scanRepos')"></span>
+              </button>
               <button class="btn btn--primary" :disabled="saving" @click="saveProfile">
                 <span class="spinner spinner--sm" x-show="saving" x-cloak></span>
                 <span x-text="t('userSettings.saveChanges')"></span>

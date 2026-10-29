@@ -646,6 +646,11 @@ var en = {
     path: 'Path on disk',
   },
   userSettings: {
+    scanRepos: 'Scan & add projects',
+    scanSuccess: 'Added {count} projects: {names}',
+    scanNone: 'No unregistered git repositories found',
+    scanFailed: 'Scan failed',
+    needRepoRoot: 'Set and save your repo directory first',
     title: 'User Settings',
     profile: 'Profile',
     changePassword: 'Change Password',

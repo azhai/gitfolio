@@ -649,6 +649,11 @@ var zh = {
     path: '落盘路径',
   },
   userSettings: {
+    scanRepos: '扫描和添加项目',
+    scanSuccess: '已添加 {count} 个项目：{names}',
+    scanNone: '没有发现未登记的 git 仓库',
+    scanFailed: '扫描失败',
+    needRepoRoot: '请先填写并保存自有仓库目录',
     title: '个人设置',
     profile: '个人资料',
     changePassword: '修改密码',

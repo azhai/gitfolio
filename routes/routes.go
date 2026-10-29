@@ -43,6 +43,7 @@ func setupUserRoutes(api fiber.Router) {
 	api.Get("/user/me", handlers.GetCurrentUser)
 	api.Put("/user/me", middleware.GuestReadOnly(), handlers.UpdateUser)
 	api.Post("/user/me/password", middleware.GuestReadOnly(), handlers.ChangePassword)
+	api.Post("/user/scan-repos", middleware.GuestReadOnly(), handlers.ScanUserRepos)
 	api.Get("/users", handlers.ListUsers)
 	api.Post("/users", middleware.AdminOnly(), handlers.CreateUser)
 	api.Get("/users/:username", handlers.GetUser)

@@ -523,6 +523,9 @@ export const usersAPI = {
   changePassword(data) {
     return api.post('/user/me/password', data)
   },
+  scanRepos() {
+    return api.post('/user/scan-repos')
+  },
   uploadAvatar(username, file) {
     var formData = new FormData()
     formData.append('avatar', file)

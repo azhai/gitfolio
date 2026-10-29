@@ -9,6 +9,7 @@ Alpine.data('settings', function () {
   return {
     loading: true,
     saving: false,
+    scanning: false,
     uploading: false,
     changingPassword: false,
     avatarUrl: '',
@@ -61,6 +62,32 @@ Alpine.data('settings', function () {
         toastError(err)
       } finally {
         this.saving = false
+      }
+    },
+
+    // 扫描自有仓库目录，把未登记的 git 仓库补进系统。
+    // 目录本身没设置时按钮不会出现，但直接调用还是要拦一下。
+    scanRepos: async function () {
+      if (!this.profile.repo_root) {
+        toast(t('userSettings.needRepoRoot'), 'error')
+        return
+      }
+      if (this.scanning) return
+      this.scanning = true
+      try {
+        var data = await usersAPI.scanRepos()
+        if (data && data.added > 0) {
+          toast(t('userSettings.scanSuccess', {
+            count: data.added,
+            names: (data.names || []).join(', '),
+          }), 'success')
+        } else {
+          toast(t('userSettings.scanNone'), 'info')
+        }
+      } catch (err) {
+        toast(err.message || t('userSettings.scanFailed'), 'error')
+      } finally {
+        this.scanning = false
       }
     },
 
