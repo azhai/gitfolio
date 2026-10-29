@@ -53,12 +53,15 @@ export function timeAgo(dateStr) {
   // Zero-value timestamps (0001-01-01) reach us as "1/1" and only add noise.
   if (isNaN(d.getTime()) || d.getFullYear() < 1970) return ''
   var diff = (Date.now() - d.getTime()) / 1000
+  // 未来的时间点（比如下次同步）也得能说清楚，否则负数会一路掉进“刚刚”。
+  var future = diff < 0
+  var secs = Math.abs(diff)
   var time = packs[currentLang].time || {}
-  if (diff < 10) return time.justNow || 'just now'
-  if (diff < 60) return Math.floor(diff) + (time.secondsAgo || 's ago')
-  if (diff < 3600) return Math.floor(diff / 60) + (time.minutesAgo || 'm ago')
-  if (diff < 86400) return Math.floor(diff / 3600) + (time.hoursAgo || 'h ago')
-  if (diff < 604800) return Math.floor(diff / 86400) + (time.daysAgo || 'd ago')
+  if (secs < 10) return time.justNow || 'just now'
+  if (secs < 60) return Math.floor(secs) + (future ? time.secondsLater : time.secondsAgo)
+  if (secs < 3600) return Math.floor(secs / 60) + (future ? time.minutesLater : time.minutesAgo)
+  if (secs < 86400) return Math.floor(secs / 3600) + (future ? time.hoursLater : time.hoursAgo)
+  if (secs < 604800) return Math.floor(secs / 86400) + (future ? time.daysLater : time.daysAgo)
   return d.toLocaleDateString(currentLang === 'zh' ? 'zh-CN' : 'en-US')
 }
 

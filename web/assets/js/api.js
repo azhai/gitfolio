@@ -193,6 +193,9 @@ export const reposAPI = {
   deleteTag(owner, repo, name) {
     return api.del('/' + owner + '/' + repo + '/tags/' + encodeURIComponent(name))
   },
+  cherryPick(owner, repo, shas) {
+    return api.post('/' + owner + '/' + repo + '/cherry-pick', { shas: shas })
+  },
   deleteCommitRange(owner, repo, fromSHA, toSHA) {
     return api.post('/' + owner + '/' + repo + '/delete-commits', { from_sha: fromSHA, to_sha: toSHA })
   },
@@ -268,9 +271,6 @@ export const reposAPI = {
   refreshStats(owner, repo) {
     return api.post('/' + owner + '/' + repo + '/refresh-stats')
   },
-  refreshContributors(owner, repo) {
-    return api.post('/' + owner + '/' + repo + '/refresh-contributors')
-  },
   getRemotes(owner, repo) {
     return api.get('/' + owner + '/' + repo + '/remotes')
   },
@@ -321,6 +321,9 @@ export const groupsAPI = {
   },
   members(name) {
     return api.get('/groups/' + name + '/members')
+  },
+  repositories(name) {
+    return api.get('/groups/' + encodeURIComponent(name) + '/repos')
   },
   addMember(name, data) {
     return api.post('/groups/' + name + '/members', data)
@@ -527,7 +530,14 @@ export const usersAPI = {
       method: 'POST',
       headers: { 'Authorization': 'Bearer ' + getToken() },
       body: formData,
-    }).then(function(res) { return res.json() })
+    }).then(function(res) {
+      if (!res.ok) {
+        return res.json().catch(function() { return {} }).then(function(body) {
+          throw new Error(body.error || 'HTTP ' + res.status)
+        })
+      }
+      return res.json()
+    })
   },
   update(username, data) {
     return api.put('/users/' + username, data)

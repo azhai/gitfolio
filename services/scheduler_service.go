@@ -36,12 +36,24 @@ func NewSchedulerService(db *models.Database) *SchedulerService {
 	}
 }
 
-func (s *SchedulerService) getOwnerName(ownerID int64) string {
-	owner, err := s.db.Owner.Select().Where("id = ?", ownerID).One()
-	if err == nil && owner != nil {
-		return owner.Username
+// getOwnerName 按 owner_type 解析仓库归属的显示名。
+// owner_id 在用户和团队两套主键里会重号（admin 和 ab 都是 1），
+// 只按 id 查会把团队项目写成用户名。
+func (s *SchedulerService) getOwnerName(repo *models.Repository) string {
+	if repo == nil {
+		return "local"
 	}
-	user, err := s.db.User.Select().Where("id = ?", ownerID).One()
+	if repo.IsGroupOwned() {
+		group, err := s.db.Group.Select().Where("id = ?", repo.OwnerID).One()
+		if err == nil && group != nil {
+			return group.Name
+		}
+		return "unknown"
+	}
+	if repo.OwnerID == 0 {
+		return "local"
+	}
+	user, err := s.db.User.Select().Where("id = ?", repo.OwnerID).One()
 	if err == nil && user != nil {
 		return user.Username
 	}
@@ -158,13 +170,13 @@ func (s *SchedulerService) checkMirrorSync(repo *models.Repository, now time.Tim
 		}()
 	default:
 		UnlockSync(repo.ID)
-		log.Printf("[Scheduler] Sync queue full, skipping %s/%s", s.getOwnerName(repo.OwnerID), repo.Name)
+		log.Printf("[Scheduler] Sync queue full, skipping %s/%s", s.getOwnerName(repo), repo.Name)
 	}
 }
 
 // executeMirrorSync performs the actual mirror sync for a repository.
 func (s *SchedulerService) executeMirrorSync(repo *models.Repository, sp *models.SyncPoint) {
-	ownerName := s.getOwnerName(repo.OwnerID)
+	ownerName := s.getOwnerName(repo)
 	syncSvc := NewSyncService(s.db)
 	remoteRepo, _ := syncSvc.GetRemoteRepoInfo(repo.ID)
 	if remoteRepo == nil {
@@ -209,7 +221,7 @@ func (s *SchedulerService) executeMirrorSync(repo *models.Repository, sp *models
 	} else {
 		log.Printf("[Scheduler] Sync succeeded for %s/%s", ownerName, repo.Name)
 		syncSvc.UpdateSyncPoint(sp.ID, true, "")
-		syncSvc.LogSync(sp.ID, "mirror", "success", "", duration, syncResult.IssuesInserted+syncResult.IssuesUpdated+syncResult.PRsInserted+syncResult.PRsUpdated, 0, "")
+		syncSvc.LogSync(sp.ID, "mirror", "success", syncResult.FailureNote, duration, syncResult.IssuesInserted+syncResult.IssuesUpdated+syncResult.PRsInserted+syncResult.PRsUpdated, 0, "")
 
 		if syncResult.MaxIssueNumber > sp.LastIssueNumber {
 			sp.LastIssueNumber = syncResult.MaxIssueNumber
@@ -254,7 +266,7 @@ func (s *SchedulerService) checkStatsRefresh(repo *models.Repository, now time.T
 
 // executeStatsRefresh performs the actual stats refresh for a repository.
 func (s *SchedulerService) executeStatsRefresh(repo *models.Repository, sp *models.SyncPoint) {
-	ownerName := s.getOwnerName(repo.OwnerID)
+	ownerName := s.getOwnerName(repo)
 
 	log.Printf("[Scheduler] Refreshing stats for %s/%s", ownerName, repo.Name)
 
@@ -370,6 +382,7 @@ func (s *SchedulerService) GetOrCreateSyncPoint(repoID int64, syncType string) (
 	now := time.Now().UTC()
 	nextSync := now.Add(43200 * time.Second)
 	sp.NextSyncAt = &nextSync
+	sp.Stamp()
 	if err := s.db.SyncPoint.Insert().One(&sp); err != nil {
 		return nil, err
 	}
@@ -415,7 +428,7 @@ func (s *SchedulerService) ListAllSyncPoints() ([]SyncPointInfo, error) {
 			continue
 		}
 
-		ownerName := s.getOwnerName(repo.OwnerID)
+		ownerName := s.getOwnerName(repo)
 
 		info := SyncPointInfo{
 			ID:            sp.ID,
@@ -542,7 +555,7 @@ func (s *SchedulerService) ListAllSyncLogs(limit int) ([]SyncLogInfo, error) {
 			repoCache[sp.RepositoryID] = repo
 		}
 
-		ownerName := s.getOwnerName(repo.OwnerID)
+		ownerName := s.getOwnerName(repo)
 		result = append(result, SyncLogInfo{
 			ID:          l.ID,
 			SyncPointID: l.SyncPointID,

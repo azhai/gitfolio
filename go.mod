@@ -5,7 +5,7 @@ go 1.27
 require (
 	github.com/VictoriaMetrics/fastcache v1.13.3
 	github.com/azhai/gobus v0.2.1
-	github.com/azhai/goent v0.9.6
+	github.com/azhai/goent v0.9.8
 	github.com/gofiber/fiber/v3 v3.6.1
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/go-github/v88 v88.0.0

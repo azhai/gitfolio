@@ -17,6 +17,12 @@ func FormatTime(t time.Time) string {
 	return t.In(cstZone).Format("2006-01-02T15:04:05+08:00")
 }
 
+// DisplayNow 返回界面所用的东八区当前时间，只用于生成给人看的标签（备份名等）。
+// 写入时间列仍然必须用 UTC，见 models.Stamp。
+func DisplayNow() time.Time {
+	return time.Now().In(cstZone)
+}
+
 const (
 	HTTPStatusOK                  = 200
 	HTTPStatusCreated             = 201

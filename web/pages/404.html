@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>GitFolio · 404</title>
+    <link rel="stylesheet" href="/assets/css/app.css" />
+  </head>
+  <body class="app-body">
+    <div id="app-shell"></div>
+
+    <main class="app-main">
+      <div class="empty" style="padding-top: 96px">
+        <div class="empty__icon" style="font-size: 56px; font-weight: 700; color: #d1d5db; height: auto">404</div>
+        <div class="empty__title" data-i18n="notFound.title">页面不存在</div>
+        <div class="empty__desc" data-i18n="notFound.desc">这个地址可能已经失效，或者仓库还不存在。</div>
+        <div class="row gap-8 mt-24" style="justify-content: center">
+          <a class="btn btn--primary" href="/home" data-i18n="notFound.home">回到首页</a>
+          <a class="btn btn--ghost" href="/projects" data-i18n="notFound.projects">浏览项目</a>
+        </div>
+      </div>
+    </main>
+
+    <div id="app-footer"></div>
+    <script type="module">
+      import { t } from '/assets/js/i18n.js'
+      document.querySelectorAll('[data-i18n]').forEach(function (el) {
+        el.textContent = t(el.dataset.i18n)
+      })
+    </script>
+    <script type="module" src="/assets/js/app.js"></script>
+  </body>
+</html>

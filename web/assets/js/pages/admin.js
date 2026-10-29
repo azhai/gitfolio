@@ -11,6 +11,12 @@ function intervalLabel(seconds) {
   return seconds + ' s'
 }
 
+function statusLabel(status) {
+  if (status === 'success') return t('admin.success')
+  if (status === 'failure') return t('admin.failure')
+  return t('common.running')
+}
+
 Alpine.data('admin', function () {
   return {
     loading: true,
@@ -125,14 +131,15 @@ Alpine.data('admin', function () {
           return []
         }),
       ])
-      this.syncPoints = Array.isArray(result[0]) ? result[0] : (result[0] && result[0].data) || []
-      this.syncLogs = Array.isArray(result[1]) ? result[1] : (result[1] && result[1].data) || []
+      // 接口返回的是 {sync_points:[…]} / {logs:[…]}，不是数组也不是 {data:[…]}。
+      this.syncPoints = (result[0] && result[0].sync_points) || []
+      this.syncLogs = (result[1] && result[1].logs) || []
     },
 
     loadBackups: async function () {
       try {
         var data = await backupsAPI.list()
-        this.backups = Array.isArray(data) ? data : (data && data.data) || []
+        this.backups = (data && data.backups) || []
       } catch (err) {
         this.backups = []
       }
@@ -171,5 +178,6 @@ Alpine.data('admin', function () {
     t: t,
     timeAgo: timeAgo,
     intervalLabel: intervalLabel,
+    statusLabel: statusLabel,
   }
 })

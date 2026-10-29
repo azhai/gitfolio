@@ -29,7 +29,6 @@ optimized-rules.txt
 .env
 
 # Repository storage
-dist/
 docs/superpowers/
 projs/
 repos/

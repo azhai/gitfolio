@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/VictoriaMetrics/fastcache"
 	"github.com/azhai/gitfolio/config"
@@ -42,6 +43,10 @@ var (
 	publicFS = subFS(webFS, "web/public")
 
 	etagCacheSize = 32 * 1024 * 1024 // 32MB
+
+	// 嵌入文件的 mtime 是零值，浏览器会把启发式新鲜度算成“还能用几十年”，
+	// 发版后继续跑缓存里的旧脚本。静态响应改用启动时间做时间戳。
+	processStart = time.Now()
 )
 
 func main() {
@@ -159,12 +164,15 @@ func CreateApp() *fiber.App {
 	// browser could send, which would hand back the stale body it cached.
 	app.Use(func(c fiber.Ctx) error {
 		path := c.Path()
-		if !strings.HasPrefix(path, "/api/") && !strings.HasPrefix(path, "/uploads/") {
-			c.Request().Header.Del(fiber.HeaderIfModifiedSince)
-			c.Request().Header.Del(fiber.HeaderIfNoneMatch)
-			c.Set(fiber.HeaderCacheControl, "no-cache")
+		if strings.HasPrefix(path, "/api/") || strings.HasPrefix(path, "/uploads/") {
+			return c.Next()
 		}
-		return c.Next()
+		c.Request().Header.Del(fiber.HeaderIfModifiedSince)
+		c.Request().Header.Del(fiber.HeaderIfNoneMatch)
+		c.Set(fiber.HeaderCacheControl, "no-cache")
+		err := c.Next()
+		c.Set(fiber.HeaderLastModified, processStart.UTC().Format("Mon, 02 Jan 2006 15:04:05 GMT"))
+		return err
 	})
 	app.Use("/assets", assetsHandler)
 	app.Use("/", publicHandler)

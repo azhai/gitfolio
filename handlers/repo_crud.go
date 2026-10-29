@@ -88,6 +88,7 @@ func CreateRepository(c fiber.Ctx) error {
 	}
 
 	stats := &models.RepositoryStats{RepositoryID: repo.ID}
+	stats.Stamp()
 	if err := db.RepositoryStats.Insert().One(stats); err != nil {
 		fmt.Printf("Warning: failed to create repository stats: %v\n", err)
 	}
@@ -397,11 +398,11 @@ func UpdateRepository(c fiber.Ctx) error {
 	if req.Name != "" {
 		result.Repo.Name = req.Name
 	}
-	if req.Description != "" {
-		result.Repo.Description = req.Description
+	if req.Description != nil {
+		result.Repo.Description = *req.Description
 	}
-	if req.Homepage != "" {
-		result.Repo.Homepage = req.Homepage
+	if req.Homepage != nil {
+		result.Repo.Homepage = *req.Homepage
 	}
 	if req.ProjectType != "" {
 		oldType := result.Repo.ProjectType

@@ -73,6 +73,7 @@ func CreateCommitReferences(db *models.Database, commitHash string, repoID int64
 			TargetID:     ref.TargetID,
 			Action:       ref.Action,
 		}
+		record.Stamp()
 		db.CommitReference.Insert().One(record)
 
 		if ref.Action == "closes" && ref.TargetType == "issue" {

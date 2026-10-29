@@ -3,13 +3,34 @@ package services
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/azhai/gitfolio/config"
 	"github.com/azhai/gitfolio/models"
 	"github.com/azhai/goent/backup"
 )
+
+// libpqBackupDSN 去掉连接串里的 search_path。libpq 不认这个参数，pg_dump 和 psql 会
+// 直接拒绝整个 URI；驱动却接受它，所以应用的 DSN 一直带着。备份和恢复的每条语句都写了
+// schema 限定名，不依赖 search_path，去掉是安全的。
+func libpqBackupDSN(dsn string) string {
+	if !strings.HasPrefix(dsn, "postgres://") && !strings.HasPrefix(dsn, "postgresql://") {
+		return dsn
+	}
+	u, err := url.Parse(dsn)
+	if err != nil || !u.Query().Has("search_path") {
+		return dsn
+	}
+
+	q := u.Query()
+	q.Del("search_path")
+	u.RawQuery = q.Encode()
+
+	return u.String()
+}
 
 // BackupService handles full/incremental backups and restore.
 type BackupService struct {
@@ -21,7 +42,7 @@ type BackupService struct {
 func NewBackupService(db *models.Database) *BackupService {
 	cfg := backup.Config{
 		Dir:                     backupDir(),
-		DSN:                     config.GetConfig().Database.DSN,
+		DSN:                     libpqBackupDSN(config.GetConfig().Database.DSN),
 		Schema:                  "folio",
 		LogTables:               []string{"sync_log", "git_command_log"},
 		ExcludedFromIncremental: []string{"backup", "sync_log", "git_command_log"},
@@ -40,9 +61,10 @@ func backupDir() string {
 	return filepath.Join(root, "..", "backups")
 }
 
-// ListBackups returns all backups ordered by creation time desc.
+// ListBackups returns all backups newest first.
+// 用 id 而不是 created_at 排序：回填过的历史行共享同一个时间戳，按时间排序会给出随机顺序。
 func (s *BackupService) ListBackups(limit int) ([]*models.Backup, error) {
-	q := s.db.Backup.Select().OrderBy("created_at DESC")
+	q := s.db.Backup.Select().OrderBy("id DESC")
 	if limit > 0 {
 		q = q.Take(limit)
 	}
@@ -60,8 +82,9 @@ func (s *BackupService) CreateFullBackup(ctx context.Context, name string) (*mod
 		Name:       name,
 		BackupType: "full",
 		Status:     "running",
-		StartedAt:  timePtr(time.Now().UTC()),
 	}
+	backup.Stamp()
+	backup.StartedAt = timePtr(backup.CreatedAt)
 	if err := s.db.Backup.Insert().One(backup); err != nil {
 		return nil, err
 	}
@@ -74,7 +97,7 @@ func (s *BackupService) CreateFullBackup(ctx context.Context, name string) (*mod
 func (s *BackupService) CreateIncrementalBackup(ctx context.Context, name string) (*models.Backup, error) {
 	full, err := s.db.Backup.Select().
 		Where("backup_type = ? AND status = ?", "full", "success").
-		OrderBy("created_at DESC").One()
+		OrderBy("id DESC").One()
 	if err != nil || full == nil {
 		return nil, fmt.Errorf("no successful full backup found")
 	}
@@ -84,8 +107,9 @@ func (s *BackupService) CreateIncrementalBackup(ctx context.Context, name string
 		BackupType:   "incremental",
 		BaseBackupID: &full.ID,
 		Status:       "running",
-		StartedAt:    timePtr(time.Now().UTC()),
 	}
+	backup.Stamp()
+	backup.StartedAt = timePtr(backup.CreatedAt)
 	if err := s.db.Backup.Insert().One(backup); err != nil {
 		return nil, err
 	}

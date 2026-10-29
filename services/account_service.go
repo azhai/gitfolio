@@ -28,7 +28,7 @@ func (s *AccountService) CreateOrUpdateAccount(platform, username, email, avatar
 		account.AvatarURL = avatarURL
 		account.APIURL = apiURL
 		account.IsActive = true
-		account.UpdatedAt = time.Now()
+		account.UpdatedAt = time.Now().UTC()
 		if err := s.db.PlatformAccount.Save().One(&account); err != nil {
 			return nil, err
 		}
@@ -42,6 +42,7 @@ func (s *AccountService) CreateOrUpdateAccount(platform, username, email, avatar
 			UserID:    userID,
 			IsActive:  true,
 		}
+		account.Stamp()
 		if err := s.db.PlatformAccount.Insert().One(&account); err != nil {
 			return nil, err
 		}
@@ -65,7 +66,7 @@ func (s *AccountService) CreateOrUpdateToken(platform, name, accessToken, refres
 		token.ExpiresAt = expiresAt
 		token.Scopes = scopes
 		token.IsActive = true
-		token.UpdatedAt = time.Now()
+		token.UpdatedAt = time.Now().UTC()
 		if repoID != nil {
 			token.RepositoryID = repoID
 		}
@@ -85,6 +86,7 @@ func (s *AccountService) CreateOrUpdateToken(platform, name, accessToken, refres
 			RepositoryID: repoID,
 			IsActive:     true,
 		}
+		token.Stamp()
 		if err := s.db.SyncToken.Insert().One(&token); err != nil {
 			return nil, err
 		}
@@ -133,6 +135,6 @@ func (s *AccountService) DeactivateToken(tokenID int64) error {
 	}
 	token := *tokens[0]
 	token.IsActive = false
-	token.UpdatedAt = time.Now()
+	token.UpdatedAt = time.Now().UTC()
 	return s.db.SyncToken.Save().One(&token)
 }

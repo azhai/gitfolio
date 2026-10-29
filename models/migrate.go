@@ -127,49 +127,92 @@ func EnsureRepoRootColumns(db *Database) error {
 // 原生 SQL 里不能使用 "?" 占位符：驱动不会把它改写成 PostgreSQL 的 $1，
 // 因此这里统一拼接字面量。
 func ensureColumn(db *Database, table, column, colType string) error {
-	ctx := context.Background()
-	driverName := strings.ToLower(db.Driver().Name())
-
-	var cnt int
-	isPG := driverName == "postgres" || driverName == "postgresql"
-	schema := ""
-	if isPG {
-		// 表可能不在默认 search_path 上（例如 folio schema），先定位它。
-		schema = pgSchemaFor(db, table)
+	if columnExists(db, table, column) {
+		return nil
 	}
 
-	switch {
-	case isPG:
-		query := fmt.Sprintf(
+	target := tableTarget(db, table)
+	sql := fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s DEFAULT ''", target, quoteIdent(column), colType)
+	if err := db.RawExecContext(context.Background(), sql); err != nil {
+		return fmt.Errorf("failed to add %s.%s column: %w", table, column, err)
+	}
+	// 把 NULL 归一化为默认空字符串，避免读取时出现 NULL 扫描错误。
+	_ = db.RawExecContext(context.Background(),
+		fmt.Sprintf("UPDATE %s SET %s = '' WHERE %s IS NULL", target, quoteIdent(column), quoteIdent(column)))
+	return nil
+}
+
+// columnExists 判断表里是否已经有某一列。
+func columnExists(db *Database, table, column string) bool {
+	ctx := context.Background()
+	driverName := strings.ToLower(db.Driver().Name())
+	isPG := driverName == "postgres" || driverName == "postgresql"
+
+	var query string
+	if isPG {
+		schema := pgSchemaFor(db, table)
+		query = fmt.Sprintf(
 			"SELECT count(*) FROM information_schema.columns WHERE table_name = '%s' AND column_name = '%s'",
 			table, column)
 		if schema != "" {
 			query += fmt.Sprintf(" AND table_schema = '%s'", schema)
 		}
-		if err := db.RawQueryRowContext(ctx, query).Scan(&cnt); err != nil {
-			return fmt.Errorf("failed to inspect %s.%s: %w", table, column, err)
-		}
-	default: // sqlite: PRAGMA table_info
-		query := fmt.Sprintf("SELECT count(*) FROM pragma_table_info('%s') WHERE name = '%s'", table, column)
-		if err := db.RawQueryRowContext(ctx, query).Scan(&cnt); err != nil {
-			return fmt.Errorf("failed to inspect %s.%s: %w", table, column, err)
-		}
-	}
-	if cnt > 0 {
-		return nil
+	} else { // sqlite: PRAGMA table_info
+		query = fmt.Sprintf("SELECT count(*) FROM pragma_table_info('%s') WHERE name = '%s'", table, column)
 	}
 
-	target := quoteIdent(table)
-	if isPG && schema != "" {
-		target = quoteIdent(schema) + "." + quoteIdent(table)
+	var cnt int
+	if err := db.RawQueryRowContext(ctx, query).Scan(&cnt); err != nil {
+		return false
 	}
-	sql := fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s DEFAULT ''", target, quoteIdent(column), colType)
-	if err := db.RawExecContext(ctx, sql); err != nil {
-		return fmt.Errorf("failed to add %s.%s column: %w", table, column, err)
+	return cnt > 0
+}
+
+// tableTarget 返回可直接用于 SQL 的表名；PostgreSQL 的表可能不在默认 search_path 上。
+func tableTarget(db *Database, table string) string {
+	driverName := strings.ToLower(db.Driver().Name())
+	if driverName == "postgres" || driverName == "postgresql" {
+		if schema := pgSchemaFor(db, table); schema != "" {
+			return quoteIdent(schema) + "." + quoteIdent(table)
+		}
 	}
-	// 把 NULL 归一化为默认空字符串，避免读取时出现 NULL 扫描错误。
-	_ = db.RawExecContext(ctx,
-		fmt.Sprintf("UPDATE %s SET %s = '' WHERE %s IS NULL", target, quoteIdent(column), quoteIdent(column)))
+	return quoteIdent(table)
+}
+
+// duplicateURLColumns 是历史遗留的重复列：模型字段 SSHURL/APIURL 曾经带上
+// db:"sshurl"/db:"apiurl" 标签，AutoMigrate 于是又建了一遍同义的列。两边都 NOT NULL
+// 且没有默认值，只有一边会被写入，另一边的插入就会直接失败。数据在规范列上。
+var duplicateURLColumns = []struct{ table, dup, canonical string }{
+	{"remote_repository", "sshurl", "ssh_url"},
+	{"remote_repository", "apiurl", "api_url"},
+	{"platform_account", "apiurl", "api_url"},
+}
+
+// DropDuplicateURLColumns 删掉这些同义列，删之前把只在旧列里的值补到规范列上。
+func DropDuplicateURLColumns(db *Database) error {
+	if db == nil || db.DB == nil {
+		return fmt.Errorf("database not initialized")
+	}
+	ctx := context.Background()
+
+	for _, c := range duplicateURLColumns {
+		if !columnExists(db, c.table, c.dup) {
+			continue
+		}
+		target := tableTarget(db, c.table)
+		if columnExists(db, c.table, c.canonical) {
+			if err := db.RawExecContext(ctx, fmt.Sprintf(
+				"UPDATE %s SET %s = %s WHERE %s = '' AND %s <> ''",
+				target, quoteIdent(c.canonical), quoteIdent(c.dup),
+				quoteIdent(c.canonical), quoteIdent(c.dup))); err != nil {
+				return fmt.Errorf("failed to backfill %s.%s: %w", c.table, c.canonical, err)
+			}
+		}
+		if err := db.RawExecContext(ctx, fmt.Sprintf("ALTER TABLE %s DROP COLUMN %s",
+			target, quoteIdent(c.dup))); err != nil {
+			return fmt.Errorf("failed to drop %s.%s: %w", c.table, c.dup, err)
+		}
+	}
 	return nil
 }
 
@@ -491,6 +534,31 @@ var timestampBackfillTargets = []struct {
 	{"group_member", []string{"created_at"}},
 	{"activity", []string{"created_at"}},
 	{"task_attachment", []string{"created_at"}},
+	// 同步链路上的表早期完全没有写时间戳。备份列表按 created_at 排序，
+	// 零值会让最新的备份排到最后，界面也只能显示占位符。
+	{"backup", []string{"created_at", "updated_at"}},
+	{"branch", []string{"created_at", "updated_at"}},
+	{"contributor", []string{"created_at", "updated_at"}},
+	{"git_command_log", []string{"created_at"}},
+	{"issue_label", []string{"created_at"}},
+	{"platform_account", []string{"created_at", "updated_at"}},
+	{"pull_request_label", []string{"created_at"}},
+	{"release", []string{"created_at", "updated_at"}},
+	{"remote_repository", []string{"created_at", "updated_at"}},
+	{"repository_stats", []string{"created_at", "updated_at"}},
+	{"sync_log", []string{"created_at"}},
+	{"sync_point", []string{"created_at", "updated_at"}},
+	{"sync_token", []string{"created_at", "updated_at"}},
+	{"task_schedule", []string{"created_at", "updated_at"}},
+	{"task_transition", []string{"created_at"}},
+	{"task_issue", []string{"created_at"}},
+	{"task_pull_request", []string{"created_at"}},
+	{"task_time_log", []string{"created_at"}},
+	{"commit_reference", []string{"created_at"}},
+	{"star", []string{"created_at"}},
+	{"watch", []string{"created_at"}},
+	{"webhook", []string{"created_at", "updated_at"}},
+	{"etag", []string{"created_at", "updated_at"}},
 }
 
 // BackfillTimestamps 把时间戳为零值（0001-01-01）的行改成当前时间。
@@ -506,9 +574,11 @@ func BackfillTimestamps(db *Database) error {
 	driverName := strings.ToLower(db.Driver().Name())
 	isPG := driverName == "postgres" || driverName == "postgresql"
 
+	// 时间列是 timestamp without time zone，入库必须是 UTC 墙钟；CURRENT_TIMESTAMP
+	// 会按会话时区（东八区）落成局部时间，界面于是多出 8 小时。
 	now := "datetime('now')"
 	if isPG {
-		now = "CURRENT_TIMESTAMP"
+		now = "(now() at time zone 'utc')"
 	}
 
 	for _, target := range timestampBackfillTargets {

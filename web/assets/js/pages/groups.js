@@ -2,7 +2,7 @@
 import Alpine from '../../lib/alpine.min.js'
 import { groupsAPI } from '../api.js'
 import { t, timeAgo } from '../i18n.js'
-import { initials } from '../model.js'
+import { initials, projectTypeClass, projectTypeLabel, repoUrl } from '../model.js'
 import { toast, toastError, confirmBox } from '../ui.js'
 
 function route() {
@@ -19,6 +19,7 @@ Alpine.data('groups', function () {
     groups: [],
     group: null,
     members: [],
+    projects: [],
     showAdd: false,
     adding: false,
     submitting: false,
@@ -53,9 +54,10 @@ Alpine.data('groups', function () {
 
     loadDetail: async function (name) {
       try {
-        var result = await Promise.all([groupsAPI.get(name), groupsAPI.members(name)])
+        var result = await Promise.all([groupsAPI.get(name), groupsAPI.members(name), groupsAPI.repositories(name)])
         this.group = result[0] || null
         this.members = Array.isArray(result[1]) ? result[1] : []
+        this.projects = Array.isArray(result[2]) ? result[2] : []
       } catch (err) {
         this.group = null
       } finally {
@@ -118,5 +120,8 @@ Alpine.data('groups', function () {
     t: t,
     timeAgo: timeAgo,
     initials: initials,
+    projectTypeClass: projectTypeClass,
+    projectTypeLabel: projectTypeLabel,
+    repoUrl: repoUrl,
   }
 })

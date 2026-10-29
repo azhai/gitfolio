@@ -198,6 +198,7 @@ func FindOrCreateContributor(db *models.Database, repoID int64, name, email, ava
 		RepositoryID: repoID,
 		CommitsCount: 0,
 	}
+	c.Stamp()
 	db.Contributor.Insert().One(c)
 	return c
 }

@@ -18,10 +18,12 @@ type LoginRequest struct {
 
 // UpdateUserRequest 更新用户信息请求
 type UpdateUserRequest struct {
-	FullName string `json:"full_name"`
-	Bio      string `json:"bio"`
-	Website  string `json:"website"`
-	Location string `json:"location"`
+	// 文本字段用指针：设置界面把简介、主页清空是常见操作，
+	// 用空串表示“不修改”的话就永远清不掉。
+	FullName *string `json:"full_name"`
+	Bio      *string `json:"bio"`
+	Website  *string `json:"website"`
+	Location *string `json:"location"`
 	// RepoRoot 是自有仓库目录，用指针以便显式清空（清空后回退到全局裸仓库目录）。
 	RepoRoot *string `json:"repo_root"`
 }
@@ -149,17 +151,17 @@ func UpdateUser(c fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "User not found"})
 	}
 
-	if req.FullName != "" {
-		userModel.FullName = req.FullName
+	if req.FullName != nil {
+		userModel.FullName = *req.FullName
 	}
-	if req.Bio != "" {
-		userModel.Bio = req.Bio
+	if req.Bio != nil {
+		userModel.Bio = *req.Bio
 	}
-	if req.Website != "" {
-		userModel.Website = req.Website
+	if req.Website != nil {
+		userModel.Website = *req.Website
 	}
-	if req.Location != "" {
-		userModel.Location = req.Location
+	if req.Location != nil {
+		userModel.Location = *req.Location
 	}
 	if req.RepoRoot != nil {
 		root, ok := models.CleanRepoRoot(*req.RepoRoot)
@@ -169,6 +171,7 @@ func UpdateUser(c fiber.Ctx) error {
 		userModel.RepoRoot = root
 	}
 
+	userModel.Stamp()
 	err = db.User.Save().One(userModel)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update user"})
@@ -379,7 +382,7 @@ func CreateUser(c fiber.Ctx) error {
 
 // ChangePasswordRequest 修改密码请求
 type ChangePasswordRequest struct {
-	OldPassword string `json:"old_password" validate:"required"`
+	OldPassword string `json:"current_password" validate:"required"`
 	NewPassword string `json:"new_password" validate:"required,min=6"`
 }
 

@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"log"
 	"net/url"
 	"os"
 	"os/exec"
@@ -290,9 +291,12 @@ func GetRepositoryContributors(c fiber.Ctx) error {
 	}
 
 	db := models.GetDB()
+	// awesome-go 这类仓库的 shortlog 有两千多个名字，全列出来既慢又没法看；
+	// 统计卡片上的总数走 repository_stats，这里只要排名靠前的。
 	contributors, err := db.Contributor.Select().
 		Where("repository_id = ?", result.Repo.ID).
-		OrderBy("commits_count DESC").All()
+		OrderBy("commits_count DESC").
+		Take(100).All()
 	if err != nil {
 		return c.Status(fiber.StatusOK).JSON([]any{})
 	}
@@ -323,7 +327,10 @@ func GetCodeStats(c fiber.Ctx) error {
 	gitSvc := gitSvcFor(result)
 	stats, err := gitSvc.GetCodeStats(result.OwnerName(), result.Repo.Name)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to get code stats: " + err.Error()})
+		// 镜像/导入的仓库目录可能被删掉。这里和提交列表一样返回空统计，
+		// 页面显示 0 而不是报 500，控制台也不再刷红。
+		log.Printf("failed to get code stats for %s/%s: %v", result.OwnerName(), result.Repo.Name, err)
+		return c.Status(fiber.StatusOK).JSON(&services.CodeStats{})
 	}
 
 	return c.Status(fiber.StatusOK).JSON(stats)
@@ -346,7 +353,8 @@ func GetCommitActivity(c fiber.Ctx) error {
 	gitSvc := gitSvcFor(result)
 	activity, err := gitSvc.GetCommitActivity(result.OwnerName(), result.Repo.Name, days)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to get commit activity: " + err.Error()})
+		log.Printf("failed to get commit activity for %s/%s: %v", result.OwnerName(), result.Repo.Name, err)
+		return c.Status(fiber.StatusOK).JSON(fiber.Map{"activity": []any{}, "days": days})
 	}
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"activity": activity, "days": days})
@@ -496,7 +504,7 @@ func CommitChanges(c fiber.Ctx) error {
 
 	helpers.CreateCommitReferences(db, commitHash, result.Repo.ID, req.Message)
 
-	now := time.Now()
+	now := time.Now().UTC()
 	result.Repo.LastCommitAt = &now
 	db.Repository.Save().One(result.Repo)
 
@@ -1094,7 +1102,7 @@ func EditFile(c fiber.Ctx) error {
 
 	helpers.CreateCommitReferences(db, commitHash, result.Repo.ID, req.Message)
 
-	now := time.Now()
+	now := time.Now().UTC()
 	result.Repo.LastCommitAt = &now
 	db.Repository.Save().One(result.Repo)
 
@@ -1149,7 +1157,7 @@ func DeleteFile(c fiber.Ctx) error {
 
 	helpers.CreateCommitReferences(db, commitHash, result.Repo.ID, req.Message)
 
-	now := time.Now()
+	now := time.Now().UTC()
 	result.Repo.LastCommitAt = &now
 	db.Repository.Save().One(result.Repo)
 
@@ -1162,7 +1170,8 @@ func DeleteFile(c fiber.Ctx) error {
 
 // ListRemotes 列出所有远程仓库
 func ListRemotes(c fiber.Ctx) error {
-	result, err := helpers.GetOwnerAndRepoWithPrivateAccessFromParams(c)
+	// Remote URLs may contain credentials, so only repo admins can read them.
+	result, err := helpers.RequireOwnerAndRepoFromParams(c)
 	if err != nil {
 		return err
 	}
@@ -1174,7 +1183,9 @@ func ListRemotes(c fiber.Ctx) error {
 	gitSvc := gitSvcFor(result)
 	remotes, err := gitSvc.ListRemotes(result.OwnerName(), result.Repo.Name)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+		// 仓库目录不存在时 git 会直接报错，这里按空列表处理，和上面的提交列表一致。
+		log.Printf("failed to list remotes for %s/%s: %v", result.OwnerName(), result.Repo.Name, err)
+		return c.Status(fiber.StatusOK).JSON(fiber.Map{"remotes": []any{}})
 	}
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"remotes": remotes})

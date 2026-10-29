@@ -184,6 +184,34 @@
               </div>
             </div>
           </div>
+          <div class="card mt-24">
+            <div class="card__head">
+              <span class="card__title">
+                <span x-text="t('group.projects')"></span>
+                <span class="muted" x-text="'(' + projects.length + ')'"></span>
+              </span>
+            </div>
+            <div class="list">
+              <template x-for="p in projects" :key="p.id || p.name">
+                <a class="list__item" :href="repoUrl(p)" style="align-items: center">
+                  <div class="grow">
+                    <div class="row gap-8 mb-4">
+                      <span class="strong green" x-text="p.name"></span>
+                      <span class="badge" :class="projectTypeClass(p.project_type)"
+                        x-text="projectTypeLabel(p.project_type)"></span>
+                    </div>
+                    <div class="text-sm muted truncate"
+                      x-text="p.description || t('group.noDescription')"></div>
+                  </div>
+                  <span class="text-xs muted-2" x-show="p.last_commit_at"
+                    x-text="timeAgo(p.last_commit_at)"></span>
+                </a>
+              </template>
+              <div class="empty" x-show="!projects.length" x-cloak>
+                <div class="empty__desc" x-text="t('group.noProjects')"></div>
+              </div>
+            </div>
+          </div>
         </div>
         </template>
 

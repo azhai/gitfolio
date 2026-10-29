@@ -115,7 +115,7 @@
               <tbody>
                 <template x-for="sp in syncPoints" :key="sp.id">
                   <tr>
-                    <td class="mono" x-text="sp.owner + '/' + sp.repo"></td>
+                    <td class="mono" x-text="sp.owner_name + '/' + sp.repo_name"></td>
                     <td>
                       <span class="badge badge--gray"
                         x-text="sp.sync_type === 'mirror' ? t('admin.mirrorSync') : t('admin.statsRefresh')"></span>
@@ -156,12 +156,15 @@
                 <template x-for="log in syncLogs" :key="log.id">
                   <tr>
                     <td class="muted text-xs" x-text="fmt.formatDateTime(log.created_at)"></td>
-                    <td class="mono" x-text="log.repo || '-'"></td>
-                    <td class="muted text-xs" x-text="log.sync_type || '-'"></td>
+                    <td class="mono" x-text="log.repo_name || '-'"></td>
+                    <td>
+                      <span class="badge badge--gray"
+                        x-text="log.sync_type === 'mirror' ? t('admin.mirrorSync') : t('admin.statsRefresh')"></span>
+                    </td>
                     <td>
                       <span class="badge"
-                        :class="log.status === 'success' ? 'badge--green' : (log.status === 'failed' ? 'badge--red' : 'badge--gray')"
-                        x-text="log.status"></span>
+                        :class="log.status === 'success' ? 'badge--green' : (log.status === 'failure' ? 'badge--red' : 'badge--gray')"
+                        x-text="statusLabel(log.status)"></span>
                     </td>
                     <td class="muted text-xs" x-text="fmt.formatDuration(log.duration)"></td>
                     <td class="muted text-xs truncate" style="max-width: 360px"
@@ -211,18 +214,18 @@
                     <td class="mono truncate" x-text="b.name || ('#' + b.id)"></td>
                     <td>
                       <span class="badge" :class="b.backup_type === 'full' ? 'badge--blue' : 'badge--gray'"
-                        x-text="b.backup_type"></span>
+                        x-text="b.backup_type === 'full' ? t('admin.fullBackup') : t('admin.incrementalBackup')"></span>
                     </td>
                     <td>
                       <span class="badge"
-                        :class="b.status === 'completed' ? 'badge--green' : (b.status === 'failed' ? 'badge--red' : 'badge--amber')"
-                        x-text="b.status"></span>
+                        :class="b.status === 'success' ? 'badge--green' : (b.status === 'failure' ? 'badge--red' : 'badge--amber')"
+                        x-text="statusLabel(b.status)"></span>
                     </td>
                     <td class="muted text-xs" x-text="fmt.formatBytes(b.size_bytes)"></td>
                     <td class="muted text-xs" x-text="b.finished_at ? fmt.formatDateTime(b.finished_at) : '-'"></td>
                     <td class="text-right">
-                      <button class="btn btn--sm btn--danger-ghost" @click="restoreBackup(b)"
-                        x-text="t('admin.restore')"></button>
+                      <button class="btn btn--sm btn--danger-ghost" x-show="b.status === 'success'"
+                        @click="restoreBackup(b)" x-text="t('admin.restore')"></button>
                     </td>
                   </tr>
                 </template>

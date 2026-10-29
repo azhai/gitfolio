@@ -222,6 +222,7 @@ func CreateMirror(c fiber.Ctx) error {
 			LastSyncAt:    &now,
 			DefaultBranch: "main",
 		}
+		repo.Stamp()
 		if err := db.Repository.Insert().One(&repo); err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": fmt.Sprintf("Failed to create repository: %v", err)})
 		}
@@ -278,18 +279,19 @@ func CreateMirror(c fiber.Ctx) error {
 					now := time.Now().UTC()
 					sp := syncPoints[0]
 					sp.LastSyncAt = &now
+					// 没有同步到数据时保留原水位，否则下一轮会跳过还没拉取的区间。
 					if syncResult.MaxIssueUpdatedAt != nil {
 						sp.LastIssueSyncAt = syncResult.MaxIssueUpdatedAt
-					} else {
-						sp.LastIssueSyncAt = &now
 					}
 					if syncResult.MaxPRUpdatedAt != nil {
 						sp.LastPRSyncAt = syncResult.MaxPRUpdatedAt
-					} else {
-						sp.LastPRSyncAt = &now
 					}
-					sp.LastIssueNumber = syncResult.MaxIssueNumber
-					sp.LastPRNumber = syncResult.MaxPRNumber
+					if syncResult.MaxIssueNumber > sp.LastIssueNumber {
+						sp.LastIssueNumber = syncResult.MaxIssueNumber
+					}
+					if syncResult.MaxPRNumber > sp.LastPRNumber {
+						sp.LastPRNumber = syncResult.MaxPRNumber
+					}
 					db.SyncPoint.Save().One(sp)
 				}
 			}()

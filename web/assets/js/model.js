@@ -34,7 +34,6 @@ export var TASK_STATUS = {
   draft: { bg: '#f3f4f6', color: '#6b7280', label: 'task.draft' },
   todo: { bg: '#dbeafe', color: '#2563eb', label: 'task.todo' },
   progress: { bg: '#fef3c7', color: '#d97706', label: 'task.inProgress' },
-  in_progress: { bg: '#fef3c7', color: '#d97706', label: 'task.inProgress' },
   review: { bg: '#ede9fe', color: '#7c3aed', label: 'task.review' },
   completed: { bg: '#dcfce7', color: '#16a34a', label: 'task.completed' },
   done: { bg: '#dcfce7', color: '#16a34a', label: 'task.done' },

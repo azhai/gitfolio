@@ -533,54 +533,80 @@ func (s *GitService) DeleteTag(owner, name, tagName string) error {
 }
 
 // DeleteCommitRange 删除从 fromSHA 到 toSHA 的连续提交（含两端）
+// currentBranchOf 返回仓库当前分支名，detached HEAD 时回退为空（不推送）。
+func currentBranchOf(repoPath string) string {
+	cmd := exec.Command("git", "-C", repoPath, "rev-parse", "--abbrev-ref", "HEAD")
+	out, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	branch := strings.TrimSpace(string(out))
+	if branch == "HEAD" {
+		return ""
+	}
+	return branch
+}
+
+// pushIfRemote 在仓库配置了 origin 时把当前分支推上去。
+//
+// 本地自建项目通常没有 origin，这时候不该把「推送失败」当成操作失败——
+// 历史重写已经在本机生效了。推送失败（例如远端拒绝）仍然返回错误。
+func (s *GitService) pushIfRemote(repoPath, branch string) error {
+	if branch == "" || branch == "HEAD" {
+		return nil
+	}
+	remoteCmd := exec.Command("git", "-C", repoPath, "remote", "get-url", "origin")
+	if err := remoteCmd.Run(); err != nil {
+		return nil // 没有 origin，纯本地仓库
+	}
+	pushCmd := exec.Command("git", "-C", repoPath, "push", "-f", "origin", branch)
+	if output, err := pushCmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("failed to push %s: %s: %w", branch, strings.TrimSpace(string(output)), err)
+	}
+	return nil
+}
+
 func (s *GitService) DeleteCommitRange(owner, repo, fromSHA, toSHA string) error {
 	repoPath := s.getRepoPath(owner, repo)
 	if _, err := os.Stat(repoPath); os.IsNotExist(err) {
 		return fmt.Errorf("repository not found")
 	}
-
-	workDir, err := os.MkdirTemp("", "gitfolio-delete-commits-*")
-	if err != nil {
-		return fmt.Errorf("failed to create temp directory: %w", err)
+	if s.isBareRepo(repoPath) {
+		return fmt.Errorf("cannot rewrite history of a bare repository")
 	}
-	defer os.RemoveAll(workDir)
-
-	cloneCmd := exec.Command("git", "clone", repoPath, workDir)
-	if output, err := cloneCmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("failed to clone repository: %s: %w", strings.TrimSpace(string(output)), err)
+	if _, err := s.AutoCommitStaged(repoPath); err != nil {
+		return fmt.Errorf("failed to auto-commit staged changes: %w", err)
 	}
 
-	// 获取 toSHA 的父提交
-	parentCmd := exec.Command("git", "-C", workDir, "rev-parse", toSHA+"^")
+	// from 必须是范围内更早的那个提交：以它前面一个提交为新的基点，
+	// 把 to 之后的提交搬过去，于是 from..to（含两端）整体消失。
+	parentCmd := exec.Command("git", "-C", repoPath, "rev-parse", fromSHA+"^")
 	parentOutput, err := parentCmd.Output()
 	if err != nil {
-		return fmt.Errorf("failed to get parent of %s: %w", toSHA[:7], err)
+		return fmt.Errorf("failed to get parent of %s: %w", fromSHA, err)
 	}
 	parentSHA := strings.TrimSpace(string(parentOutput))
 
-	// 获取当前分支名
-	branchCmd := exec.Command("git", "-C", workDir, "rev-parse", "--abbrev-ref", "HEAD")
+	branchCmd := exec.Command("git", "-C", repoPath, "rev-parse", "--abbrev-ref", "HEAD")
 	branchOutput, _ := branchCmd.Output()
 	currentBranch := strings.TrimSpace(string(branchOutput))
 
-	// git rebase --onto <parent-of-to> <to> <branch>
-	// 跳过 from..to 范围内的提交
-	rebaseCmd := exec.Command("git", "-C", workDir, "rebase", "--onto", parentSHA, toSHA, currentBranch)
+	rebaseCmd := exec.Command("git", "-C", repoPath, "rebase", "--onto", parentSHA, toSHA, currentBranch)
 	if output, err := rebaseCmd.CombinedOutput(); err != nil {
-		abortCmd := exec.Command("git", "-C", workDir, "rebase", "--abort")
+		// 半途失败时把仓库恢复到操作前的状态，不留一个卡住的 rebase。
+		abortCmd := exec.Command("git", "-C", repoPath, "rebase", "--abort")
 		abortCmd.Run()
-		return fmt.Errorf("failed to rebase: %s: %w", strings.TrimSpace(string(output)), err)
+		errMsg := strings.TrimSpace(string(output))
+		if strings.Contains(strings.ToLower(errMsg), "conflict") || strings.Contains(errMsg, "冲突") {
+			return fmt.Errorf("CONFLICT: %s", errMsg)
+		}
+		return fmt.Errorf("failed to rebase: %s: %w", errMsg, err)
 	}
 
-	pushCmd := exec.Command("git", "-C", workDir, "push", "-f", "origin", currentBranch)
-	if output, err := pushCmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("failed to push changes: %s: %w", strings.TrimSpace(string(output)), err)
-	}
-
+	s.pushIfRemote(repoPath, currentBranch)
 	return nil
 }
 
-// isBareRepo 检查是否为裸仓库
 func (s *GitService) isBareRepo(repoPath string) bool {
 	cmd := exec.Command("git", "-C", repoPath, "rev-parse", "--is-bare-repository")
 	output, err := cmd.Output()
@@ -655,12 +681,8 @@ func (s *GitService) RevertCommit(owner, name, sha string) error {
 		return fmt.Errorf("git revert failed: %s: %w", errMsg, err)
 	}
 
-	// 非裸仓库需要 push
-	if !s.isBareRepo(repoPath) {
-		pushCmd := exec.Command("git", "-C", repoPath, "push", "origin", "HEAD")
-		if output, err := pushCmd.CombinedOutput(); err != nil {
-			fmt.Printf("Warning: failed to push revert: %s\n", strings.TrimSpace(string(output)))
-		}
+	if err := s.pushIfRemote(repoPath, currentBranchOf(repoPath)); err != nil {
+		fmt.Printf("Warning: revert applied locally, %v\n", err)
 	}
 
 	return nil
@@ -694,12 +716,9 @@ func (s *GitService) ResetCommits(owner, name string, count int) error {
 		return fmt.Errorf("git reset --hard %s failed: %s: %w", ref, strings.TrimSpace(string(output)), err)
 	}
 
-	// 非裸仓库需要 force push
-	if !s.isBareRepo(repoPath) {
-		pushCmd := exec.Command("git", "-C", repoPath, "push", "-f", "origin", currentBranch)
-		if output, err := pushCmd.CombinedOutput(); err != nil {
-			return fmt.Errorf("failed to force push after reset: %s: %w", strings.TrimSpace(string(output)), err)
-		}
+	// 有远端才推；本地仓库没有 origin，重置本身已经生效。
+	if err := s.pushIfRemote(repoPath, currentBranch); err != nil {
+		return fmt.Errorf("reset applied locally, but %w", err)
 	}
 
 	return nil
@@ -926,11 +945,8 @@ func (s *GitService) CherryPick(owner, name string, shas []string) error {
 		return fmt.Errorf("failed to cherry-pick: %s: %w", errMsg, err)
 	}
 
-	if !s.isBareRepo(repoPath) {
-		pushCmd := exec.Command("git", "-C", repoPath, "push", "origin", "HEAD")
-		if output, err := pushCmd.CombinedOutput(); err != nil {
-			fmt.Printf("Warning: failed to push cherry-pick: %s\n", strings.TrimSpace(string(output)))
-		}
+	if err := s.pushIfRemote(repoPath, currentBranchOf(repoPath)); err != nil {
+		fmt.Printf("Warning: cherry-pick applied locally, %v\n", err)
 	}
 
 	return nil
@@ -1197,9 +1213,24 @@ func (s *GitService) RebaseInteractive(owner, name, base string, todos []RebaseT
 		return fmt.Errorf("repository not found")
 	}
 
+	if len(todos) == 0 {
+		return fmt.Errorf("no commits to rebase")
+	}
+
+	// 只接受这几个动作：reword 需要真正编辑提交信息，我们没有交互终端，
+	// 放进去只会得到一个「看起来成功但消息没变」的结果。
 	script := ""
 	for _, todo := range todos {
-		script += fmt.Sprintf("%s %s %s\n", todo.Action, todo.Hash, todo.Message)
+		action := strings.ToLower(strings.TrimSpace(todo.Action))
+		switch action {
+		case "pick", "squash", "fixup", "drop", "edit":
+		default:
+			return fmt.Errorf("unsupported rebase action: %s", todo.Action)
+		}
+		if todo.Hash == "" {
+			return fmt.Errorf("rebase action %s has no commit hash", action)
+		}
+		script += fmt.Sprintf("%s %s %s\n", action, todo.Hash, todo.Message)
 	}
 
 	scriptPath := filepath.Join(os.TempDir(), fmt.Sprintf("gitfolio-rebase-todo-%d", time.Now().UnixNano()))
@@ -1208,15 +1239,29 @@ func (s *GitService) RebaseInteractive(owner, name, base string, todos []RebaseT
 	}
 	defer os.Remove(scriptPath)
 
-	seqEditor := fmt.Sprintf("cp %s $1", scriptPath)
+	// 用一个脚本覆盖 todo 文件，而不是 GIT_SEQUENCE_EDITOR="cp ... $1"：
+	// git 会在命令后面再追加一次文件路径，$1 里那一次就成了多余的参数，cp 直接报错。
+	editorPath := filepath.Join(os.TempDir(), fmt.Sprintf("gitfolio-rebase-editor-%d.sh", time.Now().UnixNano()))
+	editorBody := fmt.Sprintf("#!/bin/sh\ncp %q \"$1\"\n", scriptPath)
+	if err := os.WriteFile(editorPath, []byte(editorBody), 0700); err != nil {
+		return fmt.Errorf("failed to write sequence editor: %w", err)
+	}
+	defer os.Remove(editorPath)
+
+	// squash/fixup 还会再开一次提交信息编辑器；没有终端可交互，
+	// 不压住它整个请求会一直挂着。true 表示沿用默认信息。
 	env := os.Environ()
-	env = append(env, "GIT_SEQUENCE_EDITOR="+seqEditor)
+	env = append(env, "GIT_SEQUENCE_EDITOR="+editorPath, "GIT_EDITOR=true")
 
 	cmd := exec.Command("git", "-C", repoPath, "rebase", "-i", base)
 	cmd.Env = env
 	if output, err := cmd.CombinedOutput(); err != nil {
 		errMsg := strings.TrimSpace(string(output))
-		if strings.Contains(errMsg, "CONFLICT") {
+		// 没有「继续变基」的入口（冲突要人工改文件），所以失败就回滚，
+		// 不能把仓库丢在一个半途而废的 rebase 里。
+		abortCmd := exec.Command("git", "-C", repoPath, "rebase", "--abort")
+		abortCmd.Run()
+		if strings.Contains(strings.ToLower(errMsg), "conflict") || strings.Contains(errMsg, "冲突") {
 			return fmt.Errorf("CONFLICT: %s", errMsg)
 		}
 		return fmt.Errorf("rebase failed: %s: %w", errMsg, err)
@@ -1230,81 +1275,37 @@ func (s *GitService) StagePatch(owner, name, filePath string, lineIndices []int)
 	if _, err := os.Stat(repoPath); os.IsNotExist(err) {
 		return fmt.Errorf("repository not found")
 	}
+	if s.isBareRepo(repoPath) {
+		return fmt.Errorf("cannot stage files in bare repository")
+	}
 
-	diffCmd := exec.Command("git", "-C", repoPath, "diff", "-U0", "--", filePath)
+	diffCmd := exec.Command("git", "-C", repoPath, "diff", "-U3", "--", filePath)
 	diffOutput, err := diffCmd.Output()
 	if err != nil {
 		return fmt.Errorf("failed to get diff for patch: %w", err)
 	}
 
-	patchLines := s.extractPatchLines(string(diffOutput), lineIndices)
-	if len(patchLines) == 0 {
+	selected := make(map[int]bool, len(lineIndices))
+	for _, idx := range lineIndices {
+		selected[idx] = true
+	}
+	patch := buildPartialPatch(string(diffOutput), selected)
+	if strings.TrimSpace(patch) == "" {
 		return nil
 	}
 
 	patchPath := filepath.Join(os.TempDir(), fmt.Sprintf("gitfolio-patch-%d", time.Now().UnixNano()))
-	if err := os.WriteFile(patchPath, []byte(strings.Join(patchLines, "\n")+"\n"), 0644); err != nil {
+	if err := os.WriteFile(patchPath, []byte(patch), 0600); err != nil {
 		return fmt.Errorf("failed to write patch: %w", err)
 	}
 	defer os.Remove(patchPath)
 
-	applyCmd := exec.Command("git", "-C", repoPath, "apply", "--cached", patchPath)
+	// --recount 让 git 自己数行数，hunk 头算错也不至于整个补丁失败。
+	applyCmd := exec.Command("git", "-C", repoPath, "apply", "--cached", "--recount", patchPath)
 	if output, err := applyCmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("failed to apply patch: %s: %w", strings.TrimSpace(string(output)), err)
 	}
 	return nil
-}
-
-// extractPatchLines 从diff输出中提取指定行对应的hunk
-func (s *GitService) extractPatchLines(diffText string, lineIndices []int) []string {
-	lines := strings.Split(diffText, "\n")
-	result := []string{}
-	lineSet := make(map[int]bool)
-	for _, idx := range lineIndices {
-		lineSet[idx] = true
-	}
-
-	currentHunk := []string{}
-	hunkHasSelection := false
-	contentLineIdx := 0
-
-	for _, line := range lines {
-		if line == "" {
-			continue
-		}
-		if strings.HasPrefix(line, "diff ") || strings.HasPrefix(line, "index ") || strings.HasPrefix(line, "--- ") || strings.HasPrefix(line, "+++ ") {
-			if hunkHasSelection && len(currentHunk) > 0 {
-				result = append(result, currentHunk...)
-			}
-			currentHunk = []string{line}
-			hunkHasSelection = false
-			contentLineIdx = 0
-			continue
-		}
-		if strings.HasPrefix(line, "@@ ") {
-			if hunkHasSelection && len(currentHunk) > 0 {
-				result = append(result, currentHunk...)
-			}
-			currentHunk = []string{line}
-			hunkHasSelection = false
-			contentLineIdx = 0
-			continue
-		}
-		if strings.HasPrefix(line, "+") || strings.HasPrefix(line, "-") {
-			if lineSet[contentLineIdx] {
-				hunkHasSelection = true
-			}
-			currentHunk = append(currentHunk, line)
-			contentLineIdx++
-		} else {
-			currentHunk = append(currentHunk, line)
-			contentLineIdx++
-		}
-	}
-	if hunkHasSelection && len(currentHunk) > 0 {
-		result = append(result, currentHunk...)
-	}
-	return result
 }
 
 // StashEntry stash条目

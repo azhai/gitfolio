@@ -70,6 +70,72 @@ function parsePath() {
   }
 }
 
+var MARKDOWN_EXT = /\.(md|markdown|mdown|mkd|mkdn)$/i
+
+// 文件扩展名 -> highlight.js 语言标识。只映射到内置语言，避免控制台刷出
+// “没有该语言” 的警告。
+var EXT_LANG = {
+  go: 'go', js: 'javascript', mjs: 'javascript', cjs: 'javascript', jsx: 'javascript',
+  ts: 'typescript', tsx: 'typescript', py: 'python', rb: 'ruby', rs: 'rust',
+  java: 'java', c: 'c', h: 'c', cpp: 'cpp', cc: 'cpp', hpp: 'cpp', cs: 'csharp',
+  php: 'php', css: 'css', html: 'xml', xml: 'xml', json: 'json', yaml: 'yaml',
+  yml: 'yaml', toml: 'ini', md: 'markdown', sql: 'sql', sh: 'bash',
+  bash: 'bash', zsh: 'bash', ini: 'ini', diff: 'diff', patch: 'diff',
+  lua: 'lua', kt: 'kotlin', swift: 'swift', scala: 'scala', r: 'r',
+  ps1: 'powershell', vim: 'vim', nginx: 'nginx',
+}
+
+var API_BASE = '/api/v1'
+
+function isMarkdownPath(path) {
+  return MARKDOWN_EXT.test(path || '')
+}
+
+// 返回 "language-xxx"；highlight.js 没内置该语言时返回空串，让它自动推断。
+function languageClassFor(path) {
+  var name = (path || '').split('/').pop() || ''
+  var ext = name.indexOf('.') >= 0 ? name.split('.').pop().toLowerCase() : ''
+  var lang = EXT_LANG[ext]
+  if (!lang) return ''
+  if (window.hljs && !window.hljs.getLanguage(lang)) return ''
+  return 'language-' + lang
+}
+
+// Only rewrite repo-relative URLs. Absolute, protocol-relative and pure
+// fragment links already point somewhere meaningful.
+function isRelativeHref(href) {
+  return !/^(?:[a-z][a-z0-9+.-]*:|\/\/|\/|#)/i.test(href)
+}
+
+function splitHref(href) {
+  var idx = href.search(/[?#]/)
+  if (idx < 0) return { path: href, suffix: '' }
+  return { path: href.slice(0, idx), suffix: href.slice(idx) }
+}
+
+// Resolve a relative markdown path against the directory containing the
+// markdown file ('' for README at repo root).
+function resolveRepoPath(baseDir, relative) {
+  var segs = (baseDir || '').split('/').filter(Boolean)
+  var decoded = relative
+  try {
+    decoded = decodeURI(relative || '')
+  } catch (err) {
+    /* keep the raw path when it contains a stray % */
+  }
+  var parts = String(decoded || '').split('/')
+  for (var i = 0; i < parts.length; i++) {
+    var part = parts[i]
+    if (!part || part === '.') continue
+    if (part === '..') {
+      if (segs.length) segs.pop()
+    } else {
+      segs.push(part)
+    }
+  }
+  return segs
+}
+
 Alpine.data('project', function () {
   return {
     owner: '',
@@ -87,6 +153,14 @@ Alpine.data('project', function () {
     posting: false,
     syncing: false,
     savingSync: false,
+    syncPollTimer: null,
+    pushUrl: '',
+    remotes: [],
+    loadingRemotes: false,
+    newRemoteName: '',
+    newRemoteUrl: '',
+    addingRemote: false,
+    pushingRemote: '',
     emptyMessage: '',
 
     repo: null,
@@ -99,8 +173,13 @@ Alpine.data('project', function () {
     file: null,
     filePath: '',
     fileContent: '',
+    fileLangClass: '',
+    fileHtml: '',
+    fileSource: false,
+    sourceView: false,
     fileSize: '',
     readmeHtml: '',
+    readmePath: '',
     canEditFile: false,
     editing: false,
     editContent: '',
@@ -150,13 +229,22 @@ Alpine.data('project', function () {
     tasksError: '',
     task: null,
     taskError: '',
-    taskHtml: '',
+    taskGoalHtml: '',
+    taskDraftHtml: '',
     taskComments: [],
     taskTransitions: [],
     taskCommentText: '',
     postingTask: false,
     transitioning: false,
+    isTaskOwner: false,
+    openIssues: [],
+    openIssuesLoaded: false,
+    showTaskIssuePicker: false,
+    attachingTask: false,
+    deletingAttachment: false,
     newTask: { title: '', goal: '', draft: '', priority: 3, handler: '', verifier: '' },
+    newTaskIssueIds: [],
+    showNewTaskIssuePicker: false,
 
     // git 工作流：工作区、暂存区与 stash
     gitStatus: null,
@@ -172,6 +260,7 @@ Alpine.data('project', function () {
     diffStaged: false,
     diffResult: null,
     diffLoading: false,
+    diffCanPick: false,
     commitMessage: '',
     committing: false,
     staging: false,
@@ -181,6 +270,18 @@ Alpine.data('project', function () {
     newBranch: '',
     mergeSource: '',
     changesCount: 0,
+    // 行级暂存：lineSel 用「行下标 -> 是否勾选」的对象，勾选状态在重渲染后保留。
+    lineSel: {},
+    stagingLines: false,
+    // 交互式 rebase
+    recentCommits: [],
+    rebaseBase: '',
+    rebaseTodos: [],
+    rebasing: false,
+    // 提交操作：范围删除选中态
+    rangeMode: false,
+    rangeStart: -1,
+    rangeEnd: -1,
 
     codeStats: null,
     statsError: '',
@@ -189,6 +290,10 @@ Alpine.data('project', function () {
     commitActivity: [],
 
     settings: { name: '', description: '', homepage: '', default_branch: '' },
+    transferTarget: '',
+    transferring: false,
+    deleteConfirm: '',
+    deleting: false,
 
     syncConfig: null,
     syncDraft: { intervalHours: 0, intervalMinutes: 0, is_paused: false },
@@ -203,6 +308,7 @@ Alpine.data('project', function () {
       this.sha = r.sha
       this.dirPath = r.sub
       this.base = '/' + r.owner + '/' + r.repo
+      this.sourceView = new URLSearchParams(window.location.search).get('source') === '1'
       this.ownerUrl = '/users/' + r.owner
       this.emptyMessage = t('project.emptyTree')
       this.updateCrumbs()
@@ -247,6 +353,7 @@ Alpine.data('project', function () {
         homepage: this.repo.homepage || '',
         default_branch: this.repo.default_branch || '',
       }
+      this.pushUrl = this.repo.mirror_url || ''
       try {
         if (this.tab === 'tree') await this.loadTree()
         else if (this.tab === 'commits') await this.loadCommits(1)
@@ -257,15 +364,18 @@ Alpine.data('project', function () {
         else if (this.tab === 'stats') await this.loadStats()
         else if (this.tab === 'tasks') await this.loadTasks()
         else if (this.tab === 'task') await this.loadTask()
-        else if (this.tab === 'task-new') await this.loadBranches()
+        else if (this.tab === 'task-new') await this.loadOpenIssues()
         else if (this.tab === 'issues') await this.loadIssues()
         else if (this.tab === 'issue') await this.loadIssue()
         else if (this.tab === 'prs') await this.loadPRs()
         else if (this.tab === 'pr') await this.loadPR()
         else if (this.tab === 'pr-new') await this.loadBranches()
         else if (this.tab === 'changes') await this.loadGitStatus()
-        else if (this.tab === 'settings') await this.loadBranches()
-        else if (this.tab === 'sync') await this.loadSync()
+        else if (this.tab === 'settings') {
+          if (this.canManage) await this.loadBranches()
+        } else if (this.tab === 'sync') {
+          if (this.canManage) await this.loadSync()
+        }
       } catch (err) {
         /* each section renders its own empty state */
       } finally {
@@ -277,11 +387,15 @@ Alpine.data('project', function () {
     // ---------- files ----------
 
     loadTree: async function () {
-      this.lastCommit = await reposAPI.lastCommit(this.owner, this.repoName).catch(function () {
+      // 三个请求互不依赖，并行发出；串行时整页 spinner 会白白多等两轮往返。
+      var commitPromise = reposAPI.lastCommit(this.owner, this.repoName).catch(function () {
         return null
       })
+      var treePromise = reposAPI.tree(this.owner, this.repoName, this.dirPath)
+      var readmePromise = this.dirPath ? null : this.loadReadme()
+      this.lastCommit = await commitPromise
       try {
-        var data = await reposAPI.tree(this.owner, this.repoName, this.dirPath)
+        var data = await treePromise
         var list = (data && data.entries) || []
         if (list.length === 1 && list[0].type === 'blob' && list[0].path === this.dirPath) {
           await this.openFile(this.dirPath)
@@ -289,7 +403,7 @@ Alpine.data('project', function () {
         }
         this.entries = list
         this.file = null
-        if (!this.dirPath) await this.loadReadme()
+        if (readmePromise) await readmePromise
       } catch (err) {
         await this.openFile(this.dirPath)
       }
@@ -297,10 +411,16 @@ Alpine.data('project', function () {
 
     openFile: async function (path) {
       this.filePath = path || ''
+      this.fileLangClass = languageClassFor(path)
       var data = await reposAPI.file(this.owner, this.repoName, path)
       this.file = data || {}
       this.fileContent = (data && (data.content || data.raw)) || ''
       this.fileSize = data && data.size ? String(data.size) : ''
+      var dir = this.filePath.indexOf('/') >= 0 ? this.filePath.slice(0, this.filePath.lastIndexOf('/')) : ''
+      this.fileHtml = isMarkdownPath(this.filePath) ? this.markdownHtml(this.fileContent, dir) : ''
+      // "查看源码" on the README card opens this file with ?source=1 so the
+      // source toggle is already on, matching the README entry elsewhere.
+      this.fileSource = this.sourceView && !!this.fileHtml
       this.entries = []
       this.$nextTick(this.highlight.bind(this))
     },
@@ -396,11 +516,14 @@ Alpine.data('project', function () {
 
     loadReadme: async function () {
       var names = ['README.md', 'readme.md', 'README.markdown', 'README']
+      this.readmeHtml = ''
+      this.readmePath = ''
       for (var i = 0; i < names.length; i++) {
         try {
           var file = await reposAPI.file(this.owner, this.repoName, names[i])
           if (file && file.content) {
-            this.readmeHtml = this.markdownHtml(file.content)
+            this.readmePath = names[i]
+            this.readmeHtml = this.markdownHtml(file.content, '')
             return
           }
         } catch (err) {
@@ -576,7 +699,7 @@ Alpine.data('project', function () {
       this.tasks.forEach(function (task) {
         if (!known[task.status]) {
           known[task.status] = true
-          columns.push({ key: task.status, label: task.status })
+          columns.push({ key: task.status, label: taskStatus(task.status).label })
         }
       })
       this.taskColumns = columns.map(function (col) {
@@ -590,12 +713,17 @@ Alpine.data('project', function () {
       })
     },
 
+    applyTask: function (task) {
+      this.task = task || null
+      this.taskGoalHtml = this.markdownHtml((task && task.goal) || '')
+      this.taskDraftHtml = this.markdownHtml((task && task.draft) || '')
+      var uid = this.$store.auth.user && this.$store.auth.user.id
+      this.isTaskOwner = !!(task && uid && task.initiator_id === uid)
+    },
+
     loadTask: async function () {
       try {
-        this.task = await tasksAPI.get(this.owner, this.repoName, this.number)
-        this.taskHtml = this.markdownHtml(
-          (this.task && (this.task.goal || this.task.draft)) || ''
-        )
+        this.applyTask(await tasksAPI.get(this.owner, this.repoName, this.number))
         var pair = await Promise.all([
           tasksAPI.comments(this.owner, this.repoName, this.number).catch(function () {
             return []
@@ -608,6 +736,116 @@ Alpine.data('project', function () {
         this.taskTransitions = Array.isArray(pair[1]) ? pair[1] : []
       } catch (err) {
         this.taskError = err.message || t('task.notFound')
+      }
+    },
+
+    refreshTask: async function () {
+      try {
+        this.applyTask(await tasksAPI.get(this.owner, this.repoName, this.number))
+      } catch (err) {
+        toast(err.message || t('common.failed'), 'error')
+      }
+    },
+
+    loadOpenIssues: async function () {
+      if (this.openIssuesLoaded) return
+      try {
+        var data = await issuesAPI.list(this.owner, this.repoName, { state: 'open', per_page: 50 })
+        this.openIssues = Array.isArray(data) ? data : (data && data.data) || []
+      } catch (err) {
+        this.openIssues = []
+      } finally {
+        this.openIssuesLoaded = true
+      }
+    },
+
+    linkableIssues: function (exclude) {
+      var ids = exclude || []
+      return this.openIssues.filter(function (issue) {
+        return ids.indexOf(issue.id) < 0
+      })
+    },
+
+    selectedNewTaskIssues: function () {
+      var ids = this.newTaskIssueIds
+      return this.openIssues.filter(function (issue) {
+        return ids.indexOf(issue.id) >= 0
+      })
+    },
+
+    toggleNewTaskIssuePicker: async function () {
+      await this.loadOpenIssues()
+      this.showNewTaskIssuePicker = !this.showNewTaskIssuePicker
+    },
+
+    toggleNewTaskIssue: function (id) {
+      var index = this.newTaskIssueIds.indexOf(id)
+      if (index >= 0) this.newTaskIssueIds.splice(index, 1)
+      else this.newTaskIssueIds.push(id)
+    },
+
+    toggleTaskIssuePicker: async function () {
+      await this.loadOpenIssues()
+      this.showTaskIssuePicker = !this.showTaskIssuePicker
+    },
+
+    linkTaskIssue: async function (issueId) {
+      try {
+        await tasksAPI.linkIssue(this.owner, this.repoName, this.number, issueId)
+        this.showTaskIssuePicker = false
+        await this.refreshTask()
+        toast(t('task.issueLinked'))
+      } catch (err) {
+        toast(err.message || t('task.linkFailed'), 'error')
+      }
+    },
+
+    unlinkTaskIssue: async function (issueId) {
+      try {
+        await tasksAPI.unlinkIssue(this.owner, this.repoName, this.number, issueId)
+        await this.refreshTask()
+        toast(t('task.issueUnlinked'))
+      } catch (err) {
+        toast(err.message || t('task.unlinkFailed'), 'error')
+      }
+    },
+
+    uploadTaskAttachments: async function (event) {
+      var files = event.target.files
+      if (!files || !files.length) return
+      this.attachingTask = true
+      try {
+        for (var i = 0; i < files.length; i++) {
+          var created = await tasksAPI.uploadAttachment(this.owner, this.repoName, this.number, files[i])
+          if (created && created.error) throw new Error(created.error)
+        }
+        await this.refreshTask()
+        toast(t('task.attachmentUploaded'))
+      } catch (err) {
+        toast(err.message || t('task.uploadFailed'), 'error')
+      } finally {
+        this.attachingTask = false
+        event.target.value = ''
+      }
+    },
+
+    deleteTaskAttachment: async function (attachment) {
+      var ok = await confirmBox({
+        title: t('task.confirmDelete'),
+        message: t('task.confirmDeleteAttachment', { name: attachment.file_name }),
+        danger: true,
+        confirmText: t('common.delete'),
+      })
+      if (!ok) return
+      this.deletingAttachment = true
+      try {
+        await tasksAPI.deleteAttachment(this.owner, this.repoName, this.number, attachment.id)
+        await this.refreshTask()
+        toast(t('task.attachmentDeleted'))
+      } catch (err) {
+        toast(err.message || t('task.deleteFailed'), 'error')
+      } finally {
+        this.deletingAttachment = false
       }
     },
 
@@ -640,7 +878,7 @@ Alpine.data('project', function () {
         var updated = await tasksAPI.transition(this.owner, this.repoName, this.number, {
           to_status: next,
         })
-        this.task = updated || this.task
+        if (updated) this.applyTask(updated)
         this.taskTransitions = await tasksAPI
           .transitions(this.owner, this.repoName, this.number)
           .catch(function () {
@@ -662,7 +900,20 @@ Alpine.data('project', function () {
       this.creating = true
       try {
         var task = await tasksAPI.create(this.owner, this.repoName, this.newTask)
-        window.location.href = this.base + '/tasks/' + ((task && task.id) || '')
+        var taskId = task && task.id
+        if (taskId) {
+          var self = this
+          await Promise.all(
+            this.newTaskIssueIds.map(function (issueId) {
+              return tasksAPI
+                .linkIssue(self.owner, self.repoName, taskId, issueId)
+                .catch(function () {
+                  /* a failed link must not drop the task that was just created */
+                })
+            })
+          )
+        }
+        window.location.href = this.base + '/tasks/' + (taskId || '')
       } catch (err) {
         toast(err.message || t('task.createFailed'), 'error')
       } finally {
@@ -691,6 +942,8 @@ Alpine.data('project', function () {
     // ---------- commit detail ----------
 
     loadCommit: async function () {
+      // 重置需要知道这个提交离 HEAD 有多远，所以顺带取一次列表。
+      await this.loadRecentCommits()
       try {
         this.commit = await reposAPI.commitDetail(this.owner, this.repoName, this.sha)
       } catch (err) {
@@ -975,7 +1228,13 @@ Alpine.data('project', function () {
         if (this.settings.default_branch) payload.default_branch = this.settings.default_branch
         var updated = await reposAPI.update(this.owner, this.repoName, payload)
         this.repo = Object.assign({}, this.repo, updated || {})
+        var newName = (updated && updated.name) || this.settings.name
         toast(t('projectSettings.settingsSaved'))
+        // 改名后旧路径会 404，页面必须跟到新的仓库地址。
+        if (newName && newName !== this.repoName) {
+          window.location.href =
+            '/' + encodeURIComponent(this.owner) + '/' + encodeURIComponent(newName) + '/settings'
+        }
       } catch (err) {
         toast(err.message || t('projectSettings.saveFailed'), 'error')
       } finally {
@@ -983,19 +1242,45 @@ Alpine.data('project', function () {
       }
     },
 
-    deleteRepo: async function () {
+    transferRepo: async function () {
+      var target = (this.transferTarget || '').trim()
+      if (!target) {
+        toast(t('projectSettings.typeNewOwner'), 'error')
+        return
+      }
       var ok = await confirmBox({
-        title: t('projectSettings.confirmDeleteRepo'),
-        message: t('project.deleteConfirm'),
+        title: t('projectSettings.confirmTransfer'),
+        message: t('projectSettings.transferWarning'),
         danger: true,
-        confirmText: t('project.deleteRepo'),
+        confirmText: t('projectSettings.transferProject'),
       })
       if (!ok) return
+      this.transferring = true
+      try {
+        await reposAPI.transfer(this.owner, this.repoName, target)
+        this.transferTarget = ''
+        toast(t('projectSettings.transferSuccess'))
+        window.location.href = '/projects'
+      } catch (err) {
+        toast(err.message || t('projectSettings.transferFailed'), 'error')
+      } finally {
+        this.transferring = false
+      }
+    },
+
+    deleteRepo: async function () {
+      if (this.deleteConfirm !== this.repoName) {
+        toast(t('projectSettings.typeRepoName', { repo: this.repoName }), 'error')
+        return
+      }
+      this.deleting = true
       try {
         await reposAPI.del(this.owner, this.repoName)
         window.location.href = '/projects'
       } catch (err) {
         toast(err.message || t('projectSettings.deleteRepoFailed'), 'error')
+      } finally {
+        this.deleting = false
       }
     },
 
@@ -1006,8 +1291,103 @@ Alpine.data('project', function () {
       return t(remote ? 'projectSettings.codeSyncDesc' : 'projectSettings.codeSyncLocalDesc')
     },
 
+    isLocalProject: function () {
+      return !this.repo || this.repo.project_type === 'local'
+    },
+
+    isRemoteProject: function () {
+      return !!this.repo && ['mirror', 'public', 'private'].indexOf(this.repo.project_type) >= 0
+    },
+
+    canPushProject: function () {
+      return !!this.repo && ['public', 'private', 'local'].indexOf(this.repo.project_type) >= 0
+    },
+
     loadSync: async function () {
-      await Promise.all([this.loadSyncConfig(), this.loadSyncLogs()])
+      var jobs = [this.loadSyncConfig(), this.loadSyncLogs()]
+      if (this.isLocalProject()) jobs.push(this.loadRemotes())
+      await Promise.all(jobs)
+    },
+
+    loadRemotes: async function () {
+      this.loadingRemotes = true
+      try {
+        var data = await reposAPI.getRemotes(this.owner, this.repoName)
+        this.remotes = (data && data.remotes) || []
+      } catch (err) {
+        this.remotes = []
+      } finally {
+        this.loadingRemotes = false
+      }
+    },
+
+    addRemote: async function () {
+      var name = (this.newRemoteName || '').trim()
+      var url = (this.newRemoteUrl || '').trim()
+      if (!name || !url) {
+        toast(t('projectSettings.remoteUrlRequired'), 'error')
+        return
+      }
+      this.addingRemote = true
+      try {
+        await reposAPI.addRemote(this.owner, this.repoName, name, url)
+        this.newRemoteName = ''
+        this.newRemoteUrl = ''
+        toast(t('projectSettings.remoteAdded'))
+        await this.loadRemotes()
+      } catch (err) {
+        toast(err.message || t('projectSettings.addRemoteFailed'), 'error')
+      } finally {
+        this.addingRemote = false
+      }
+    },
+
+    removeRemote: async function (name) {
+      var ok = await confirmBox({
+        title: t('projectSettings.removeRemote'),
+        message: name,
+        danger: true,
+        confirmText: t('common.delete'),
+      })
+      if (!ok) return
+      try {
+        await reposAPI.removeRemote(this.owner, this.repoName, name)
+        toast(t('projectSettings.remoteRemoved'))
+        await this.loadRemotes()
+      } catch (err) {
+        toast(err.message || t('projectSettings.removeRemoteFailed'), 'error')
+      }
+    },
+
+    pushNamedRemote: async function (name) {
+      this.pushingRemote = name
+      try {
+        await reposAPI.syncPush(this.owner, this.repoName, '', name)
+        toast(t('projectSettings.pushSyncStarted'))
+        await this.loadSyncLogs()
+      } catch (err) {
+        toast(err.message || t('projectSettings.syncFailed'), 'error')
+      } finally {
+        this.pushingRemote = ''
+      }
+    },
+
+    pushToRemote: async function () {
+      var url = (this.pushUrl || '').trim()
+      if (!url) {
+        toast(t('projectSettings.remoteUrlRequired'), 'error')
+        return
+      }
+      this.syncing = true
+      try {
+        await reposAPI.syncPush(this.owner, this.repoName, url, '')
+        toast(t('projectSettings.pushSyncStarted'))
+        await this.loadSyncLogs()
+      } catch (err) {
+        toast(err.message || t('projectSettings.syncFailed'), 'error')
+      } finally {
+        this.syncing = false
+      }
     },
 
     loadSyncConfig: async function () {
@@ -1054,21 +1434,43 @@ Alpine.data('project', function () {
     },
 
     pullCode: async function () {
+      var self = this
       return this.runSync(function () {
-        return reposAPI.syncPull(this.owner, this.repoName)
+        return reposAPI.syncPull(self.owner, self.repoName)
       }, t('projectSettings.pullCodeStarted'))
     },
 
     pullIssues: async function () {
+      var self = this
       return this.runSync(function () {
-        return reposAPI.syncIssues(this.owner, this.repoName)
+        return reposAPI.syncIssues(self.owner, self.repoName)
       }, t('projectSettings.issuesSyncStarted'))
     },
 
     refreshStats: async function () {
+      var self = this
       return this.runSync(function () {
-        return reposAPI.refreshStats(this.owner, this.repoName)
+        return reposAPI.refreshStats(self.owner, self.repoName)
       }, t('projectSettings.statsRefreshed'))
+    },
+
+    // 代码拉取是同步的，议题/PR 在后台跑，返回 202 后日志里先是 running；
+    // 一次点完三步，用户不用记住哪个按钮对应哪类数据。
+    syncAll: async function () {
+      if (this.syncing) return
+      this.syncing = true
+      try {
+        await reposAPI.syncPull(this.owner, this.repoName)
+        await reposAPI.syncIssues(this.owner, this.repoName)
+        await reposAPI.refreshStats(this.owner, this.repoName)
+        toast(t('projectSettings.syncAllStarted'))
+      } catch (err) {
+        toast(err.message || t('projectSettings.syncFailed'), 'error')
+      } finally {
+        this.syncing = false
+        await this.loadSyncLogs()
+        this.startSyncPolling()
+      }
     },
 
     runSync: async function (fn, okMessage) {
@@ -1077,11 +1479,32 @@ Alpine.data('project', function () {
         await fn()
         toast(okMessage)
         await this.loadSyncLogs()
+        this.startSyncPolling()
       } catch (err) {
         toast(err.message || t('projectSettings.syncFailed'), 'error')
       } finally {
         this.syncing = false
       }
+    },
+
+    // 后台同步完成后才写最终状态，页面主动轮询到 running 行消失为止。
+    startSyncPolling: function () {
+      var self = this
+      if (this.syncPollTimer) return
+      var ticks = 0
+      this.syncPollTimer = setInterval(function () {
+        ticks++
+        self.loadSyncLogs().then(function () {
+          var running = (self.syncLogs || []).some(function (log) {
+            return log.status === 'running'
+          })
+          if (!running || ticks >= 100) {
+            clearInterval(self.syncPollTimer)
+            self.syncPollTimer = null
+            self.loadSyncConfig()
+          }
+        })
+      }, 3000)
     },
 
     // ---------- git workflow ----------
@@ -1111,6 +1534,7 @@ Alpine.data('project', function () {
       }
       await this.loadStashes()
       await this.loadBranches()
+      await this.loadRecentCommits()
     },
 
     filePaths: function (files) {
@@ -1176,6 +1600,9 @@ Alpine.data('project', function () {
     openDiff: async function (file, staged) {
       this.diffPath = file.path
       this.diffStaged = !!staged
+      this.lineSel = {}
+      // 只有未暂存的差异能按行暂存；裸仓库没有索引可写。
+      this.diffCanPick = !staged && !!(this.repo && this.repo.has_work_tree)
       this.diffLoading = true
       try {
         this.diffResult = await reposAPI.diff(this.owner, this.repoName, file.path, !!staged)
@@ -1346,18 +1773,279 @@ Alpine.data('project', function () {
       }
     },
 
-    // ---------- misc ----------
+    // ---------- 行级暂存 ----------
 
-    // microlight 直接读取 textContent 再重写元素，所以可以反复调用；
-    // 它按 class 扫描整页的 .microlight 块，一次调用就够。
-    highlight: function () {
-      if (!window.microlight || !this.fileContent) return
-      window.microlight.reset()
+    pickedLines: function () {
+      var sel = this.lineSel || {}
+      var out = []
+      for (var key in sel) {
+        if (sel[key]) out.push(parseInt(key, 10))
+      }
+      return out
     },
 
-    markdownHtml: function (text) {
+    clearLines: function () {
+      this.lineSel = {}
+    },
+
+    stageSelectedLines: async function () {
+      var indices = this.pickedLines()
+      if (!indices.length || this.stagingLines) return
+      this.stagingLines = true
+      try {
+        await reposAPI.stagePatch(this.owner, this.repoName, this.diffPath, indices)
+        toast(t('gitWorkflow.stageSuccess'))
+        this.lineSel = {}
+        await this.loadGitStatus()
+        // 重新取未暂存的差异，勾选的行已经不在里面了。
+        if (this.diffPath) {
+          var path = this.diffPath
+          var stillUnstaged = this.gitUnstaged.filter(function (f) { return f.path === path })
+          if (stillUnstaged.length) await this.openDiff(stillUnstaged[0], false)
+          else {
+            this.diffResult = null
+            this.diffPath = ''
+          }
+        }
+      } catch (err) {
+        toast(err.message || t('gitWorkflow.stageFailed'), 'error')
+      } finally {
+        this.stagingLines = false
+      }
+    },
+
+    // ---------- 提交操作 ----------
+
+    loadRecentCommits: async function () {
+      try {
+        var data = await reposAPI.commits(this.owner, this.repoName, { page: 1, per_page: 50 })
+        this.recentCommits = (data && data.commits) || []
+      } catch (err) {
+        this.recentCommits = []
+      }
+    },
+
+    commitIndex: function (sha) {
+      for (var i = 0; i < this.recentCommits.length; i++) {
+        if (this.recentCommits[i].hash === sha) return i
+      }
+      return -1
+    },
+
+    cherryPickCommit: async function () {
+      if (!this.sha) return
+      try {
+        await reposAPI.cherryPick(this.owner, this.repoName, [this.sha])
+        toast(t('gitWorkflow.cherryPickSuccess'))
+        await this.loadRecentCommits()
+        await this.loadGitStatus()
+      } catch (err) {
+        toast(err.message || t('gitWorkflow.cherryPickFailed'), 'error')
+      }
+    },
+
+    revertCommit: async function () {
+      if (!this.sha) return
+      try {
+        await reposAPI.revertCommit(this.owner, this.repoName, this.sha)
+        toast(t('gitWorkflow.revertSuccess'))
+        await this.loadRecentCommits()
+        await this.loadGitStatus()
+      } catch (err) {
+        toast(err.message || t('gitWorkflow.revertFailed'), 'error')
+      }
+    },
+
+    resetToCommit: async function () {
+      var idx = this.commitIndex(this.sha)
+      if (idx < 0) {
+        toast(t('gitWorkflow.resetOnlyRecent'), 'error')
+        return
+      }
+      var count = idx + 1
+      var ok = await confirmBox({
+        title: t('gitWorkflow.reset'),
+        message: t('gitWorkflow.resetConfirm', { count: count }),
+        danger: true,
+        confirmText: t('gitWorkflow.reset'),
+      })
+      if (!ok) return
+      try {
+        await reposAPI.resetCommits(this.owner, this.repoName, count)
+        toast(t('gitWorkflow.resetSuccess'))
+        window.location.href = this.base + '/commits'
+      } catch (err) {
+        toast(err.message || t('gitWorkflow.resetFailed'), 'error')
+      }
+    },
+
+    // ----- 范围删除：commits 列表里选两个端点 -----
+
+    toggleRangeMode: function () {
+      this.rangeMode = !this.rangeMode
+      this.rangeStart = -1
+      this.rangeEnd = -1
+    },
+
+    pickRange: function (index) {
+      if (this.rangeStart < 0 || this.rangeEnd >= 0) {
+        this.rangeStart = index
+        this.rangeEnd = -1
+      } else {
+        this.rangeEnd = index
+      }
+    },
+
+    inRange: function (index) {
+      if (!this.rangeMode || this.rangeStart < 0) return false
+      if (this.rangeEnd < 0) return index === this.rangeStart
+      var lo = Math.min(this.rangeStart, this.rangeEnd)
+      var hi = Math.max(this.rangeStart, this.rangeEnd)
+      return index >= lo && index <= hi
+    },
+
+    // 列表是从新到旧，所以下标越大越旧；from 必须是更早的那个提交。
+    rangeSelection: function () {
+      if (this.rangeStart < 0 || this.rangeEnd < 0) return { count: 0 }
+      var lo = Math.min(this.rangeStart, this.rangeEnd)
+      var hi = Math.max(this.rangeStart, this.rangeEnd)
+      return {
+        count: hi - lo + 1,
+        from: this.commits[hi] && this.commits[hi].hash,
+        to: this.commits[lo] && this.commits[lo].hash,
+      }
+    },
+
+    deleteRange: async function () {
+      var sel = this.rangeSelection()
+      if (!sel.count || !sel.from || !sel.to) return
+      var ok = await confirmBox({
+        title: t('gitWorkflow.deleteCommit'),
+        message: t('gitWorkflow.deleteConfirm', { count: sel.count }),
+        danger: true,
+        confirmText: t('gitWorkflow.confirmDeleteCommits'),
+      })
+      if (!ok) return
+      try {
+        await reposAPI.deleteCommitRange(this.owner, this.repoName, sel.from, sel.to)
+        toast(t('gitWorkflow.deleteSuccess'))
+        this.rangeMode = false
+        this.rangeStart = -1
+        this.rangeEnd = -1
+        await this.loadRecentCommits()
+        await this.loadCommits(1)
+      } catch (err) {
+        toast(err.message || t('gitWorkflow.deleteFailed'), 'error')
+      }
+    },
+
+    // ---------- 交互式 rebase ----------
+
+    // todos 用列表里 base 之上的提交，按从旧到新排列（git 的执行顺序）。
+    buildRebase: function () {
+      var idx = this.commitIndex(this.rebaseBase)
+      if (idx <= 0) {
+        this.rebaseTodos = []
+        return
+      }
+      var subset = this.recentCommits.slice(0, idx).reverse()
+      this.rebaseTodos = subset.map(function (c) {
+        return { action: 'pick', hash: c.hash, short: c.short_hash || c.hash.slice(0, 7), message: c.message }
+      })
+    },
+
+    moveTodo: function (index, delta) {
+      var next = index + delta
+      if (next < 0 || next >= this.rebaseTodos.length) return
+      var arr = this.rebaseTodos.slice()
+      var tmp = arr[index]
+      arr[index] = arr[next]
+      arr[next] = tmp
+      this.rebaseTodos = arr
+    },
+
+    runRebase: async function () {
+      if (!this.rebaseBase) {
+        toast(t('gitWorkflow.baseRequired'), 'error')
+        return
+      }
+      if (!this.rebaseTodos.length) {
+        toast(t('gitWorkflow.noCommitsForRebase'), 'error')
+        return
+      }
+      // 工作区不干净时 git 会直接拒绝变基，先给出人话提示。
+      if (this.changesCount > 0) {
+        toast(t('gitWorkflow.rebaseNeedsClean'), 'error')
+        return
+      }
+      this.rebasing = true
+      try {
+        await reposAPI.rebaseInteractive(this.owner, this.repoName, this.rebaseBase, this.rebaseTodos)
+        toast(t('gitWorkflow.rebaseSuccess'))
+        this.rebaseTodos = []
+        this.rebaseBase = ''
+        await this.loadGitStatus()
+        await this.loadRecentCommits()
+        this.repo = await reposAPI.get(this.owner, this.repoName)
+      } catch (err) {
+        toast(err.message || t('gitWorkflow.rebaseFailed'), 'error')
+        await this.loadGitStatus()
+      } finally {
+        this.rebasing = false
+      }
+    },
+
+    // ---------- misc ----------
+
+    // highlight.js 从 textContent 读取源码再写回 token，因此换文件后重跑一次
+    // 就能得到当前内容的着色。
+    highlight: function () {
+      var el = this.$refs.fileCode
+      if (!window.hljs || !el || !this.fileContent) return
+      // highlight.js 会跳过已标记的元素；换文件后要先清掉标记再重新着色。
+      delete el.dataset.highlighted
+      window.hljs.highlightElement(el)
+    },
+
+    markdownHtml: function (text, baseDir) {
       if (!text) return ''
-      return sanitizeHtml(marked.parse(String(text)))
+      var html = sanitizeHtml(marked.parse(String(text)))
+      // baseDir == null means "leave links alone" (comments, issue bodies, ...).
+      return baseDir == null ? html : this.resolveMarkdownLinks(html, baseDir)
+    },
+
+    // README/file markdown is written relative to the repo, but the SPA serves
+    // files from /tree/<path> and images from /raw/<path>. Rewrite those URLs
+    // so links and screenshots in README work without manual fixes.
+    resolveMarkdownLinks: function (html, baseDir) {
+      var doc = new DOMParser().parseFromString(html, 'text/html')
+
+      var links = doc.querySelectorAll('a[href]')
+      for (var i = 0; i < links.length; i++) {
+        var href = (links[i].getAttribute('href') || '').trim()
+        if (!isRelativeHref(href)) continue
+        var link = splitHref(href)
+        var segs = resolveRepoPath(baseDir, link.path)
+        if (!link.path || !segs.length) continue
+        var path = segs.map(encodeURIComponent).join('/')
+        links[i].setAttribute('href', this.base + '/tree/' + path + link.suffix)
+        links[i].setAttribute('target', '_self')
+        links[i].removeAttribute('rel')
+      }
+
+      var images = doc.querySelectorAll('img[src]')
+      for (var j = 0; j < images.length; j++) {
+        var src = (images[j].getAttribute('src') || '').trim()
+        if (!isRelativeHref(src)) continue
+        var img = splitHref(src)
+        var imgSegs = resolveRepoPath(baseDir, img.path)
+        if (!img.path || !imgSegs.length) continue
+        var imgPath = imgSegs.map(encodeURIComponent).join('/')
+        images[j].setAttribute('src', API_BASE + '/' + encodeURIComponent(this.owner) + '/' +
+          encodeURIComponent(this.repoName) + '/raw/' + imgPath + img.suffix)
+      }
+
+      return doc.body.innerHTML
     },
 
     toggleStar: async function () {

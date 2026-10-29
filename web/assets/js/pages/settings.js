@@ -11,6 +11,7 @@ Alpine.data('settings', function () {
     saving: false,
     uploading: false,
     changingPassword: false,
+    avatarUrl: '',
     profile: {
       username: '',
       email: '',
@@ -26,6 +27,7 @@ Alpine.data('settings', function () {
       try {
         var me = await usersAPI.getMe()
         if (me) {
+          this.avatarUrl = me.avatar || ''
           this.profile = {
             username: me.username || '',
             email: me.email || '',
@@ -71,11 +73,12 @@ Alpine.data('settings', function () {
       }
       this.uploading = true
       try {
-        await usersAPI.uploadAvatar(this.profile.username, file)
+        var updated = await usersAPI.uploadAvatar(this.profile.username, file)
+        if (updated && updated.avatar) this.avatarUrl = updated.avatar
         await this.$store.auth.refresh()
         toast(t('userSettings.avatarUpdated'), 'success')
       } catch (err) {
-        toast(t('userSettings.avatarUploadFailed'), 'error')
+        toast(err.message || t('userSettings.avatarUploadFailed'), 'error')
       } finally {
         this.uploading = false
         event.target.value = ''

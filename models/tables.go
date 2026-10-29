@@ -421,9 +421,9 @@ type PlatformAccount struct {
 	Username  string `goe:"index"`
 	Email     string
 	AvatarURL string
-	APIURL    string
-	IsActive  bool  `goe:"default:true"`
-	UserID    int64 `goe:"index;m2o"`
+	APIURL    string `goe:"column:api_url"`
+	IsActive  bool   `goe:"default:true"`
+	UserID    int64  `goe:"index;m2o"`
 
 	// With 预加载挂载字段
 	User   *User        `goe:"-"`
@@ -452,12 +452,14 @@ type RemoteRepository struct {
 	CreatedAt time.Time
 	UpdatedAt time.Time
 
-	Platform     string `goe:"index"`
-	Owner        string `goe:"index"`
-	RepoName     string `goe:"index"`
-	CloneURL     string `db:"clone_url"`
-	SSHURL       string `db:"sshurl"`
-	APIURL       string `db:"apiurl"`
+	Platform string `goe:"index"`
+	Owner    string `goe:"index"`
+	RepoName string `goe:"index"`
+	// goent 会把 SSHURL/APIURL 这类连续大写的字段名压成 sshurl/apiurl，和 fields.go
+	// 里的 ssh_url/api_url 对不上；两套列都不可空，插入就会撞 NOT NULL。列名要写死。
+	CloneURL     string `goe:"column:clone_url"`
+	SSHURL       string `goe:"column:ssh_url"`
+	APIURL       string `goe:"column:api_url"`
 	WebURL       string
 	RepositoryID int64  `goe:"index"`
 	AccountID    *int64 `goe:"index"`

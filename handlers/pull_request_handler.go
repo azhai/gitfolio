@@ -138,10 +138,11 @@ func autoTransitionLinkedTasks(db *models.Database, prID int64, userID int64) {
 			UserID:     userID,
 			Comment:    "Auto-transitioned: linked PR was merged",
 		}
+		transition.Stamp()
 		db.TaskTransition.Insert().One(transition)
 
 		task.Status = "review"
-		now := time.Now()
+		now := time.Now().UTC()
 		task.LastHandledAt = &now
 		db.Task.Save().One(task)
 	}

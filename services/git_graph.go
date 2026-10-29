@@ -145,6 +145,20 @@ func (s *GitService) GetBranches(owner, name string) ([]string, error) {
 	return branches, nil
 }
 
+// GetHeadBranch 返回 HEAD 指向的分支名；游离 HEAD 或仓库不可用时返回空串。
+// 裸镜像没有 checked-out 分支，HEAD 就是这个仓库真正的默认分支。
+func (s *GitService) GetHeadBranch(owner, name string) string {
+	repoPath := s.getRepoPath(owner, name)
+
+	cmd := exec.Command("git", "-C", repoPath, "symbolic-ref", "--short", "HEAD")
+	output, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+
+	return strings.TrimSpace(string(output))
+}
+
 // GetAllBranches 获取所有分支列表（含远程分支）
 func (s *GitService) GetAllBranches(owner, name string) ([]string, error) {
 	repoPath := s.getRepoPath(owner, name)

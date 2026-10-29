@@ -189,15 +189,21 @@ func runSyncSSEStream(args syncSSEArgs) sse.Handler {
 				} else if args.syncPointID > 0 {
 					args.syncSvc.LogSync(args.syncPointID, "mirror", "failure", err.Error(), duration, 0, 0, "")
 				}
+				if args.syncPointID > 0 {
+					args.syncSvc.UpdateSyncPoint(args.syncPointID, false, err.Error())
+				}
 				_ = sendEvent(services.SyncTopicError, err.Error())
 				return
 			}
 
 			totalSynced := syncResult.IssuesInserted + syncResult.IssuesUpdated + syncResult.PRsInserted + syncResult.PRsUpdated
 			if runningLogID > 0 {
-				args.syncSvc.UpdateSyncLog(runningLogID, "success", "", duration, int64(totalSynced), 0)
+				args.syncSvc.UpdateSyncLog(runningLogID, "success", syncResult.FailureNote, duration, int64(totalSynced), 0)
 			} else if args.syncPointID > 0 {
-				args.syncSvc.LogSync(args.syncPointID, "mirror", "success", "", duration, totalSynced, 0, "")
+				args.syncSvc.LogSync(args.syncPointID, "mirror", "success", syncResult.FailureNote, duration, totalSynced, 0, "")
+			}
+			if args.syncPointID > 0 {
+				args.syncSvc.UpdateSyncPoint(args.syncPointID, true, "")
 			}
 
 			now := time.Now().UTC()
@@ -207,21 +213,26 @@ func runSyncSSEStream(args syncSSEArgs) sse.Handler {
 			}
 
 			if args.syncPointID > 0 {
-				sp := args.syncPoints[0]
-				sp.LastSyncAt = &now
-				if syncResult.MaxIssueUpdatedAt != nil {
-					sp.LastIssueSyncAt = syncResult.MaxIssueUpdatedAt
-				} else {
-					sp.LastIssueSyncAt = &now
+				// 重新读取：UpdateSyncPoint 刚写过这一行，用同步前的旧快照保存会把
+				// 清掉的失败计数又写回去。
+				sp, findErr := args.db.SyncPoint.Select().Where("id = ?", args.syncPointID).One()
+				if findErr == nil && sp != nil {
+					sp.LastSyncAt = &now
+					// 没有同步到数据时保留原水位，否则下一轮会跳过还没拉取的区间。
+					if syncResult.MaxIssueUpdatedAt != nil {
+						sp.LastIssueSyncAt = syncResult.MaxIssueUpdatedAt
+					}
+					if syncResult.MaxPRUpdatedAt != nil {
+						sp.LastPRSyncAt = syncResult.MaxPRUpdatedAt
+					}
+					if syncResult.MaxIssueNumber > sp.LastIssueNumber {
+						sp.LastIssueNumber = syncResult.MaxIssueNumber
+					}
+					if syncResult.MaxPRNumber > sp.LastPRNumber {
+						sp.LastPRNumber = syncResult.MaxPRNumber
+					}
+					args.db.SyncPoint.Save().One(sp)
 				}
-				if syncResult.MaxPRUpdatedAt != nil {
-					sp.LastPRSyncAt = syncResult.MaxPRUpdatedAt
-				} else {
-					sp.LastPRSyncAt = &now
-				}
-				sp.LastIssueNumber = syncResult.MaxIssueNumber
-				sp.LastPRNumber = syncResult.MaxPRNumber
-				args.db.SyncPoint.Save().One(sp)
 			}
 
 			_ = sendEvent(services.SyncTopicComplete, fmt.Sprintf("Sync completed: %d issues/prs updated", totalSynced))

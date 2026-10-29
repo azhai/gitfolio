@@ -123,6 +123,7 @@ func EnsureDefaultLabels(db *models.Database, repoID int64) error {
 				Description:  dl.Description,
 				RepositoryID: repoID,
 			}
+			newLabel.Stamp()
 			if err := db.Label.Insert().One(newLabel); err != nil {
 				return err
 			}
@@ -149,10 +150,12 @@ func AttachLabelsToIssue(db *models.Database, repoID, issueID int64, labelNames 
 	}
 
 	for _, l := range dbLabels {
-		db.IssueLabel.Insert().One(&models.IssueLabel{
+		il := &models.IssueLabel{
 			IssueID: issueID,
 			LabelID: l.ID,
-		})
+		}
+		il.Stamp()
+		db.IssueLabel.Insert().One(il)
 		labels = append(labels, ModelToLabelInfo(l))
 	}
 	return labels

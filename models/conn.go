@@ -80,6 +80,9 @@ func OpenDB(cfg drivers.DatabaseConfig) (*Database, error) {
 		if err := EnsureRepoRootColumns(db); err != nil {
 			return nil, fmt.Errorf("Failed to ensure repo_root columns: %v", err)
 		}
+		if err := DropDuplicateURLColumns(db); err != nil {
+			return nil, fmt.Errorf("Failed to drop duplicate url columns: %v", err)
+		}
 		if err := BackfillTimestamps(db); err != nil {
 			return nil, fmt.Errorf("Failed to backfill timestamps: %v", err)
 		}

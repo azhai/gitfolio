@@ -157,6 +157,42 @@ func TestEnsureRepoRootColumns_AddsColumns(t *testing.T) {
 	}
 }
 
+func TestDropDuplicateURLColumns_BackfillsAndDrops(t *testing.T) {
+	db := openTestDB(t)
+	defer CloseDB()
+	ctx := context.Background()
+
+	// 模拟旧库：规范列是空的，值只存在同义的重复列里。
+	if err := db.RawExecContext(ctx, "ALTER TABLE remote_repository ADD COLUMN sshurl TEXT NOT NULL DEFAULT ''"); err != nil {
+		t.Fatalf("add duplicate column: %v", err)
+	}
+	if err := db.RawExecContext(ctx, `INSERT INTO remote_repository
+		(created_at, updated_at, platform, owner, repo_name, clone_url, ssh_url, api_url, web_url, repository_id, is_primary, direction, sync_enabled, sshurl)
+		VALUES (datetime('now'), datetime('now'), 'github', 'avelino', 'awesome-go', '', '', '', '', 1, 0, 'pull', 1, 'git@github.com:avelino/awesome-go.git')`); err != nil {
+		t.Fatalf("insert row: %v", err)
+	}
+
+	if err := DropDuplicateURLColumns(db); err != nil {
+		t.Fatalf("drop duplicates: %v", err)
+	}
+
+	if columnExists(db, "remote_repository", "sshurl") {
+		t.Fatal("expected sshurl column to be dropped")
+	}
+	var sshURL string
+	if err := db.RawQueryRowContext(ctx, "SELECT ssh_url FROM remote_repository WHERE repository_id = 1").Scan(&sshURL); err != nil {
+		t.Fatalf("read ssh_url: %v", err)
+	}
+	if sshURL != "git@github.com:avelino/awesome-go.git" {
+		t.Fatalf("expected ssh_url backfilled, got %q", sshURL)
+	}
+
+	// 再跑一次不应该因为列已经没了而报错。
+	if err := DropDuplicateURLColumns(db); err != nil {
+		t.Fatalf("drop duplicates second run: %v", err)
+	}
+}
+
 func TestMigrateOrphanRepositories(t *testing.T) {
 	db := openTestDB(t)
 	defer CloseDB()

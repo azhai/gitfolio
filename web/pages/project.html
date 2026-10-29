@@ -11,78 +11,7 @@
     <div id="app-shell"></div>
 
     <div x-data="project">
-      <aside class="sidebar" x-show="!loading" x-cloak>
-      <div class="sidebar__owner">
-        <span x-icon="{ name: 'folder-open', size: 13 }"></span>
-        <a :href="ownerUrl" x-text="owner"></a>
-      </div>
-      <div class="sidebar__repo" x-text="repo && repo.name"></div>
-      <div class="sidebar__desc" x-text="(repo && repo.description) || ''"></div>
-
-      <div class="sidebar__group" x-text="t('project.overview')"></div>
-      <a class="sidebar__link" :class="tab === 'tree' ? 'is-active' : ''" :href="base">
-        <span x-icon="{ name: 'file-code', size: 15 }"></span>
-        <span x-text="t('project.files')"></span>
-      </a>
-      <a class="sidebar__link" :class="tab === 'commits' ? 'is-active' : ''" :href="base + '/commits'">
-        <span x-icon="{ name: 'file-diff', size: 15 }"></span>
-        <span x-text="t('project.commits')"></span>
-      </a>
-      <a class="sidebar__link" x-show="canManage && repo && repo.has_work_tree"
-        :class="tab === 'changes' ? 'is-active' : ''" :href="base + '/changes'">
-        <span x-icon="{ name: 'git-commit-vertical', size: 15 }"></span>
-        <span x-text="t('sidebar.gitWorkflow')"></span>
-        <span class="sidebar__count" x-show="changesCount" x-text="changesCount"></span>
-      </a>
-      <a class="sidebar__link" :class="tab === 'branches' ? 'is-active' : ''" :href="base + '/branches'">
-        <span x-icon="{ name: 'git-branch', size: 15 }"></span>
-        <span x-text="t('project.branches')"></span>
-        <span class="sidebar__count" x-show="repo" x-text="repo && repo.branches_count"></span>
-      </a>
-      <a class="sidebar__link" :class="tab === 'tags' ? 'is-active' : ''" :href="base + '/tags'">
-        <span x-icon="{ name: 'tag', size: 15 }"></span>
-        <span x-text="t('project.tags')"></span>
-        <span class="sidebar__count" x-show="repo" x-text="repo && repo.tags_count"></span>
-      </a>
-      <a class="sidebar__link" :class="tab === 'stats' ? 'is-active' : ''" :href="base + '/stats'">
-        <span x-icon="{ name: 'chart-bar', size: 15 }"></span>
-        <span x-text="t('sidebar.statistics')"></span>
-      </a>
-
-      <div class="sidebar__group" x-text="t('project.issues')"></div>
-      <a class="sidebar__link" :class="tabIs('issues') ? 'is-active' : ''" :href="base + '/issues'">
-        <span x-icon="{ name: 'triangle-alert', size: 15 }"></span>
-        <span x-text="t('project.issues')"></span>
-        <span class="sidebar__count" x-show="repo && repo.open_issues_count"
-          x-text="repo && repo.open_issues_count"></span>
-      </a>
-      <a class="sidebar__link" :class="tabIs('prs') ? 'is-active' : ''" :href="base + '/pull_requests'">
-        <span x-icon="{ name: 'git-pull-request', size: 15 }"></span>
-        <span x-text="t('project.mergeRequests')"></span>
-      </a>
-      <a class="sidebar__link" :class="tabIs('tasks') ? 'is-active' : ''" :href="base + '/tasks'">
-        <span x-icon="{ name: 'clipboard-list', size: 15 }"></span>
-        <span x-text="t('project.tasks')"></span>
-      </a>
-      <a class="sidebar__link" :class="tab === 'releases' ? 'is-active' : ''" :href="base + '/releases'">
-        <span x-icon="{ name: 'package', size: 15 }"></span>
-        <span x-text="t('project.releases')"></span>
-      </a>
-
-      <div class="sidebar__group" x-show="canManage" x-text="t('project.settings')"></div>
-      <a class="sidebar__link" x-show="canManage" :class="tab === 'settings' ? 'is-active' : ''"
-        :href="base + '/settings'">
-        <span x-icon="{ name: 'settings', size: 15 }"></span>
-        <span x-text="t('project.settings')"></span>
-      </a>
-      <a class="sidebar__link" x-show="canManage" :class="tab === 'sync' ? 'is-active' : ''"
-        :href="base + '/sync'">
-        <span x-icon="{ name: 'refresh-cw', size: 15 }"></span>
-        <span x-text="t('project.sync')"></span>
-      </a>
-    </aside>
-
-    <main class="app-main app-main--with-sidebar">
+    <main class="app-main">
       <div class="loading-box" x-show="loading">
         <span class="spinner"></span><span x-text="t('common.loading')"></span>
       </div>
@@ -93,8 +22,8 @@
           <div class="row between gap-16 wrap">
             <div>
               <h1 class="repo-title">
-                <span class="muted" x-text="owner + ' / '"></span>
-                <span x-text="repo && repo.name"></span>
+                <span class="muted"><a :href="ownerUrl" x-text="owner"></a> / </span>
+                <a :href="base" x-text="repo && repo.name"></a>
               </h1>
               <div class="row gap-8 mt-8 wrap">
                 <span class="badge" :class="projectTypeClass(repo && repo.project_type)"
@@ -139,10 +68,22 @@
           <a class="tab" :class="tab === 'branches' ? 'is-active' : ''" :href="base + '/branches'">
             <span x-icon="{ name: 'git-branch', size: 15 }"></span>
             <span x-text="t('project.branches')"></span>
+            <span class="tab__count" x-show="repo" x-text="repo && repo.branches_count"></span>
+          </a>
+          <a class="tab" :class="tab === 'tags' ? 'is-active' : ''" :href="base + '/tags'">
+            <span x-icon="{ name: 'tag', size: 15 }"></span>
+            <span x-text="t('project.tags')"></span>
+            <span class="tab__count" x-show="repo" x-text="repo && repo.tags_count"></span>
+          </a>
+          <a class="tab" :class="tab === 'stats' ? 'is-active' : ''" :href="base + '/stats'">
+            <span x-icon="{ name: 'chart-bar', size: 15 }"></span>
+            <span x-text="t('sidebar.statistics')"></span>
           </a>
           <a class="tab" :class="tabIs('issues') ? 'is-active' : ''" :href="base + '/issues'">
             <span x-icon="{ name: 'triangle-alert', size: 15 }"></span>
             <span x-text="t('project.issues')"></span>
+            <span class="tab__count" x-show="repo && repo.open_issues_count"
+              x-text="repo && repo.open_issues_count"></span>
           </a>
           <a class="tab" :class="tabIs('prs') ? 'is-active' : ''" :href="base + '/pull_requests'">
             <span x-icon="{ name: 'git-pull-request', size: 15 }"></span>
@@ -152,10 +93,19 @@
             <span x-icon="{ name: 'clipboard-list', size: 15 }"></span>
             <span x-text="t('project.tasks')"></span>
           </a>
+          <a class="tab" :class="tab === 'releases' ? 'is-active' : ''" :href="base + '/releases'">
+            <span x-icon="{ name: 'package', size: 15 }"></span>
+            <span x-text="t('project.releases')"></span>
+          </a>
           <a class="tab" x-show="canManage" :class="tab === 'settings' ? 'is-active' : ''"
             :href="base + '/settings'">
             <span x-icon="{ name: 'settings', size: 15 }"></span>
             <span x-text="t('project.settings')"></span>
+          </a>
+          <a class="tab" x-show="canManage" :class="tab === 'sync' ? 'is-active' : ''"
+            :href="base + '/sync'">
+            <span x-icon="{ name: 'refresh-cw', size: 15 }"></span>
+            <span x-text="t('project.sync')"></span>
           </a>
         </div>
 
@@ -239,14 +189,21 @@
                 <span class="card__title mono" x-text="filePath"></span>
                 <div class="row gap-8">
                   <span class="text-xs muted-2" x-text="fileSize"></span>
+                  <button class="btn btn--sm" x-show="fileHtml && !editing"
+                    @click="fileSource = !fileSource"
+                    x-text="fileSource ? t('fileViewer.rendered') : t('fileViewer.viewSource')"></button>
                   <button class="btn btn--sm" x-show="canEditFile && !editing" @click="startEdit"
                     x-text="t('fileViewer.edit')"></button>
                   <button class="btn btn--sm btn--danger-ghost" x-show="canEditFile && !editing" @click="removeFile"
                     x-text="t('common.delete')"></button>
                 </div>
               </div>
-              <div class="code-block" style="border: 0; border-radius: 0" x-show="!editing">
-                <pre><code class="microlight" x-ref="fileCode" x-text="fileContent"></code></pre>
+              <div class="code-block" style="border: 0; border-radius: 0" x-show="!editing && (!fileHtml || fileSource)">
+                <pre><code class="hljs" :class="fileLangClass" x-ref="fileCode"
+                  x-text="fileContent"></code></pre>
+              </div>
+              <div class="card__body" x-show="!editing && fileHtml && !fileSource" x-cloak>
+                <div class="md" x-html="fileHtml"></div>
               </div>
               <div class="card__body" x-show="editing" x-cloak>
                 <textarea class="textarea mono" rows="18" x-model="editContent"></textarea>
@@ -269,7 +226,9 @@
           <!-- readme -->
           <div class="card mt-20" x-show="!file && readmeHtml" x-cloak>
             <div class="card__head">
-              <span class="card__title" x-text="'README.md'"></span>
+              <span class="card__title" x-text="readmePath || 'README.md'"></span>
+              <a class="btn btn--sm btn--ghost" :href="base + '/tree/' + encodeURIComponent(readmePath) + '?source=1'"
+                x-text="t('fileViewer.viewSource')"></a>
             </div>
             <div class="card__body">
               <div class="md" x-html="readmeHtml"></div>
@@ -280,6 +239,14 @@
         <!-- commits -->
         <section x-show="tab === 'commits'" x-cloak>
           <div class="card">
+            <div class="card__head">
+              <span class="card__title" x-text="t('project.commits')"></span>
+              <div class="row gap-8">
+                <button class="btn btn--sm" x-show="repo && repo.has_work_tree"
+                  :class="rangeMode ? 'btn--primary' : ''" @click="toggleRangeMode"
+                  x-text="t('gitWorkflow.selectForDelete')"></button>
+              </div>
+            </div>
             <table class="table">
               <thead>
                 <tr>
@@ -290,14 +257,25 @@
                 </tr>
               </thead>
               <tbody>
-                <template x-for="c in commits" :key="c.hash">
-                  <tr>
+                <template x-for="(c, i) in commits" :key="c.hash">
+                  <tr :class="inRange(i) ? 'row--picked' : ''"
+                    :style="rangeMode ? 'cursor: pointer' : ''" @click="rangeMode && pickRange(i)">
                     <td class="truncate" style="max-width: 460px">
-                      <a :href="base + '/commits/' + c.hash" x-text="c.message"></a>
+                      <template x-if="!rangeMode">
+                        <a :href="base + '/commits/' + c.hash" x-text="c.message"></a>
+                      </template>
+                      <template x-if="rangeMode">
+                        <span x-text="c.message"></span>
+                      </template>
                     </td>
                     <td class="muted" x-text="c.author"></td>
                     <td class="mono muted-2">
-                      <a :href="base + '/commits/' + c.hash" x-text="c.short_hash"></a>
+                      <template x-if="!rangeMode">
+                        <a :href="base + '/commits/' + c.hash" x-text="c.short_hash"></a>
+                      </template>
+                      <template x-if="rangeMode">
+                        <span x-text="c.short_hash"></span>
+                      </template>
                     </td>
                     <td class="muted text-xs" x-text="relativeTime(c.date)"></td>
                   </tr>
@@ -308,6 +286,21 @@
               <div class="empty__desc" x-text="t('commit.noCommits')"></div>
             </div>
           </div>
+
+          <div class="card mt-16" x-show="rangeMode" x-cloak>
+            <div class="card__body row between gap-12 wrap" style="padding: 16px 18px">
+              <span class="text-sm muted"
+                x-text="rangeSelection().count
+                  ? t('gitWorkflow.deleteRangeHint', { from: rangeSelection().from.slice(0, 7), to: rangeSelection().to.slice(0, 7) })
+                  : t('gitWorkflow.selectForDeleteHint')"></span>
+              <div class="row gap-8">
+                <button class="btn btn--sm" @click="toggleRangeMode" x-text="t('common.cancel')"></button>
+                <button class="btn btn--sm btn--danger" :disabled="!rangeSelection().count"
+                  @click="deleteRange" x-text="t('gitWorkflow.deleteCommit')"></button>
+              </div>
+            </div>
+          </div>
+
           <div class="row center gap-8 mt-16" x-show="commitPages > 1" x-cloak>
             <button class="btn btn--sm" :disabled="commitPage <= 1" @click="goCommitPage(commitPage - 1)"
               x-text="t('projects.prevPage')"></button>
@@ -467,10 +460,25 @@
             <div class="diff" x-show="!diffLoading && !(diffResult && diffResult.is_binary)">
               <template x-for="(line, i) in diffRows()" :key="i">
                 <div :class="line.cls">
+                  <template x-if="diffCanPick && line.cls.indexOf('diff__line--') >= 0">
+                    <span class="diff__pick">
+                      <input type="checkbox" x-model="lineSel[i]" />
+                    </span>
+                  </template>
                   <span class="diff__sign" x-text="line.sign"></span>
                   <span class="diff__text" x-text="line.text"></span>
                 </div>
               </template>
+            </div>
+            <div class="card__body row between gap-12 wrap" style="padding: 14px 18px" x-show="diffCanPick" x-cloak>
+              <span class="text-xs muted-2" x-text="t('gitWorkflow.selectLinesHint')"></span>
+              <div class="row gap-8">
+                <button class="btn btn--sm" :disabled="!pickedLines().length" @click="clearLines"
+                  x-text="t('gitWorkflow.clearSelection')"></button>
+                <button class="btn btn--primary btn--sm" :disabled="stagingLines || !pickedLines().length"
+                  @click="stageSelectedLines"
+                  x-text="t('gitWorkflow.stageSelectedLines', { count: pickedLines().length })"></button>
+              </div>
             </div>
             <div class="empty empty--tight" x-show="diffLoading">
               <div class="empty__desc" x-text="t('common.loading')"></div>
@@ -529,6 +537,51 @@
                 </select>
                 <button class="btn btn--sm" :disabled="gitBusy || !mergeSource"
                   @click="mergeInto(mergeSource)" x-text="t('gitWorkflow.mergeBranch')"></button>
+              </div>
+            </div>
+          </div>
+
+          <!-- interactive rebase -->
+          <div class="card mb-16" x-show="repo && repo.has_work_tree">
+            <div class="card__head">
+              <span class="card__title" x-text="t('gitWorkflow.rebaseEditorTitle')"></span>
+            </div>
+            <div class="card__body" style="padding: 20px">
+              <div class="row gap-8 wrap">
+                <select class="select" x-model="rebaseBase" style="max-width: 320px">
+                  <option value="" x-text="t('gitWorkflow.basePlaceholder')"></option>
+                  <template x-for="c in recentCommits" :key="'rb-' + c.hash">
+                    <option :value="c.hash" x-text="c.short_hash + '  ' + c.message"></option>
+                  </template>
+                </select>
+                <button class="btn btn--sm" :disabled="!rebaseBase" @click="buildRebase"
+                  x-text="t('gitWorkflow.rebaseLoad')"></button>
+                <button class="btn btn--sm btn--primary" :disabled="rebasing || !rebaseTodos.length"
+                  @click="runRebase" x-text="t('gitWorkflow.executeRebase')"></button>
+              </div>
+              <div class="text-xs muted-2 mt-8" x-text="t('gitWorkflow.rebaseBaseHint')"></div>
+
+              <div class="list mt-12" x-show="rebaseTodos.length" x-cloak>
+                <template x-for="(todo, i) in rebaseTodos" :key="'td-' + todo.hash">
+                  <div class="list__item change-row">
+                    <span class="mono muted-2 text-xs" x-text="todo.short"></span>
+                    <span class="grow truncate" x-text="todo.message"></span>
+                    <select class="select select--sm" x-model="todo.action">
+                      <option value="pick" x-text="t('gitWorkflow.rebasePick')"></option>
+                      <option value="squash" x-text="t('gitWorkflow.rebaseSquash')"></option>
+                      <option value="fixup" x-text="t('gitWorkflow.rebaseFixup')"></option>
+                      <option value="edit" x-text="t('gitWorkflow.rebaseEdit')"></option>
+                      <option value="drop" x-text="t('gitWorkflow.rebaseDrop')"></option>
+                    </select>
+                    <button class="btn btn--sm btn--ghost" :disabled="i === 0" @click="moveTodo(i, -1)"
+                      x-text="'↑'"></button>
+                    <button class="btn btn--sm btn--ghost" :disabled="i === rebaseTodos.length - 1"
+                      @click="moveTodo(i, 1)" x-text="'↓'"></button>
+                  </div>
+                </template>
+              </div>
+              <div class="empty empty--tight" x-show="!rebaseTodos.length">
+                <div class="empty__desc" x-text="t('gitWorkflow.noCommitsForRebase')"></div>
               </div>
             </div>
           </div>
@@ -603,6 +656,22 @@
                 </div>
               </div>
             </div>
+
+            <!-- commit actions -->
+            <div class="card mt-20" x-show="repo && repo.has_work_tree" x-cloak>
+              <div class="card__head">
+                <span class="card__title" x-text="t('gitWorkflow.commitActions')"></span>
+                <span class="text-xs muted-2" x-text="t('gitWorkflow.cherryPickHint')"></span>
+              </div>
+              <div class="card__body row gap-8 wrap" style="padding: 16px 18px">
+                <button class="btn btn--sm" @click="cherryPickCommit" x-text="t('gitWorkflow.cherryPick')"></button>
+                <button class="btn btn--sm" @click="revertCommit" x-text="t('gitWorkflow.revert')"></button>
+                <button class="btn btn--sm btn--danger-ghost" @click="resetToCommit"
+                  x-text="t('gitWorkflow.reset')"></button>
+              </div>
+            </div>
+            <div class="alert alert--info mt-16" x-show="repo && !repo.has_work_tree" x-cloak
+              x-text="t('gitWorkflow.actionNeedsWorkTree')"></div>
 
             <div class="card mt-20" x-show="commit && commit.files && commit.files.length">
               <div class="card__head">
@@ -1167,6 +1236,36 @@
                 <textarea class="textarea" rows="6" x-model="newTask.draft"
                   :placeholder="t('task.draftPlaceholder')"></textarea>
               </div>
+              <div class="field">
+                <div class="row between">
+                  <label class="label" x-text="t('task.linkedIssues')"></label>
+                  <button class="btn btn--sm btn--ghost" @click="toggleNewTaskIssuePicker"
+                    x-text="showNewTaskIssuePicker ? t('common.collapse') : t('common.linkIssue')"></button>
+                </div>
+                <div class="row gap-8 wrap mb-8" x-show="newTaskIssueIds.length" x-cloak>
+                  <template x-for="issue in selectedNewTaskIssues()" :key="issue.id">
+                    <div class="badge badge--blue">
+                      <span x-text="'#' + issue.number + ' ' + issue.title"></span>
+                      <span style="cursor: pointer; display: inline-flex" :title="t('common.unlink')"
+                        @click="toggleNewTaskIssue(issue.id)">
+                        <span x-icon="{ name: 'x', size: 12 }"></span>
+                      </span>
+                    </div>
+                  </template>
+                </div>
+                <div class="issue-picker" x-show="showNewTaskIssuePicker" x-cloak>
+                  <template x-for="issue in linkableIssues(newTaskIssueIds)" :key="issue.id">
+                    <button class="issue-picker__item" @click="toggleNewTaskIssue(issue.id)">
+                      <span class="muted-2" x-text="'#' + issue.number"></span>
+                      <span class="grow ellipsis-one-line" x-text="issue.title"></span>
+                      <span class="text-xs green" x-text="'+ ' + t('common.link')"></span>
+                    </button>
+                  </template>
+                  <div class="text-sm muted-2"
+                    x-show="!linkableIssues(newTaskIssueIds).length"
+                    x-text="t('common.noLinkableIssues')"></div>
+                </div>
+              </div>
               <div class="row between">
                 <a class="btn btn--ghost" :href="base + '/tasks'" x-text="t('common.cancel')"></a>
                 <button class="btn btn--primary" :disabled="creating || !newTask.title.trim()"
@@ -1210,7 +1309,105 @@
                   <span><span class="muted-2" x-text="t('task.verifier') + ' '"></span><span x-text="(task && task.verifier) || '-'"></span></span>
                   <span x-text="task && task.created_at ? fmt.formatDateTime(task.created_at) : ''"></span>
                 </div>
-                <div class="md mt-16" x-show="taskHtml" x-html="taskHtml"></div>
+                <div class="md mt-16" x-show="taskGoalHtml" x-html="taskGoalHtml"></div>
+              </div>
+            </div>
+
+            <div class="card mt-16" x-show="task && task.draft" x-cloak>
+              <div class="card__body" style="padding: 24px">
+                <h2 class="section-title" x-text="t('task.draftOrPlan')"></h2>
+                <div class="md mt-12" x-html="taskDraftHtml"></div>
+              </div>
+            </div>
+
+            <div class="card mt-16" x-show="task && task.schedules && task.schedules.length" x-cloak>
+              <div class="card__body" style="padding: 24px">
+                <h2 class="section-title" x-text="t('task.schedules')"></h2>
+                <div class="list mt-12">
+                  <template x-for="s in task.schedules" :key="s.id">
+                    <div class="list__item">
+                      <span class="badge badge--blue" x-text="s.schedule_type || t('task.schedule')"></span>
+                      <span class="text-sm muted" x-text="(s.plan_start_date || t('common.pending')) + ' ~ ' + (s.plan_end_date || t('common.pending'))"></span>
+                      <span class="text-xs muted-2" x-text="[s.user1, s.user2, s.user3].filter(Boolean).join(' · ')"></span>
+                    </div>
+                  </template>
+                </div>
+              </div>
+            </div>
+
+            <div class="card mt-16">
+              <div class="card__head">
+                <span class="card__title" x-text="t('task.linkedIssues')"></span>
+                <span class="badge badge--gray" x-text="((task && task.issues) || []).length"></span>
+                <button class="btn btn--sm btn--ghost" x-show="isTaskOwner"
+                  @click="toggleTaskIssuePicker"
+                  x-text="showTaskIssuePicker ? t('common.collapse') : t('common.linkIssue')"></button>
+              </div>
+              <div class="card__body" style="padding: 16px 24px">
+                <div class="list" x-show="task && task.issues && task.issues.length">
+                  <template x-for="issue in (task && task.issues) || []" :key="issue.id">
+                    <div class="list__item">
+                      <a class="text-sm blue" :href="base + '/issues/' + issue.number">
+                        <span class="muted-2" x-text="'#' + issue.number + ' '"></span>
+                        <span x-text="issue.title"></span>
+                      </a>
+                      <span class="badge" :class="issue.status === 'closed' ? 'badge--gray' : 'badge--green'"
+                        x-text="issue.status === 'closed' ? t('common.closed') : t('common.open')"></span>
+                      <button class="btn btn--sm btn--ghost" x-show="isTaskOwner" :title="t('common.unlink')"
+                        @click="unlinkTaskIssue(issue.id)">
+                        <span x-icon="{ name: 'x', size: 13 }"></span>
+                      </button>
+                    </div>
+                  </template>
+                </div>
+                <div class="text-sm muted-2" x-show="!(task && task.issues && task.issues.length)"
+                  x-text="t('common.noLinkedIssues')"></div>
+
+                <div class="mt-12" x-show="showTaskIssuePicker" x-cloak>
+                  <div class="issue-picker">
+                    <template x-for="issue in linkableIssues((task && task.issues || []).map(function (i) { return i.id }))" :key="issue.id">
+                      <button class="issue-picker__item" @click="linkTaskIssue(issue.id)">
+                        <span class="muted-2" x-text="'#' + issue.number"></span>
+                        <span class="grow ellipsis-one-line" x-text="issue.title"></span>
+                        <span class="text-xs green" x-text="'+ ' + t('common.link')"></span>
+                      </button>
+                    </template>
+                    <div class="text-sm muted-2"
+                      x-show="!linkableIssues((task && task.issues || []).map(function (i) { return i.id })).length"
+                      x-text="t('common.noLinkableIssues')"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="card mt-16">
+              <div class="card__head">
+                <span class="card__title" x-text="t('task.attachments')"></span>
+                <span class="badge badge--gray" x-text="((task && task.attachments) || []).length"></span>
+                <button class="btn btn--sm btn--ghost" x-show="isTaskOwner" :disabled="attachingTask"
+                  @click="$refs.taskAttachmentInput.click()">
+                  <span class="spinner spinner--sm" x-show="attachingTask" x-cloak></span>
+                  <span x-text="t('task.uploadAttachment')"></span>
+                </button>
+                <input type="file" x-ref="taskAttachmentInput" class="hidden" multiple
+                  accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
+                  @change="uploadTaskAttachments" />
+              </div>
+              <div class="card__body" style="padding: 16px 24px">
+                <div class="list" x-show="task && task.attachments && task.attachments.length">
+                  <template x-for="a in (task && task.attachments) || []" :key="a.id">
+                    <div class="list__item">
+                      <span class="text-sm grow ellipsis-one-line" x-text="a.file_name"></span>
+                      <span class="text-xs muted-2" x-text="fmt.formatBytes(a.file_size)"></span>
+                      <button class="btn btn--sm btn--ghost" x-show="isTaskOwner" :disabled="deletingAttachment"
+                        :title="t('common.delete')" @click="deleteTaskAttachment(a)">
+                        <span x-icon="{ name: 'trash-2', size: 13 }"></span>
+                      </button>
+                    </div>
+                  </template>
+                </div>
+                <div class="text-sm muted-2" x-show="!(task && task.attachments && task.attachments.length)"
+                  x-text="t('task.noAttachments')"></div>
               </div>
             </div>
 
@@ -1264,8 +1461,17 @@
           </div>
         </section>
 
+        <!-- settings / sync are admin-only; keep direct URLs from rendering the form -->
+        <section x-show="(tab === 'settings' || tab === 'sync') && !canManage" x-cloak style="max-width: 900px">
+          <div class="card">
+            <div class="card__body" style="padding: 24px">
+              <div class="text-sm muted-2" x-text="t('projectSettings.noPermission')"></div>
+            </div>
+          </div>
+        </section>
+
         <!-- project settings -->
-        <section x-show="tab === 'settings'" x-cloak style="max-width: 900px">
+        <section x-show="tab === 'settings' && canManage" x-cloak style="max-width: 900px">
           <h1 class="page-title mb-20" x-text="t('projectSettings.title')"></h1>
 
           <div class="card">
@@ -1326,23 +1532,60 @@
 
           <div class="card">
             <div class="card__head">
+              <span class="card__title" x-text="t('storage.title')"></span>
+              <span class="badge" :class="repo && repo.storage_kind === 'work' ? 'badge--green' : 'badge--blue'"
+                x-text="repo && repo.storage_kind === 'work' ? t('storage.work') : t('storage.bare')"></span>
+            </div>
+            <div class="card__body" style="padding: 24px">
+              <p class="text-sm muted mb-16"
+                x-text="repo && repo.storage_kind === 'work' ? t('storage.workDesc') : t('storage.bareDesc')"></p>
+              <div x-show="repo && repo.local_path" x-cloak>
+                <label class="label" x-text="t('storage.path')"></label>
+                <div class="mono text-sm ellipsis-one-line" :title="repo && repo.local_path"
+                  x-text="repo && repo.local_path"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card__head">
               <span class="card__title" x-text="t('project.dangerZone')"></span>
             </div>
             <div class="card__body" style="padding: 24px">
-              <div class="row between gap-16 wrap">
+              <div class="row between gap-16 wrap" x-show="canManage && repo && repo.project_type !== 'local'">
+                <div>
+                  <div class="strong" x-text="t('projectSettings.transferOwnership')"></div>
+                  <div class="text-sm muted mt-4" x-text="t('projectSettings.transferDesc')"></div>
+                </div>
+                <div class="row gap-8">
+                  <input class="input" style="width: 200px" x-model="transferTarget"
+                    :placeholder="t('projectSettings.newOwnerPlaceholder')" />
+                  <button class="btn btn--sm" :disabled="transferring || !transferTarget.trim()"
+                    @click="transferRepo" x-text="t('projectSettings.transferProject')"></button>
+                </div>
+              </div>
+
+              <div class="row between gap-16 wrap mt-20" x-show="canManage">
                 <div>
                   <div class="strong" x-text="t('projectSettings.deleteProject')"></div>
                   <div class="text-sm muted mt-4" x-text="t('projectSettings.deleteWarning')"></div>
                 </div>
-                <button class="btn btn--danger btn--sm" x-show="canManage" @click="deleteRepo"
-                  x-text="t('project.deleteRepo')"></button>
+                <div class="row gap-8">
+                  <input class="input" style="width: 200px" x-model="deleteConfirm"
+                    :placeholder="repoName" />
+                  <button class="btn btn--danger btn--sm"
+                    :disabled="deleting || deleteConfirm !== repoName" @click="deleteRepo"
+                    x-text="t('projectSettings.confirmDelete')"></button>
+                </div>
               </div>
+              <div class="hint mt-8" x-show="canManage"
+                x-text="t('projectSettings.typeRepoName', { repo: repoName })"></div>
             </div>
           </div>
         </section>
 
         <!-- project sync -->
-        <section x-show="tab === 'sync'" x-cloak style="max-width: 900px">
+        <section x-show="tab === 'sync' && canManage" x-cloak style="max-width: 900px">
           <h1 class="page-title mb-20" x-text="t('project.sync')"></h1>
 
           <div class="card">
@@ -1351,15 +1594,80 @@
             </div>
             <div class="card__body" style="padding: 24px">
               <p class="text-sm muted mb-16" x-text="syncDesc()"></p>
+              <div class="row gap-16 text-sm mb-16" x-show="repo && repo.mirror_url">
+                <span class="muted-2" x-text="t('projectSettings.remoteSource') + ':'"></span>
+                <a class="blue truncate" :href="repo && repo.mirror_url ? repo.mirror_url.replace(/\.git$/, '') : ''"
+                  target="_blank" rel="noopener noreferrer"
+                  x-text="repo && repo.mirror_url ? repo.mirror_url.replace(/\.git$/, '') : ''"></a>
+              </div>
+              <div class="row gap-16 text-sm mb-16" x-show="!isLocalProject()">
+                <a :href="base + '/issues'">
+                  <span class="muted-2" x-text="t('sidebar.issues') + ': '"></span>
+                  <span x-text="((repo && repo.open_issues_count) || 0) + ((repo && repo.closed_issues_count) || 0)"></span>
+                </a>
+                <a :href="base + '/pull_requests'">
+                  <span class="muted-2" x-text="t('sidebar.mergeRequests') + ': '"></span>
+                  <span x-text="((repo && repo.open_prs_count) || 0) + ((repo && repo.closed_prs_count) || 0)"></span>
+                </a>
+              </div>
+
               <div class="row gap-10 wrap" x-show="canManage">
-                <button class="btn btn--sm" :disabled="syncing" @click="pullCode"
+                <button class="btn btn--sm btn--primary" x-show="isRemoteProject()" :disabled="syncing"
+                  @click="syncAll" x-text="syncing ? t('projectSettings.syncRunning') : t('projectSettings.syncAll')"></button>
+                <button class="btn btn--sm" x-show="isRemoteProject()" :disabled="syncing" @click="pullCode"
                   x-text="t('projectSettings.pullCode')"></button>
-                <button class="btn btn--sm" :disabled="syncing" @click="pullIssues"
+                <button class="btn btn--sm" x-show="isRemoteProject()" :disabled="syncing" @click="pullIssues"
                   x-text="t('projectSettings.pullIssues')"></button>
                 <button class="btn btn--sm" :disabled="syncing" @click="refreshStats"
                   x-text="t('projectSettings.refreshStats')"></button>
               </div>
               <div class="text-xs muted-2 mt-12" x-show="syncing" x-text="t('projectSettings.syncStarted')"></div>
+
+              <div class="mt-24" x-show="canManage && !isLocalProject() && canPushProject()" x-cloak>
+                <label class="label" x-text="t('projectSettings.remoteUrlLabel')"></label>
+                <div class="row gap-8 wrap">
+                  <input class="input grow" x-model="pushUrl"
+                    :placeholder="t('projectSettings.remoteUrlPlaceholder')" />
+                  <button class="btn btn--sm" :disabled="syncing" @click="pushToRemote"
+                    x-text="t('projectSettings.pushToRemote')"></button>
+                </div>
+              </div>
+
+              <div class="mt-24" x-show="canManage && isLocalProject()" x-cloak>
+                <div class="row between mb-8">
+                  <label class="label" x-text="t('projectSettings.remoteRepositories')"></label>
+                  <span class="spinner spinner--sm" x-show="loadingRemotes" x-cloak></span>
+                </div>
+                <div class="list" x-show="remotes.length">
+                  <template x-for="remote in remotes" :key="remote.name">
+                    <div class="list__item">
+                      <div class="grow">
+                        <div class="text-sm strong" x-text="remote.name"></div>
+                        <div class="text-xs muted-2 ellipsis-one-line" :title="remote.fetch_url"
+                          x-text="(remote.fetch_url || '') + (remote.push_urls && remote.push_urls.length && remote.push_urls[0] !== remote.fetch_url ? ' → ' + remote.push_urls.join(', ') : '')"></div>
+                      </div>
+                      <button class="btn btn--sm btn--ghost" :disabled="pushingRemote === remote.name"
+                        @click="pushNamedRemote(remote.name)" x-text="t('projectSettings.pushToRemote')"></button>
+                      <button class="btn btn--sm btn--ghost" :title="t('projectSettings.removeRemote')"
+                        @click="removeRemote(remote.name)">
+                        <span x-icon="{ name: 'trash-2', size: 13 }"></span>
+                      </button>
+                    </div>
+                  </template>
+                </div>
+                <div class="text-sm muted-2 mb-12" x-show="!loadingRemotes && !remotes.length"
+                  x-text="t('projectSettings.noRemotes')"></div>
+
+                <div class="row gap-8 wrap mt-8">
+                  <input class="input" style="max-width: 140px" x-model="newRemoteName"
+                    :placeholder="t('projectSettings.remoteName')" />
+                  <input class="input grow" x-model="newRemoteUrl"
+                    :placeholder="t('projectSettings.remoteUrlPlaceholder')" />
+                  <button class="btn btn--sm btn--primary"
+                    :disabled="addingRemote || !newRemoteName.trim() || !newRemoteUrl.trim()"
+                    @click="addRemote" x-text="t('projectSettings.addRemote')"></button>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -1387,7 +1695,8 @@
 
               <div class="alert alert--error mb-16" x-show="syncConfig && syncConfig.last_error">
                 <span x-text="t('projectSettings.recentError') + ': '"></span>
-                <span x-text="syncConfig && syncConfig.last_error"></span>
+                <span class="ellipsis-one-line" :title="syncConfig && syncConfig.last_error"
+                  x-text="syncConfig && syncConfig.last_error"></span>
               </div>
 
               <div class="row gap-12 wrap" x-show="canManage">
@@ -1431,8 +1740,13 @@
                   <tr>
                     <td class="muted text-xs" x-text="fmt.formatDateTime(log.created_at)"></td>
                     <td>
-                      <span class="badge" :class="log.status === 'success' ? 'badge--green' : 'badge--red'"
-                        x-text="log.status === 'success' ? t('projectSettings.success') : t('projectSettings.failed')"></span>
+                      <span class="badge"
+                        :class="log.status === 'failure' ? 'badge--red' : (log.status === 'running' ? 'badge--blue' : (log.message ? 'badge--amber' : 'badge--green'))"
+                        x-text="log.status === 'failure' ? t('projectSettings.failed')
+                          : (log.status === 'running' ? t('projectSettings.syncRunning')
+                            : (log.message ? t('projectSettings.syncPartial') : t('projectSettings.success')))"></span>
+                      <div class="muted text-xs ellipsis-one-line" :title="log.message" x-show="log.message"
+                        x-text="log.message"></div>
                     </td>
                     <td class="muted" x-text="(log.items_synced || 0) + ' / ' + (log.items_failed || 0)"></td>
                     <td class="muted text-xs" x-text="log.duration ? (log.duration + ' ms') : ''"></td>
@@ -1441,7 +1755,7 @@
               </tbody>
             </table>
             <div class="empty empty--tight" x-show="!syncLogs.length">
-              <div class="empty__desc" x-text="t('projectSettings.noSyncLogs')"></div>
+              <div class="empty__desc" x-text="t('projectSettings.syncEmptyHint')"></div>
             </div>
           </div>
         </section>
@@ -1450,7 +1764,7 @@
     </div>
 
     <div id="app-footer"></div>
-    <script src="/assets/lib/microlight.js" defer></script>
+    <script src="/assets/lib/highlight.min.js" defer></script>
     <script type="module" src="/assets/js/app.js"></script>
   </body>
 </html>

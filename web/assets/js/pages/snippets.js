@@ -74,10 +74,24 @@ Alpine.data('snippets', function () {
         this.snippet = null
       } finally {
         this.loading = false
-        this.$nextTick(function () {
-          if (window.microlight) window.microlight.reset()
-        })
+        this.$nextTick(this.highlight.bind(this))
       }
+    },
+
+    get snippetLangClass() {
+      var lang = this.snippet && this.snippet.language
+        ? String(this.snippet.language).toLowerCase()
+        : ''
+      if (!lang || !window.hljs || !window.hljs.getLanguage(lang)) return ''
+      return 'language-' + lang
+    },
+
+    highlight: function () {
+      var el = this.$refs.code
+      if (!window.hljs || !el) return
+      // 切换片段后内容是新的，清掉标记让 highlight.js 重新着色。
+      delete el.dataset.highlighted
+      window.hljs.highlightElement(el)
     },
 
     get filtered() {

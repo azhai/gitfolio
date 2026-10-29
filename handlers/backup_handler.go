@@ -3,12 +3,46 @@ package handlers
 import (
 	"context"
 	"strconv"
-	"time"
 
+	"github.com/azhai/gitfolio/helpers"
 	"github.com/azhai/gitfolio/models"
 	"github.com/azhai/gitfolio/services"
 	"github.com/gofiber/fiber/v3"
 )
+
+// BackupResponse 是备份记录对外输出的字段。直接序列化 models.Backup 会用 Go 的
+// 字段名（ID/CreatedAt/…），前端按 snake_case 取不到值。
+type BackupResponse struct {
+	ID         int64  `json:"id"`
+	Name       string `json:"name"`
+	BackupType string `json:"backup_type"`
+	Status     string `json:"status"`
+	SizeBytes  int64  `json:"size_bytes"`
+	Error      string `json:"error"`
+	StartedAt  string `json:"started_at"`
+	FinishedAt string `json:"finished_at"`
+}
+
+func ToBackupResponse(b *models.Backup) *BackupResponse {
+	if b == nil {
+		return nil
+	}
+	res := &BackupResponse{
+		ID:         b.ID,
+		Name:       b.Name,
+		BackupType: b.BackupType,
+		Status:     b.Status,
+		SizeBytes:  b.Size,
+		Error:      b.Error,
+	}
+	if b.StartedAt != nil {
+		res.StartedAt = helpers.FormatTime(*b.StartedAt)
+	}
+	if b.CompletedAt != nil {
+		res.FinishedAt = helpers.FormatTime(*b.CompletedAt)
+	}
+	return res
+}
 
 // ListBackups returns the backup history.
 func ListBackups(c fiber.Ctx) error {
@@ -25,7 +59,11 @@ func ListBackups(c fiber.Ctx) error {
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
-	return c.JSON(fiber.Map{"backups": backups})
+	items := make([]*BackupResponse, len(backups))
+	for i, b := range backups {
+		items[i] = ToBackupResponse(b)
+	}
+	return c.JSON(fiber.Map{"backups": items})
 }
 
 // CreateBackup starts a full or incremental backup.
@@ -41,7 +79,7 @@ func CreateBackup(c fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "backup_type must be full or incremental"})
 	}
 	if req.Name == "" {
-		req.Name = time.Now().UTC().Format("2006-01-02 15:04:05")
+		req.Name = helpers.DisplayNow().Format("2006-01-02 15:04:05")
 	}
 
 	db := models.GetDB()
@@ -58,7 +96,7 @@ func CreateBackup(c fiber.Ctx) error {
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
-	return c.Status(fiber.StatusAccepted).JSON(fiber.Map{"backup": backup})
+	return c.Status(fiber.StatusAccepted).JSON(fiber.Map{"backup": ToBackupResponse(backup)})
 }
 
 // RestoreBackup restores data from a backup.
@@ -80,22 +118,22 @@ func RestoreBackup(c fiber.Ctx) error {
 func CronFullBackup(c fiber.Ctx) error {
 	db := models.GetDB()
 	bs := services.NewBackupService(db)
-	name := time.Now().UTC().Format("cron-full-2006-01-02_15-04-05")
+	name := helpers.DisplayNow().Format("cron-full-2006-01-02_15-04-05")
 	backup, err := bs.CreateFullBackup(context.Background(), name)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
-	return c.Status(fiber.StatusAccepted).JSON(fiber.Map{"backup": backup})
+	return c.Status(fiber.StatusAccepted).JSON(fiber.Map{"backup": ToBackupResponse(backup)})
 }
 
 // CronIncrementalBackup is meant to be called by an external system cron to create an incremental backup.
 func CronIncrementalBackup(c fiber.Ctx) error {
 	db := models.GetDB()
 	bs := services.NewBackupService(db)
-	name := time.Now().UTC().Format("cron-incr-2006-01-02_15-04-05")
+	name := helpers.DisplayNow().Format("cron-incr-2006-01-02_15-04-05")
 	backup, err := bs.CreateIncrementalBackup(context.Background(), name)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
-	return c.Status(fiber.StatusAccepted).JSON(fiber.Map{"backup": backup})
+	return c.Status(fiber.StatusAccepted).JSON(fiber.Map{"backup": ToBackupResponse(backup)})
 }

@@ -16,11 +16,13 @@ type CreateRepositoryRequest struct {
 
 type UpdateRepositoryRequest struct {
 	Name          string `json:"name"`
-	Description   string `json:"description"`
-	Homepage      string `json:"homepage"`
 	ProjectType   string `json:"project_type"`
 	DefaultBranch string `json:"default_branch"`
 	MirrorURL     string `json:"mirror_url"`
+	// 描述和主页用指针：设置界面里把这两个字段清空是常见操作，
+	// 空串当“不修改”处理的话就永远清不掉。
+	Description *string `json:"description"`
+	Homepage    *string `json:"homepage"`
 }
 
 type RepositoryResponse struct {

@@ -64,6 +64,7 @@ func setupGroupRoutes(api fiber.Router) {
 	api.Put("/groups/:name", middleware.GuestReadOnly(), handlers.UpdateGroup)
 	api.Post("/groups/:name/avatar", middleware.GuestReadOnly(), handlers.UploadGroupAvatar)
 	api.Get("/groups/:name/members", handlers.ListGroupMembers)
+	api.Get("/groups/:name/repos", handlers.ListGroupRepositories)
 	api.Post("/groups/:name/members", middleware.GuestReadOnly(), handlers.AddGroupMember)
 	api.Delete("/groups/:name/members/:username", middleware.GuestReadOnly(), handlers.RemoveGroupMember)
 }
@@ -175,7 +176,6 @@ func setupRepoGitRoutes(repo fiber.Router) {
 	repo.Get("/commits/:sha", handlers.GetCommitDetail)
 	repo.Get("/compare/:basehead", handlers.CompareCommits)
 	repo.Post("/refresh-stats", middleware.GuestReadOnly(), handlers.RefreshRepositoryStats)
-	repo.Post("/refresh-contributors", middleware.GuestReadOnly(), handlers.RefreshRepositoryContributors)
 }
 
 func setupRepoSyncRoutes(repo fiber.Router) {

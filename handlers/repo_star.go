@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"log"
+
 	"github.com/azhai/gitfolio/helpers"
 	"github.com/azhai/gitfolio/middleware"
 	"github.com/azhai/gitfolio/models"
@@ -24,6 +26,7 @@ func StarRepository(c fiber.Ctx) error {
 	}
 
 	star := &models.Star{UserID: userID, RepositoryID: result.Repo.ID}
+	star.Stamp()
 	err = db.Star.Insert().One(star)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to star repository"})
@@ -79,6 +82,7 @@ func WatchRepository(c fiber.Ctx) error {
 	}
 
 	watch := &models.Watch{UserID: userID, RepositoryID: result.Repo.ID}
+	watch.Stamp()
 	err = db.Watch.Insert().One(watch)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to watch repository"})
@@ -127,30 +131,10 @@ func RefreshRepositoryStats(c fiber.Ctx) error {
 
 	go func() {
 		statsSvc := services.NewStatsService(models.GetDB())
-		_ = statsSvc.UpdateRepositoryStats(result.Repo.ID, result.OwnerName(), result.Repo.Name)
+		if err := statsSvc.UpdateRepositoryStats(result.Repo.ID, result.OwnerName(), result.Repo.Name); err != nil {
+			log.Printf("failed to refresh stats for %s/%s: %v", result.OwnerName(), result.Repo.Name, err)
+		}
 	}()
 
 	return c.Status(fiber.StatusAccepted).JSON(fiber.Map{"status": "refreshing"})
-}
-
-// RefreshRepositoryContributors 从远程平台识别并刷新仓库贡献者
-func RefreshRepositoryContributors(c fiber.Ctx) error {
-	result, err := helpers.RequireOwnerAndRepoFromParams(c)
-	if err != nil {
-		return err
-	}
-
-	if !result.Repo.IsRemote() {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Not a remote repository"})
-	}
-
-	db := models.GetDB()
-	syncSvc := services.NewSyncService(db)
-
-	remoteRepo, err := syncSvc.GetRemoteRepoInfo(result.Repo.ID)
-	if err != nil || remoteRepo == nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "No remote repo found"})
-	}
-
-	return c.Status(fiber.StatusAccepted).JSON(fiber.Map{"status": "identifying"})
 }

@@ -39,11 +39,13 @@ web/
 | `/home` | `home.html` |
 | `/projects`, `/projects/new`, `/projects/migrate` | `projects.html` |
 | `/groups`, `/groups/:name` | `groups.html` |
+| `/activity` | `activity.html` |
 | `/snippets`, `/snippets/:id/edit` | `snippets.html` |
 | `/users`, `/users/:username` | `users.html` |
 | `/admin` | `admin.html` |
 | `/settings` | `settings.html` |
 | 其余两段及以上路径（`/:owner/:repo/...`） | `project.html` |
+| 仓库不存在或路径无法识别 | `404.html`（HTTP 404） |
 
 子路径不再单独建文件：页面脚本自己从 `location.pathname` 取参数（见
 `ui.js` 的 `projectRef()` 与 `query()`），所以 `/snippets/12/edit` 和

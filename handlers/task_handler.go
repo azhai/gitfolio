@@ -208,6 +208,7 @@ func createScheduleFromInput(db *models.Database, taskID int64, s ScheduleInput)
 	schedule.User2ID = findUserByUsername(db, s.User2)
 	schedule.User3ID = findUserByUsername(db, s.User3)
 
+	schedule.Stamp()
 	db.TaskSchedule.Insert().One(schedule)
 }
 
@@ -510,7 +511,7 @@ func UpdateTask(c fiber.Ctx) error {
 		task.HandlerID = findUserByUsername(db, req.Handler)
 	}
 
-	now := time.Now()
+	now := time.Now().UTC()
 	task.LastHandledAt = &now
 
 	err = db.Task.Save().One(task)
@@ -675,6 +676,7 @@ func UploadTaskAttachment(c fiber.Ctx) error {
 		FileType: file.Header.Get("Content-Type"),
 	}
 
+	attachment.Stamp()
 	if err := db.TaskAttachment.Insert().One(attachment); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to save attachment"})
 	}
@@ -777,6 +779,7 @@ func TransitionTask(c fiber.Ctx) error {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Only the verifier can complete this task"})
 	}
 
+	now := time.Now().UTC()
 	transition := &models.TaskTransition{
 		TaskID:     task.ID,
 		FromStatus: task.Status,
@@ -784,10 +787,10 @@ func TransitionTask(c fiber.Ctx) error {
 		UserID:     userID,
 		Comment:    req.Comment,
 	}
+	transition.Stamp()
 	db.TaskTransition.Insert().One(transition)
 
 	task.Status = req.ToStatus
-	now := time.Now()
 	task.LastHandledAt = &now
 	db.Task.Save().One(task)
 
@@ -824,7 +827,7 @@ func GetTaskTransitions(c fiber.Ctx) error {
 		CreatedAt  string `json:"created_at"`
 	}
 
-	var response []TransitionResponse
+	response := make([]TransitionResponse, 0)
 	for _, t := range transitions {
 		username := ""
 		if t.User != nil {
@@ -873,11 +876,17 @@ func GetTaskComments(c fiber.Ctx) error {
 		UpdatedAt string `json:"updated_at"`
 	}
 
-	var response []CommentResponse
+	response := make([]CommentResponse, 0)
 	for _, c := range comments {
 		author := c.AuthorName
 		if author == "" && c.Author != nil {
 			author = c.Author.Name
+		}
+		if author == "" {
+			// 早期的任务评论把 user 主键写进了 author_id，回落到用户表取名字。
+			if u := helpers.GetUser(db, c.AuthorID); u != nil {
+				author = u.Username
+			}
 		}
 		response = append(response, CommentResponse{
 			ID:        c.ID,
@@ -990,6 +999,7 @@ func LinkTaskPullRequest(c fiber.Ctx) error {
 		TaskID:        task.ID,
 		PullRequestID: pr.ID,
 	}
+	link.Stamp()
 	db.TaskPullRequest.Insert().One(link)
 
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"message": "Pull request linked successfully"})
@@ -1167,9 +1177,10 @@ func StartTimer(c fiber.Ctx) error {
 	timeLog := &models.TaskTimeLog{
 		TaskID:    task.ID,
 		UserID:    userID,
-		StartTime: time.Now(),
+		StartTime: time.Now().UTC(),
 		Note:      req.Note,
 	}
+	timeLog.Stamp()
 	db.TaskTimeLog.Insert().One(timeLog)
 
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
@@ -1204,7 +1215,7 @@ func StopTimer(c fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "No active timer found"})
 	}
 
-	now := time.Now()
+	now := time.Now().UTC()
 	active.EndTime = &now
 	active.Duration = int64(now.Sub(active.StartTime).Seconds())
 	db.TaskTimeLog.Save().One(active)

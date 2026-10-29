@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -215,6 +216,9 @@ type SyncResult struct {
 	MaxPRNumber       int
 	MaxIssueUpdatedAt *time.Time
 	MaxPRUpdatedAt    *time.Time
+	// FailureNote 记录本次没有跑通、但不足以让整次同步判负的那一类数据，
+	// 调用方把它写进同步日志，页面才能区分「全部成功」和「只同步了一半」。
+	FailureNote string
 }
 
 // SyncProgressSaver is called periodically during a sync so that progress
@@ -223,10 +227,7 @@ type SyncResult struct {
 type SyncProgressSaver func(issueNumber, prNumber int, issueSince, prSince *time.Time) error
 
 func (r *SyncResult) Add(other SyncResult) {
-	r.IssuesInserted += other.IssuesInserted
-	r.IssuesUpdated += other.IssuesUpdated
-	r.PRsInserted += other.PRsInserted
-	r.PRsUpdated += other.PRsUpdated
+	r.AddCounts(other)
 	r.MaxIssueNumber = max(r.MaxIssueNumber, other.MaxIssueNumber)
 	r.MaxPRNumber = max(r.MaxPRNumber, other.MaxPRNumber)
 	if other.MaxIssueUpdatedAt != nil && (r.MaxIssueUpdatedAt == nil || other.MaxIssueUpdatedAt.After(*r.MaxIssueUpdatedAt)) {
@@ -235,6 +236,17 @@ func (r *SyncResult) Add(other SyncResult) {
 	if other.MaxPRUpdatedAt != nil && (r.MaxPRUpdatedAt == nil || other.MaxPRUpdatedAt.After(*r.MaxPRUpdatedAt)) {
 		r.MaxPRUpdatedAt = other.MaxPRUpdatedAt
 	}
+}
+
+// AddCounts 合并已同步的条数，但不带水位：失败的那一类数据还没拉完，推进水位会
+// 让下一轮直接跳过剩下没取的区间。
+func (r *SyncResult) AddCounts(other SyncResult) {
+	r.IssuesInserted += other.IssuesInserted
+	r.IssuesUpdated += other.IssuesUpdated
+	r.IssuesDeleted += other.IssuesDeleted
+	r.PRsInserted += other.PRsInserted
+	r.PRsUpdated += other.PRsUpdated
+	r.PRsDeleted += other.PRsDeleted
 }
 
 func NewSyncService(db *models.Database) *SyncService {
@@ -798,6 +810,7 @@ func (s *SyncService) SyncGitHubRepo(ctx context.Context, owner, repo string, to
 			ForksCount:   ghRepo.ForksCount,
 			WatchCount:   ghRepo.SubscribersCount,
 		}
+		repoStats.Stamp()
 		s.db.RepositoryStats.Insert().One(repoStats)
 	} else {
 		repoStats.StarsCount = ghRepo.StargazersCount
@@ -830,6 +843,7 @@ func (s *SyncService) SyncGitHubRepo(ctx context.Context, owner, repo string, to
 		remoteRepo.LastSyncAt = &now
 		s.db.RemoteRepository.Save().One(&remoteRepo)
 	} else {
+		remoteRepo.Stamp()
 		s.db.RemoteRepository.Insert().One(&remoteRepo)
 	}
 
@@ -883,6 +897,9 @@ func (s *SyncService) batchSyncIssueLabels(repoID int64, links []struct {
 	}
 
 	if len(labelsToInsert) > 0 {
+		for _, label := range labelsToInsert {
+			label.Stamp()
+		}
 		if err := s.db.Label.Insert().All(true, labelsToInsert); err != nil {
 			for _, label := range labelsToInsert {
 				if err2 := s.db.Label.Insert().One(label); err2 != nil {
@@ -906,7 +923,7 @@ func (s *SyncService) batchSyncIssueLabels(repoID int64, links []struct {
 	}
 
 	var allToInsert []*models.IssueLabel
-	now := time.Now()
+	now := time.Now().UTC()
 	for _, link := range links {
 		for _, ghLabel := range link.labels {
 			label, ok := existingLabelMap[ghLabel.Name]
@@ -994,6 +1011,9 @@ func (s *SyncService) batchSyncPRLabels(repoID int64, links []struct {
 	}
 
 	if len(labelsToInsert) > 0 {
+		for _, label := range labelsToInsert {
+			label.Stamp()
+		}
 		if err := s.db.Label.Insert().All(true, labelsToInsert); err != nil {
 			for _, label := range labelsToInsert {
 				if err2 := s.db.Label.Insert().One(label); err2 != nil {
@@ -1017,7 +1037,7 @@ func (s *SyncService) batchSyncPRLabels(repoID int64, links []struct {
 	}
 
 	var allToInsert []*models.PullRequestLabel
-	now := time.Now()
+	now := time.Now().UTC()
 	for _, link := range links {
 		for _, ghLabel := range link.labels {
 			label, ok := existingLabelMap[ghLabel.Name]
@@ -1194,6 +1214,7 @@ func (s *SyncService) getOrCreateUser(user *models.User) (*models.User, bool, er
 		return users[0], false, nil
 	}
 
+	user.Stamp()
 	if err := s.db.User.Insert().One(user); err != nil {
 		return nil, false, err
 	}
@@ -1208,6 +1229,7 @@ func (s *SyncService) CreateSyncPoint(repoID, remoteRepoID int64, syncType strin
 		SyncType:     syncType,
 		SyncInterval: 3600,
 	}
+	syncPoint.Stamp()
 
 	if err := s.db.SyncPoint.Insert().One(&syncPoint); err != nil {
 		return nil, err
@@ -1233,10 +1255,11 @@ func (s *SyncService) UpdateSyncPoint(syncPointID int64, success bool, message s
 	if success {
 		syncPoint.LastSuccessAt = &now
 		syncPoint.FailureCount = 0
+		syncPoint.LastError = ""
 	} else {
 		syncPoint.LastFailureAt = &now
 		syncPoint.FailureCount++
-		syncPoint.LastError = message
+		syncPoint.LastError = truncateMessage(message, syncMessageMaxLen)
 	}
 
 	return s.db.SyncPoint.Save().One(&syncPoint)
@@ -1247,7 +1270,7 @@ func (s *SyncService) LogSync(syncPointID int64, syncType, status, message strin
 		SyncPointID: syncPointID,
 		SyncType:    syncType,
 		Status:      status,
-		Message:     message,
+		Message:     truncateMessage(message, syncMessageMaxLen),
 		Duration:    duration,
 		ItemsSynced: itemsSynced,
 		ItemsFailed: itemsFailed,
@@ -1264,11 +1287,24 @@ func (s *SyncService) UpdateSyncLog(logID int64, status, message string, duratio
 		return err
 	}
 	existing.Status = status
-	existing.Message = message
+	existing.Message = truncateMessage(message, syncMessageMaxLen)
 	existing.Duration = duration
 	existing.ItemsSynced = int(itemsSynced)
 	existing.ItemsFailed = int(itemsFailed)
 	return s.db.SyncLog.Save().One(existing)
+}
+
+// syncMessageMaxLen 是同步日志里一条消息的长度上限。GitHub 的 504 响应会带上整页
+// HTML，原样入库既撑大表也没法读。
+const syncMessageMaxLen = 300
+
+// truncateMessage 按字符截断，避免把中文错误信息切成半个字。
+func truncateMessage(s string, maxLen int) string {
+	runes := []rune(s)
+	if len(runes) <= maxLen {
+		return s
+	}
+	return string(runes[:maxLen]) + "…"
 }
 
 func (s *SyncService) getRepoRoot() string {
@@ -1296,6 +1332,7 @@ func LogGitCommand(db *models.Database, command, workingDir, output string, stat
 		RepositoryID: repoID,
 		ErrorMsg:     errMsg,
 	}
+	logEntry.Stamp()
 	if err := db.GitCommandLog.Insert().One(&logEntry); err != nil {
 		return 0, fmt.Errorf("[GIT-LOG] failed to save log entry: %w", err)
 	}
@@ -1310,8 +1347,9 @@ func (s *SyncService) RunGitCommand(args []string, workingDir string, repoID *in
 		RepositoryID: repoID,
 	}
 
-	now := time.Now()
+	now := time.Now().UTC()
 	logEntry.StartedAt = &now
+	logEntry.CreatedAt = now
 
 	if err := s.db.GitCommandLog.Insert().One(&logEntry); err != nil {
 		fmt.Printf("[GIT-LOG] Warning: failed to create log entry: %v\n", err)
@@ -1338,7 +1376,7 @@ func (s *SyncService) RunGitCommand(args []string, workingDir string, repoID *in
 	result.Output = strings.TrimSpace(string(output))
 	result.DurationMs = time.Since(startTime).Milliseconds()
 
-	finishTime := time.Now()
+	finishTime := time.Now().UTC()
 	logEntry.FinishedAt = &finishTime
 	logEntry.DurationMs = result.DurationMs
 	logEntry.Output = result.Output
@@ -1407,6 +1445,7 @@ func (s *SyncService) SyncPullRepository(localPath string) (*GitSyncResult, erro
 		Output:     outputStr,
 		DurationMs: durationMs,
 	}
+	logEntry.Stamp()
 
 	if err != nil {
 		result.Success = false
@@ -1468,6 +1507,7 @@ func (s *SyncService) SyncPullRepository(localPath string) (*GitSyncResult, erro
 		fetchLogEntry.Status = "success"
 		fetchLogEntry.ExitCode = 0
 	}
+	fetchLogEntry.Stamp()
 	s.db.GitCommandLog.Insert().One(&fetchLogEntry)
 
 	return result, nil
@@ -1532,6 +1572,7 @@ func (s *SyncService) SyncPushAll(localPath string) (*GitSyncResult, error) {
 			fmt.Printf("[GIT-CMD] <<< [%s] OK (%dms)\n%s\n", step.name, durationMs, truncateOutput(outputStr, 500))
 		}
 
+		logEntry.Stamp()
 		s.db.GitCommandLog.Insert().One(&logEntry)
 
 		if result.Output != "" {
@@ -1598,29 +1639,28 @@ func (s *SyncService) PushRepositoryByName(localPath, remoteName string) error {
 
 func (s *SyncService) SyncRepositoryData(ctx context.Context, repoID int64, platform, owner, repoName, token string, issueSince, prSince *time.Time, lastIssueNumber, lastPRNumber int, saveProgress SyncProgressSaver) (SyncResult, error) {
 	result := SyncResult{}
-	var firstErr error
+	var sectionErrs []error
+	okSections := 0
+
+	// 失败的那一类也可能已经取回了几页数据，条数要统计进来，但水位不推进。
+	record := func(res SyncResult, err error, label string) {
+		if err != nil {
+			s.warnf("failed to sync %s: %v", label, err)
+			sectionErrs = append(sectionErrs, fmt.Errorf("%s: %w", label, err))
+			result.AddCounts(res)
+			return
+		}
+		result.Add(res)
+		okSections++
+	}
 
 	switch platform {
 	case "gitea":
 		issueResult, err := s.SyncGiteaIssues(ctx, repoID, owner, repoName, token)
-		if err != nil {
-			s.warnf("failed to sync issues: %v", err)
-			if firstErr == nil {
-				firstErr = err
-			}
-		} else {
-			result.Add(issueResult)
-		}
+		record(issueResult, err, "issues")
 
 		prResult, err := s.SyncGiteaPRs(ctx, repoID, owner, repoName, token)
-		if err != nil {
-			s.warnf("failed to sync PRs: %v", err)
-			if firstErr == nil {
-				firstErr = err
-			}
-		} else {
-			result.Add(prResult)
-		}
+		record(prResult, err, "pull requests")
 	default:
 		// GitHub: 使用 GraphQL API 同步 Issue/PR
 		// 同步策略：updatedAt DESC 倒序
@@ -1634,14 +1674,7 @@ func (s *SyncService) SyncRepositoryData(ctx context.Context, repoID int64, plat
 		}
 		// lastNumber 不再参与同步逻辑判断，仅保留以兼容进度保存
 		issueResult, err := s.SyncGitHubIssuesGraphQL(ctx, repoID, owner, repoName, token, issueSince, lastIssueNumber, issueProgress)
-		if err != nil {
-			s.warnf("failed to sync issues: %v", err)
-			if firstErr == nil {
-				firstErr = err
-			}
-		} else {
-			result.Add(issueResult)
-		}
+		record(issueResult, err, "issues")
 
 		prProgress := func(number int, updatedAt *time.Time) error {
 			if saveProgress == nil {
@@ -1651,14 +1684,7 @@ func (s *SyncService) SyncRepositoryData(ctx context.Context, repoID int64, plat
 		}
 		// lastNumber 不再参与同步逻辑判断，仅保留以兼容进度保存
 		prResult, err := s.SyncGitHubPRsGraphQL(ctx, repoID, owner, repoName, token, prSince, lastPRNumber, prProgress)
-		if err != nil {
-			s.warnf("failed to sync PRs: %v", err)
-			if firstErr == nil {
-				firstErr = err
-			}
-		} else {
-			result.Add(prResult)
-		}
+		record(prResult, err, "pull requests")
 
 		if err := s.SyncGitHubRepoStats(ctx, repoID, owner, repoName, token); err != nil {
 			s.warnf("failed to sync repo stats: %v", err)
@@ -1670,7 +1696,25 @@ func (s *SyncService) SyncRepositoryData(ctx context.Context, repoID int64, plat
 		s.warnf("failed to update repository stats: %v", err)
 	}
 
-	return result, firstErr
+	if len(sectionErrs) == 0 {
+		return result, nil
+	}
+
+	// 限流要原样返回，调度器靠它推算下次同步时间。
+	for _, err := range sectionErrs {
+		var rlErr *RateLimitError
+		if errors.As(err, &rlErr) {
+			return result, err
+		}
+	}
+
+	joined := errors.Join(sectionErrs...)
+	if okSections == 0 {
+		return result, joined
+	}
+	// 一类成功、一类失败：按部分成功处理，让调用方把已同步的水位写回同步点。
+	result.FailureNote = strings.ReplaceAll(joined.Error(), "\n", "; ")
+	return result, nil
 }
 
 func (s *SyncService) GetRemoteRepoInfo(repoID int64) (*models.RemoteRepository, error) {
@@ -1740,12 +1784,13 @@ func (s *SyncService) SyncGitHubRepoStats(ctx context.Context, repoID int64, own
 			ForksCount:   ghRepo.ForksCount,
 			WatchCount:   ghRepo.SubscribersCount,
 		}
+		repoStats.Stamp()
 		s.db.RepositoryStats.Insert().One(repoStats)
 	} else {
 		repoStats.StarsCount = ghRepo.StargazersCount
 		repoStats.ForksCount = ghRepo.ForksCount
 		repoStats.WatchCount = ghRepo.SubscribersCount
-		repoStats.UpdatedAt = time.Now()
+		repoStats.UpdatedAt = time.Now().UTC()
 		s.db.RepositoryStats.Save().One(repoStats)
 	}
 
@@ -1777,7 +1822,7 @@ func (s *SyncService) CreateRemoteRepoFromMirrorURL(repoID int64, mirrorURL stri
 		accountID = &accounts[0].ID
 	}
 
-	now := time.Now()
+	now := time.Now().UTC()
 	apiURL := fmt.Sprintf(GitHubAPIRepoPath, baseURL, owner, repoName)
 	sshURL := fmt.Sprintf(GitHubSSHURLTemplate, owner, repoName)
 	if platform == "gitlab" {
@@ -1802,6 +1847,7 @@ func (s *SyncService) CreateRemoteRepoFromMirrorURL(repoID int64, mirrorURL stri
 		SyncEnabled:  true,
 	}
 
+	remoteRepo.Stamp()
 	if err := s.db.RemoteRepository.Insert().One(remoteRepo); err != nil {
 		log.Printf("Failed to create remote repo from mirror URL %s: %v", mirrorURL, err)
 		return nil

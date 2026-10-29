@@ -157,8 +157,8 @@ func CreateSnippet(c fiber.Ctx) error {
 		Visibility:  req.Visibility,
 		Version:     1,
 		UserID:      &userID,
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
+		CreatedAt:   time.Now().UTC(),
+		UpdatedAt:   time.Now().UTC(),
 	}
 
 	err := db.Snippet.Insert().One(snippet)
@@ -214,7 +214,7 @@ func UpdateSnippet(c fiber.Ctx) error {
 	if req.Visibility != "" {
 		snippet.Visibility = req.Visibility
 	}
-	snippet.UpdatedAt = time.Now()
+	snippet.UpdatedAt = time.Now().UTC()
 	snippet.Version++
 
 	err = db.Snippet.Save().One(snippet)

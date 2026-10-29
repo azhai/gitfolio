@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/azhai/gitfolio/models"
@@ -48,6 +49,33 @@ func newGitHubGraphQLClient(token string) *githubv4.Client {
 	src := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: token})
 	httpClient := oauth2.NewClient(context.Background(), src)
 	return githubv4.NewClient(httpClient)
+}
+
+// graphQLPageSizes 是同一页数据依次尝试的页容量。一页里每条记录都带正文、标签
+// 和评论，大仓库首次同步时 GitHub 偶尔会 504，缩小页容量重问通常就能返回。
+var graphQLPageSizes = []githubv4.Int{100, 30}
+
+// queryGraphQLPage 取一页数据，遇到网关超时这类可重试错误时缩小页容量再试一次。
+func queryGraphQLPage(vars map[string]any, query func() error) error {
+	var err error
+	for i, size := range graphQLPageSizes {
+		vars["first"] = size
+		if err = query(); err == nil || i == len(graphQLPageSizes)-1 || !isTransientGraphQLError(err) {
+			return err
+		}
+		time.Sleep(time.Duration(i+1) * 3 * time.Second)
+	}
+	return err
+}
+
+func isTransientGraphQLError(err error) bool {
+	msg := err.Error()
+	for _, marker := range []string{"500 ", "502 ", "503 ", "504 ", "Timeout", "timeout"} {
+		if strings.Contains(msg, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 // graphqlPageInfo 对应 GraphQL 的 PageInfo。
@@ -208,7 +236,7 @@ func (s *SyncService) SyncGitHubIssuesGraphQL(ctx context.Context, repoID int64,
 	for {
 		pageStart := time.Now()
 		var q issuesQuery
-		if err := client.Query(ctx, &q, vars); err != nil {
+		if err := queryGraphQLPage(vars, func() error { return client.Query(ctx, &q, vars) }); err != nil {
 			return result, fmt.Errorf("graphql issues query: %w", err)
 		}
 		apiDur := time.Since(pageStart)
@@ -487,7 +515,7 @@ func (s *SyncService) SyncGitHubPRsGraphQL(ctx context.Context, repoID int64, ow
 	for {
 		pageStart := time.Now()
 		var q pullRequestsQuery
-		if err := client.Query(ctx, &q, vars); err != nil {
+		if err := queryGraphQLPage(vars, func() error { return client.Query(ctx, &q, vars) }); err != nil {
 			return result, fmt.Errorf("graphql pull requests query: %w", err)
 		}
 		apiDur := time.Since(pageStart)

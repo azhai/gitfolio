@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -132,6 +133,51 @@ func GetGroup(c fiber.Ctx) error {
 	}
 
 	return c.Status(fiber.StatusOK).JSON(ToGroupResponse(group, getGroupMembersCount(db, group.ID)))
+}
+
+// ListGroupRepositories 返回团队拥有的项目。非团队成员只能看到公开项目，
+// 与用户主页的项目列表规则保持一致。
+func ListGroupRepositories(c fiber.Ctx) error {
+	name := c.Params("name")
+
+	db := models.GetDB()
+
+	group, err := findGroupByName(db, name)
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Group not found"})
+	}
+
+	query := db.Repository.Select().Where("owner_id = ? AND owner_type = 'group'", group.ID)
+	role := middleware.GetCurrentUserRole(c)
+	if role != "admin" && !helpers.CheckGroupMemberPermission(c, group.ID) {
+		query = query.Where("project_type IN ?", []string{"public", "mirror"})
+	}
+
+	repos, err := query.All()
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch repositories"})
+	}
+
+	sort.Slice(repos, func(i, j int) bool {
+		ti, tj := repos[i].LastCommitAt, repos[j].LastCommitAt
+		if ti == nil && tj == nil {
+			return repos[i].UpdatedAt.After(repos[j].UpdatedAt)
+		}
+		if ti == nil {
+			return false
+		}
+		if tj == nil {
+			return true
+		}
+		return ti.After(*tj)
+	})
+
+	response := make([]*RepositoryResponse, 0, len(repos))
+	for _, repo := range repos {
+		response = append(response, ToRepositoryResponse(repo, nil, group))
+	}
+
+	return c.Status(fiber.StatusOK).JSON(response)
 }
 
 func CreateGroup(c fiber.Ctx) error {
@@ -513,6 +559,7 @@ func CreateMilestone(c fiber.Ctx) error {
 		}
 	}
 
+	milestone.Stamp()
 	err = db.Milestone.Insert().One(milestone)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create milestone"})

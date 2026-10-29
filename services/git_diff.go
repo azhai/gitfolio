@@ -5,7 +5,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"sync"
 )
 
 // FileInfo 文件基本信息
@@ -106,13 +108,20 @@ func (s *GitService) GetTreeWithSize(owner, name, ref, path string) ([]TreeEntry
 		ref = "HEAD"
 	}
 
-	var cmd *exec.Cmd
+	var output []byte
+	var err error
 	if path == "" {
-		cmd = exec.Command("git", "-C", repoPath, "ls-tree", "-l", ref)
+		output, err = exec.Command("git", "-C", repoPath, "ls-tree", "-l", ref).Output()
 	} else {
-		cmd = exec.Command("git", "-C", repoPath, "ls-tree", "-l", ref, path+"/")
+		output, err = exec.Command("git", "-C", repoPath, "ls-tree", "-l", ref, path+"/").Output()
+		// 前端用 /tree/<path> 同时打开目录和文件。路径是文件时 "path/" 不会
+		// 报错，但也没有输出，这里再按文件查一次，让前端识别为文件并打开。
+		if err == nil && len(strings.TrimSpace(string(output))) == 0 {
+			if fileOut, fileErr := exec.Command("git", "-C", repoPath, "ls-tree", "-l", ref, path).Output(); fileErr == nil {
+				output = fileOut
+			}
+		}
 	}
-	output, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("failed to list tree: %w", err)
 	}
@@ -135,24 +144,85 @@ func (s *GitService) GetTreeWithSize(owner, name, ref, path string) ([]TreeEntry
 			nameParts := strings.Split(fullName, "/")
 			name := nameParts[len(nameParts)-1]
 
-			entry := TreeEntry{
+			entries = append(entries, TreeEntry{
 				Mode: mode,
 				Type: objType,
 				Hash: objHash,
 				Size: size,
 				Name: name,
 				Path: fullName,
-			}
-
-			commitMsg, commitTime := s.getLastCommitInfo(repoPath, ref, fullName)
-			entry.LastCommitMessage = commitMsg
-			entry.LastCommitTime = commitTime
-
-			entries = append(entries, entry)
+			})
 		}
 	}
 
+	// 每个条目的最后提交本来要单独跑一次 git log，几十个文件就是几百毫秒。
+	// 先扫最近若干条提交的改动文件，把本层条目的最新提交一次取出来；没扫到
+	// 的（很久没改过）再并发补查。大目录多扫一些，减少回退次数。
+	scanLimit := 300
+	if len(entries) > 100 {
+		scanLimit = 800
+	}
+	known := s.collectRecentCommits(repoPath, ref, path, scanLimit)
+
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, 8)
+	for i := range entries {
+		e := &entries[i]
+		if info, ok := known[e.Path]; ok {
+			e.LastCommitMessage, e.LastCommitTime = info[0], info[1]
+			continue
+		}
+		wg.Add(1)
+		go func(e *TreeEntry) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			e.LastCommitMessage, e.LastCommitTime = s.getLastCommitInfo(repoPath, ref, e.Path)
+		}(e)
+	}
+	wg.Wait()
+
 	return entries, nil
+}
+
+// collectRecentCommits 返回 base 目录下各条目最近一次提交的 [message, time]。
+// 只保留每个条目第一次（也就是最近一次）出现的提交，键为条目在本层的完整路径。
+func (s *GitService) collectRecentCommits(repoPath, ref, base string, limit int) map[string][2]string {
+	result := make(map[string][2]string)
+	cmd := exec.Command("git", "-C", repoPath, "log", "-n", strconv.Itoa(limit),
+		"--format=%x1e%ci%x09%s", "--name-only", ref)
+	output, err := cmd.Output()
+	if err != nil {
+		return result
+	}
+
+	prefix := ""
+	if base != "" {
+		prefix = base + "/"
+	}
+	chunks := strings.Split(string(output), "\x1e")
+	for _, chunk := range chunks[1:] {
+		lines := strings.Split(strings.TrimRight(chunk, "\n"), "\n")
+		if len(lines) == 0 {
+			continue
+		}
+		meta := strings.SplitN(lines[0], "\t", 2)
+		commitTime, message := meta[0], ""
+		if len(meta) > 1 {
+			message = meta[1]
+		}
+		for _, file := range lines[1:] {
+			if !strings.HasPrefix(file, prefix) {
+				continue
+			}
+			seg := strings.SplitN(file[len(prefix):], "/", 2)[0]
+			key := prefix + seg
+			if _, seen := result[key]; !seen {
+				result[key] = [2]string{message, commitTime}
+			}
+		}
+	}
+	return result
 }
 
 // GetFileContentByRef 获取指定引用下文件的内容
@@ -421,6 +491,117 @@ func parseUnifiedDiff(diffText string) ([]DiffLine, int, int) {
 		}
 	}
 	return result, additions, deletions
+}
+
+// parseHunkHeader 取出 hunk 头里的起始行号，@@ -12,3 +12,4 @@ 这种形式。
+func parseHunkHeader(header string) (oldStart, newStart int) {
+	parts := strings.Split(header, " ")
+	for i := 1; i < len(parts) && i < 3; i++ {
+		switch {
+		case strings.HasPrefix(parts[i], "-"):
+			fmt.Sscanf(strings.TrimPrefix(parts[i], "-"), "%d", &oldStart)
+		case strings.HasPrefix(parts[i], "+"):
+			fmt.Sscanf(strings.TrimPrefix(parts[i], "+"), "%d", &newStart)
+		}
+	}
+	return oldStart, newStart
+}
+
+// buildPartialPatch 按行选择重建补丁，没选中的行继续留在工作区。
+//
+// 下标就是 parseUnifiedDiff 给出的行下标，与 GET /diff 返回的 lines 一致
+// （hunk 头也占一行）。重建规则与 git add -p 相同：
+//   - 选中的新增行保留，未选中的整行丢掉——这样它不会进索引；
+//   - 选中的删除行保留，未选中的改写成上下文行——索引里本来就有这一行；
+//   - hunk 头按实际内容重算行数与起始行号。
+//
+// 返回空串表示没有任何行被选中（或不是文本补丁）。
+func buildPartialPatch(diffText string, selected map[int]bool) string {
+	raw := strings.Split(diffText, "\n")
+	header := make([]string, 0, 4)
+	for _, line := range raw {
+		if line == "" || strings.HasPrefix(line, "@@ ") {
+			break
+		}
+		if strings.HasPrefix(line, "GIT binary patch") || strings.HasPrefix(line, "Binary files ") {
+			return ""
+		}
+		header = append(header, line)
+	}
+	if len(header) == 0 {
+		return ""
+	}
+
+	lines, _, _ := parseUnifiedDiff(diffText)
+	out := make([]string, 0, len(header)+len(lines))
+	out = append(out, header...)
+
+	var (
+		body     []string
+		oldStart int
+		newStart int
+		oldCount int
+		newCount int
+		inHunk   bool
+		changed  bool
+	)
+	// 一个 hunk 里没有任何被选中的 +/- 行时整块丢掉：只剩上下文行的补丁
+	// 什么也不做，留着只会让人以为暂存了东西。
+	flush := func() {
+		if !inHunk || !changed {
+			return
+		}
+		out = append(out, fmt.Sprintf("@@ -%d,%d +%d,%d @@", oldStart, oldCount, newStart, newCount))
+		out = append(out, body...)
+	}
+
+	for i, line := range lines {
+		if line.Type == "hunk" {
+			flush()
+			oldStart, newStart = parseHunkHeader(line.Content)
+			oldCount, newCount = 0, 0
+			body = body[:0]
+			inHunk = true
+			changed = false
+			continue
+		}
+		if !inHunk {
+			continue
+		}
+		// "\ No newline at end of file" 这类标记原样带过，不参与行数统计。
+		if strings.HasPrefix(line.Content, "\\") {
+			body = append(body, line.Content)
+			continue
+		}
+		switch line.Type {
+		case "added":
+			if selected[i] {
+				body = append(body, "+"+line.Content)
+				newCount++
+				changed = true
+			}
+		case "deleted":
+			if selected[i] {
+				body = append(body, "-"+line.Content)
+				oldCount++
+				changed = true
+			} else {
+				body = append(body, " "+line.Content)
+				oldCount++
+				newCount++
+			}
+		default:
+			body = append(body, " "+line.Content)
+			oldCount++
+			newCount++
+		}
+	}
+	flush()
+
+	if len(out) == len(header) {
+		return ""
+	}
+	return strings.Join(out, "\n") + "\n"
 }
 
 // getLastCommitInfo 获取指定路径下最后一条提交的消息和时间
